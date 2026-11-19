@@ -52,17 +52,19 @@
 		{ href: '/', label: 'Мапа', short: 'Мапа', icon: 'building', map: true },
 		{ href: '/dashboard', label: 'Дашборд', short: 'Дашборд', icon: 'gauge' },
 		{ href: '/objects', label: 'Об’єкти', short: 'Об’єкти', icon: 'building' },
-		{ href: '/solar', label: 'Нові СЕС', short: 'Нові СЕС', icon: 'sun' }
+		{ href: '/energy', label: 'Розподіл', short: 'Розподіл', icon: 'sun' },
+		{ href: '/finance', label: 'Фінанси', short: 'Фінанси', icon: 'gauge' }
 	];
 	const tabs = primary;
 
 	// Аналітика: частина пунктів — лише для службових ролей
 	type Analytic = { href: string; label: string; only?: 'internal' | 'upload' };
 	const ANALYTICS: Analytic[] = [
-		{ href: '/independence', label: 'Енергонезалежність', only: 'internal' },
+		{ href: '/network', label: 'Баланс мережі' },
+		{ href: '/report', label: 'Звіт за місяць' },
+		{ href: '/appeals', label: 'Звернення', only: 'internal' },
 		{ href: '/overview', label: 'Споживання' },
-		{ href: '/rating', label: 'Рейтинг' },
-		{ href: '/defects', label: 'Якість даних' },
+		{ href: '/rating', label: 'Індекс ефективності' },
 		{ href: '/upload', label: 'Оновити дані', only: 'upload' }
 	];
 	const analytics = $derived(

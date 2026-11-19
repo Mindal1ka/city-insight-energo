@@ -106,6 +106,12 @@ export interface SesItem {
 	/** Рівень доступу до цього об'єкта */
 	access?: 'full' | 'ses' | 'public';
 	approximate?: boolean;
+	/** v2: розпорядник коштів (департамент) */
+	department?: string;
+	/** v2: середнє споживання е/е за місяць, кВт·год (2025 ÷ 12) */
+	cons_kwh_month_avg?: number | null;
+	/** v2: індекс ефективності споживання: кВт·год/м² ÷ медіана категорії (1 — типово, >1 — гірше) */
+	eff_index?: number | null;
 }
 
 export interface SesList {
@@ -193,7 +199,7 @@ function token(): string | null {
 	}
 }
 
-async function req<T>(url: string, init: RequestInit = {}): Promise<T> {
+export async function req<T>(url: string, init: RequestInit = {}): Promise<T> {
 	const headers = new Headers(init.headers);
 	headers.set('Accept', 'application/json');
 	const t = token();
