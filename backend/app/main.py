@@ -166,7 +166,7 @@ def site(bid: int, day: str | None = None, hour: int | None = None, user: User =
 # --- енергонезалежність і прогноз сонця (підключаються, щойно модулі існують) ---
 import importlib  # noqa: E402
 
-for _mod in ("auth_api", "ses_api", "independence_api", "forecast_api", "map_api"):
+for _mod in ("auth_api", "ses_api", "insight", "independence_api", "forecast_api", "map_api"):
     try:
         app.include_router(importlib.import_module(f".{_mod}", __package__).router)
     except ModuleNotFoundError as _e:
