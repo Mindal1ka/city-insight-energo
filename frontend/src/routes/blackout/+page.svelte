@@ -2,7 +2,7 @@
 	// «Готовність до блекауту»: скільки годин протримається кожен об'єкт. Лише службові ролі (інакше 403).
 	import { onMount } from 'svelte';
 	import { errMessage, ApiError } from '#lib/api.ts';
-	import { fetchBlackoutAll, DEPARTMENTS } from '#lib/api-v2.ts';
+	import { fetchBlackoutAll, fetchOutages, DEPARTMENTS, type Outages } from '#lib/api-v2.ts';
 	import { num, dateTime } from '#lib/format.ts';
 	import StatCard from '#lib/StatCard.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
@@ -15,7 +15,9 @@
 	let forbidden = $state(false);
 	let loading = $state(true);
 
+	let out = $state<Outages | null>(null);
 	async function load() {
+		fetchOutages().then((o) => (out = o)).catch(() => (out = null));
 		try {
 			data = await fetchBlackoutAll();
 			error = null;
@@ -66,9 +68,34 @@
 	<div class="kpis">
 		<StatCard label="Об'єктів" value={t.objects} icon="building" />
 		<StatCard label="З генератором" value={t.with_generator} icon="bolt" tone="good" />
-		<StatCard label="Тримаються ≥ 24 год" value={t.hold_24h} icon="check" tone="good" />
+		{#if t.outage_today_h != null}
+			<StatCard label="Витримають сьогоднішнє відключення" value={t.hold_today} unit={`з ${t.objects}`} icon="check" tone="good" />
+		{:else}
+			<StatCard label="Тримаються ≥ 24 год" value={t.hold_24h} icon="check" tone="good" />
+		{/if}
 		<StatCard label="Менше 4 год" value={t.under_4h} icon="alert" tone={t.under_4h > 0 ? 'warn' : 'good'} />
 	</div>
+
+	{#if out && out.queues.length}
+		<section class="out" aria-label="Графік відключень сьогодні">
+			<p class="out-h">
+				<b>Сьогодні за графіком Полтаваобленерго:</b> до {num(out.worst_hours_off ?? 0, 1)} год без світла, найдовше {num(out.worst_longest_h ?? 0, 1)} год поспіль
+				<a class="src" href="https://www.poe.pl.ua/disconnection/power-outages/" target="_blank" rel="noopener">poe.pl.ua</a>
+			</p>
+			{#each out.queues as q (q.queue)}
+				{#if q.days[0]}
+					<div class="q">
+						<span class="qn">Черга {q.queue}</span>
+						<span class="cells" title={q.days[0].off.join(', ')}>
+							{#each q.days[0].cells as c, i (i)}<i class="c{c}"></i>{/each}
+						</span>
+						<span class="qh">{num(q.days[0].hours_off, 1)} год</span>
+					</div>
+				{/if}
+			{/each}
+			<p class="out-n">Черга кожного закладу в даних міста не вказана — порівнюємо з найдовшим відключенням серед черг.</p>
+		</section>
+	{/if}
 
 	<div class="fbar">
 		<label class="sel">
@@ -332,5 +359,57 @@
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 			gap: 0.6rem;
 		}
+	}
+	.out {
+		margin: 0 0 1rem;
+		padding: 0.9rem 1rem;
+		border-radius: 14px;
+		background: var(--surface, #fff);
+		box-shadow: 0 1px 3px rgba(15, 35, 65, 0.08);
+		display: grid;
+		gap: 0.4rem;
+	}
+	.out-h {
+		margin: 0 0 0.3rem;
+		font-size: 0.92rem;
+	}
+	.src {
+		margin-left: 0.4rem;
+		font-size: 0.75rem;
+	}
+	.q {
+		display: grid;
+		grid-template-columns: 5.5rem 1fr 3.5rem;
+		align-items: center;
+		gap: 0.6rem;
+		font-size: 0.82rem;
+	}
+	.cells {
+		display: grid;
+		grid-template-columns: repeat(48, 1fr);
+		gap: 1px;
+		height: 14px;
+	}
+	.cells i {
+		display: block;
+		border-radius: 2px;
+	}
+	.cells .c1 {
+		background: #cfe9d9;
+	}
+	.cells .c2 {
+		background: #1a2433;
+	}
+	.cells .c3 {
+		background: #9aa5b4;
+	}
+	.qh {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.out-n {
+		margin: 0.2rem 0 0;
+		font-size: 0.75rem;
+		color: var(--muted);
 	}
 </style>

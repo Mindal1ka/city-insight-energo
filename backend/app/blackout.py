@@ -164,11 +164,15 @@ def blackout_all(user: User = Depends(current_user)):
                       "hours_with_generator": _r(bo["hours_with_generator"], 1),
                       "load_kw_avg": _r(bo["load_kw_avg"], 1)})
     best = lambda i: i["hours_with_generator"] if i["hours_with_generator"] is not None else i["hours_battery_sun"]
+    from .outages import outages as _out
+    worst = _out(user).get("worst_longest_h")  # найдовше відключення сьогодні за ГПВ Полтаваобленерго
     items.sort(key=best)
     return {"source": MOCK, "updated_at": now.isoformat(timespec="seconds"), "horizon_h": HORIZON_H,
             "totals": {"objects": len(items), "with_generator": sum(1 for i in items if i["generator_kw"]),
                        "with_battery": sum(1 for i in items if i["battery_kwh"]),
                        "hold_24h": sum(1 for i in items if best(i) >= 24),
+                       "outage_today_h": worst,
+                       "hold_today": sum(1 for i in items if worst is not None and best(i) >= worst),
                        "under_4h": sum(1 for i in items if best(i) < 4)},
             "items": items}
 

@@ -465,7 +465,7 @@ export const fetchBlackoutAll = () =>
 		source: 'МОК';
 		updated_at: string;
 		horizon_h: number;
-		totals: { objects: number; with_generator: number; with_battery: number; hold_24h: number; under_4h: number };
+		totals: { objects: number; with_generator: number; with_battery: number; hold_24h: number; under_4h: number; outage_today_h: number | null; hold_today: number };
 		items: BlackoutRow[];
 	}>('/api/blackout');
 
@@ -529,3 +529,51 @@ export interface BudgetReal {
 }
 
 export const fetchBudgetReal = () => req<BudgetReal>('/api/budget-real');
+
+// ---------- графіки відключень ПОЕ і реальні платежі (spending.gov.ua) ----------
+
+export interface OutageDay {
+	day: string;
+	hours_off: number;
+	hours_maybe: number;
+	longest_off_h: number;
+	longest_with_maybe_h: number;
+	off: string[];
+	/** 48 півгодин: 1 — світло, 2 — відключення, 3 — можливе */
+	cells: number[];
+	updated: string | null;
+}
+
+export interface Outages {
+	status: 'онлайн' | 'кеш' | 'збережений кеш' | 'недоступно';
+	source?: string;
+	updated?: string | null;
+	days: string[];
+	queues: { queue: string; now: string | null; days: OutageDay[] }[];
+	/** Найдовше безперервне відключення сьогодні серед черг, год */
+	worst_longest_h: number | null;
+	worst_hours_off: number | null;
+}
+
+export const fetchOutages = () => req<Outages>('/api/outages');
+
+export interface SpendingMonth {
+	payer_edrpou: string;
+	payer: string;
+	year: number;
+	month: number;
+	'енергія': number;
+	'розподіл': number;
+	'інше': number;
+	total: number;
+}
+
+export interface Spending {
+	source: 'spending.gov.ua';
+	kekv: string;
+	payers: { edrpou: string; name: string }[];
+	years: Record<string, { 'енергія': number; 'розподіл': number; 'інше': number; total: number; distribution_share_pct: number | null }>;
+	items: SpendingMonth[];
+}
+
+export const fetchSpending = () => req<Spending>('/api/spending');

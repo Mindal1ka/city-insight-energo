@@ -2,7 +2,7 @@
 	// «Фінанси»: ліміт vs оплачено (з мережі), заощадження від СЕС, окупність. Ліміти — МОК.
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
-	import { fetchDepartments, fetchBudgetReal, type Departments, type BudgetReal } from '#lib/api-v2.ts';
+	import { fetchDepartments, fetchBudgetReal, fetchSpending, type Departments, type BudgetReal, type Spending } from '#lib/api-v2.ts';
 	import { uah } from '#lib/api-ses.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
 	import StatCard from '#lib/StatCard.svelte';
@@ -13,6 +13,7 @@
 
 	let data = $state<Departments | null>(null);
 	let real = $state<BudgetReal | null>(null);
+	let sp = $state<Spending | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 
@@ -21,6 +22,7 @@
 		error = null;
 		try {
 			fetchBudgetReal().then((r) => (real = r), () => (real = null));
+			fetchSpending().then((r) => (sp = r), () => (sp = null));
 			data = await fetchDepartments();
 		} catch (e) {
 			error = errMessage(e);
@@ -119,6 +121,15 @@
 			{/each}
 		</div>
 		<p class="lg"><span><i class="sw y25"></i>2025</span><span><i class="sw y26"></i>2026</span></p>
+		{#if sp && Object.keys(sp.years).length}
+			<div class="spd">
+				<h3>Фактичні платежі Департаменту освіти <SourceTag kind="openbudget" label="spending.gov.ua" href="https://spending.gov.ua" /></h3>
+				{#each Object.entries(sp.years) as [y, v] (y)}
+					{@const last = sp.items.filter((i) => String(i.year) === y).at(-1)?.month}
+					<p><b>{y}{last && last < 12 ? ` (січ–${MONTHS[last - 1]})` : ''}:</b> енергія {uah(v['енергія'])} · розподіл (Полтаваобленерго) {uah(v['розподіл'])}{v.distribution_share_pct != null ? ` — ${num(v.distribution_share_pct, 1)} %` : ''}</p>
+				{/each}
+			</div>
+		{/if}
 	</section>
 {/if}
 
@@ -423,5 +434,19 @@
 		margin: 0.4rem 0 0;
 		padding-left: 1.1rem;
 		columns: 2;
+	}
+	.spd {
+		margin-top: 0.8rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--line, #e3e7ee);
+		font-size: 0.88rem;
+	}
+	.spd h3 {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.spd p {
+		margin: 0.2rem 0;
 	}
 </style>

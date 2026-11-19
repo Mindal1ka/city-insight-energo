@@ -27,3 +27,5 @@ Thumbs.db
 docs/drive-download-*/
 backend/data/appeals.json
 backend/data/limits.csv
+backend/data/poe_schedule.json
+backend/data/generators.csv
