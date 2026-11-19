@@ -80,7 +80,7 @@
 
 	function title(it: SesItem): string {
 		const l = look(it);
-		const k = colorBy === 'class' && it.k != null ? `, K ${kText(it.k)}` : '';
+		const k = colorBy === 'class' && it.k != null ? `, покриття ${kText(it.k)}` : '';
 		return `${it.name} — ${l.word}${k}`;
 	}
 

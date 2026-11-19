@@ -27,7 +27,7 @@
 		[
 			{ l: 'Σ спожито', v: sum('cons_kwh'), cls: 'cons' },
 			{ l: 'Σ згенеровано', v: sum('gen_kwh'), cls: 'gen' },
-			{ l: 'Надлишок', v: sum('surplus_kwh'), cls: 'sur' },
+			{ l: 'Не використано', v: sum('surplus_kwh'), cls: 'sur' },
 			{ l: 'З мережі', v: sum('grid_kwh'), cls: 'grid' }
 		].filter((t) => t.v != null)
 	);
@@ -38,7 +38,7 @@
 		{ key: 'cons_kwh', label: 'Спожито', cls: 'c-cons' },
 		{ key: 'gen_kwh', label: 'Згенеровано', cls: 'c-gen' },
 		{ key: 'battery_kwh', label: 'Через акумулятор', cls: 'c-bat' },
-		{ key: 'surplus_kwh', label: 'Надлишок', cls: 'c-sur' },
+		{ key: 'surplus_kwh', label: 'Не використано', cls: 'c-sur' },
 		{ key: 'grid_kwh', label: 'З мережі', cls: 'c-grid' },
 		{ key: 'saved_uah', label: 'Заощаджено, грн', cls: 'c-sav' }
 	];

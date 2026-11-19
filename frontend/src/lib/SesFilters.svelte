@@ -4,6 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import {
 		K_CLASSES,
+		VISIBLE_CLASSES,
 		PERIODS,
 		matchQ,
 		matchType,
@@ -167,7 +168,7 @@
 {/snippet}
 
 {#snippet classChips()}
-	{#each K_CLASSES as c (c.id)}
+	{#each VISIBLE_CLASSES as c (c.id)}
 		{@const n = classCounts.get(c.id) ?? 0}
 		<button
 			type="button"
@@ -262,7 +263,7 @@
 				{/if}
 				<div class="sec"><h3>Тип закладу</h3><div class="chips wrapc">{@render typeChips()}</div></div>
 				{#if !restricted}
-					<div class="sec"><h3>Клас K</h3><div class="chips wrapc">{@render classChips()}</div></div>
+					<div class="sec"><h3>Покриття сонцем</h3><div class="chips wrapc">{@render classChips()}</div></div>
 					<div class="sec"><h3>Потреба в розширенні</h3><div class="chips wrapc">{@render needChip()}</div></div>
 				{/if}
 				<div class="foot">

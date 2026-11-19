@@ -1,6 +1,7 @@
 <!-- 12 місяців: згенеровано (сонце) vs спожито (синій) + лінія K (права вісь, смуга 0,8–1,2) -->
 <script lang="ts">
 	import { MONTHS, num } from '#lib/format.ts';
+	import { kText } from '#lib/api-ses.ts';
 	import { K_LOW, K_HIGH } from './ObjApi.ts';
 
 	let { data, hasSes }: { data: { month: number; gen_kwh: number | null; cons_kwh: number | null; k: number | null }[]; hasSes: boolean } = $props();
@@ -36,7 +37,7 @@
 	<ul class="legend" aria-hidden="true">
 		{#if hasSes}<li><i class="sw gen"></i>Згенеровано</li>{/if}
 		<li><i class="sw cons"></i>Спожито</li>
-		{#if hasSes}<li><i class="sw k"></i>K</li>{/if}
+		{#if hasSes}<li><i class="sw k"></i>Покриття</li>{/if}
 	</ul>
 	<svg viewBox="0 0 {W} {H}" role="img" aria-label="Генерація та споживання по місяцях" onmouseleave={() => (hover = null)}>
 		{#if hasSes}
@@ -77,15 +78,15 @@
 			<b>{MONTHS[d.month - 1]}</b>
 			{#if hasSes}<span class="g">☀ {num(d.gen_kwh)}</span>{/if}
 			<span class="c">⚡ {num(d.cons_kwh)}</span>
-			{#if hasSes}<span>K {num(d.k, 2)}</span>{/if}
+			{#if hasSes}<span>покриття {kText(d.k)}</span>{/if}
 		</p>
 	{/if}
 	<table class="visually-hidden">
 		<caption>Помісячно, кВт·год</caption>
-		<thead><tr><th>Місяць</th>{#if hasSes}<th>Згенеровано</th>{/if}<th>Спожито</th>{#if hasSes}<th>K</th>{/if}</tr></thead>
+		<thead><tr><th>Місяць</th>{#if hasSes}<th>Згенеровано</th>{/if}<th>Спожито</th>{#if hasSes}<th>Покриття</th>{/if}</tr></thead>
 		<tbody>
 			{#each data as d (d.month)}
-				<tr><td>{MONTHS[d.month - 1]}</td>{#if hasSes}<td>{num(d.gen_kwh)}</td>{/if}<td>{num(d.cons_kwh)}</td>{#if hasSes}<td>{num(d.k, 2)}</td>{/if}</tr>
+				<tr><td>{MONTHS[d.month - 1]}</td>{#if hasSes}<td>{num(d.gen_kwh)}</td>{/if}<td>{num(d.cons_kwh)}</td>{#if hasSes}<td>{kText(d.k)}</td>{/if}</tr>
 			{/each}
 		</tbody>
 	</table>

@@ -1,8 +1,8 @@
 <script lang="ts">
 	// «Огляд громади»: ефективність міста на одному екрані — 4 головні показники, один графік, три короткі списки дій.
 	import { errMessage } from '#lib/api.ts';
-	import { fetchSes, uah, kwh, type SesList, type SesItem } from '#lib/api-ses.ts';
-	import { fetchDepartments, fetchNetwork, fetchZones, fetchTrend, fetchBudgetReal, type Departments, type Network, type Zones, type Trend, type BudgetReal } from '#lib/api-v2.ts';
+	import { fetchSes, uah, kwh, kText, type SesList, type SesItem } from '#lib/api-ses.ts';
+	import { fetchDepartments, fetchNetwork, fetchTrend, fetchBudgetReal, type Departments, type Network, type Trend, type BudgetReal } from '#lib/api-v2.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
 	import SourceTag from '#lib/SourceTag.svelte';
 	import { moneyShort } from '#lib/dash/DashData.ts';
@@ -15,7 +15,6 @@
 	let ses = $state<SesList | null>(null);
 	let dept = $state<Departments | null>(null);
 	let net = $state<Network | null>(null);
-	let zones = $state<Zones | null>(null);
 	let trend = $state<Trend | null>(null);
 	let bud = $state<BudgetReal | null>(null);
 	let error = $state<string | null>(null);
@@ -26,12 +25,11 @@
 		error = null;
 		try {
 			// Основні дані обов'язкові; решта (залежить від ролі) — якщо є
-			const [s, d, n, z, tr, br] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchNetwork('year'), fetchZones('month', `${new Date().getFullYear()}-07-15`), fetchTrend(), fetchBudgetReal()]);
+			const [s, d, n, tr, br] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchNetwork('year'), fetchTrend(), fetchBudgetReal()]);
 			if (s.status === 'rejected') throw s.reason;
 			ses = s.value;
 			dept = d.status === 'fulfilled' ? d.value : null;
 			net = n.status === 'fulfilled' ? n.value : null;
-			zones = z.status === 'fulfilled' ? z.value : null;
 			trend = tr.status === 'fulfilled' ? tr.value : null;
 			bud = br.status === 'fulfilled' ? br.value : null;
 		} catch (e) {
@@ -78,20 +76,7 @@
 			.sort((a, b) => (a.k as number) - (b.k as number))
 			.slice(0, 5)
 	);
-	const hasSurplus = $derived(
-		(ses?.items ?? [])
-			.filter((i) => withK(i) && i.k_class === 'Надлишок')
-			.sort((a, b) => (b.k as number) - (a.k as number))
-			.slice(0, 5)
-	);
-	const shareable = $derived(
-		(zones?.items ?? [])
-			.filter((z) => (z.shareable_kwh ?? 0) > 0)
-			.sort((a, b) => (b.shareable_kwh ?? 0) - (a.shareable_kwh ?? 0))
-			.slice(0, 5)
-	);
-	const kFmt = (k: number | null) => (k == null ? '—' : k.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-	const hasLists = $derived(needExpand.length + hasSurplus.length + shareable.length > 0);
+	const hasLists = $derived(needExpand.length > 0);
 </script>
 
 <svelte:head><title>Огляд · Insight Tool</title></svelte:head>
@@ -197,15 +182,7 @@
 				{/snippet}
 				{@render list(
 					'Потрібне розширення',
-					needExpand.map((i) => ({ href: `/object/${i.id}`, name: i.name, num: 'K ' + kFmt(i.k) }))
-				)}
-				{@render list(
-					'Є надлишок',
-					hasSurplus.map((i) => ({ href: `/object/${i.id}`, name: i.name, num: 'K ' + kFmt(i.k) }))
-				)}
-				{@render list(
-					'Можна поділитися в зоні · липень',
-					shareable.map((z) => ({ href: '/', name: z.name, num: kwh(z.shareable_kwh) }))
+					needExpand.map((i) => ({ href: `/object/${i.id}`, name: i.name, num: 'сонце дає ' + kText(i.k) }))
 				)}
 			</div>
 		{/if}
@@ -344,7 +321,7 @@
 	}
 	.lists {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
 		gap: 1rem;
 	}
 	.lst {

@@ -22,6 +22,8 @@
 		fetchSes,
 		filterItems,
 		K_CLASSES,
+		VISIBLE_CLASSES,
+		SHARE_ENABLED,
 		kwh,
 		uah,
 		type KClass,
@@ -75,6 +77,7 @@
 
 	let zReq = 0;
 	async function loadZones(p: Period, s: Season | null) {
+		if (!SHARE_ENABLED) return; // обміну поки немає — зони «хто з ким ділиться» не показуємо
 		const my = ++zReq;
 		try {
 			const day = seasonDay(s);
@@ -166,7 +169,7 @@
 	const legend = $derived(
 		restricted
 			? CATEGORIES.map((c) => ({ key: c.key, color: c.color, glyph: c.glyph, label: c.label }))
-			: K_CLASSES.map((c) => ({ key: c.id, color: c.color, glyph: c.glyph, label: c.short }))
+			: VISIBLE_CLASSES.map((c) => ({ key: c.id, color: c.color, glyph: c.glyph, label: c.short }))
 	);
 	const periodWord = $derived(
 		season ? (SEASONS.find((x) => x.id === season)?.label ?? '') : period === 'day' ? 'за день' : period === 'month' ? 'за місяць' : 'за рік'

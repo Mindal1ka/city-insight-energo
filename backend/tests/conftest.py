@@ -7,6 +7,7 @@
 import os
 
 os.environ.setdefault("REQUIRE_LOGIN", "0")  # тести доступу ролей перевіряють залежності, а не загальний бар'єр
+os.environ.setdefault("SURPLUS_CLASS", "1")  # тести класів перевіряють повну шкалу
 
 import pytest
 

@@ -162,7 +162,7 @@
 					<span>Оплачено {uah(d.paid_uah_year)} з {uah(d.limit_uah_year)}</span>
 					<span class:bad={d.paid_uah_month > d.limit_uah_month}>Місяць: {uah(d.paid_uah_month)} / {uah(d.limit_uah_month)}</span>
 					<span><Icon name="building" size={14} /> {d.objects} об'єктів, з СЕС {d.with_ses}</span>
-					<span>Дефіцит {d.deficit} · надлишок {d.surplus}{d.over_limit > 0 ? ` · перевитрата ${d.over_limit}` : ''}</span>
+					<span>Не вистачає сонця {d.deficit}{d.over_limit > 0 ? ` · перевитрата ${d.over_limit}` : ''}</span>
 					<span><Icon name="panel" size={14} /> Вкладено {uah(d.invested_uah)}</span>
 					<span><Icon name="clock" size={14} /> Окупність {d.payback_years == null ? '—' : num(d.payback_years, 1) + ' р.'}</span>
 					<a href="/objects?department={encodeURIComponent(d.department)}">Об'єкти розпорядника →</a>

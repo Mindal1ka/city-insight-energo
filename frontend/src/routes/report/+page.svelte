@@ -112,7 +112,7 @@
 			tone={t.limit_uah > 0 && t.cost_uah > t.limit_uah ? 'bad' : 'neutral'}
 		/>
 		<StatCard label="Заощаджено" value={t.saved_uah} format={uah} icon="sun" tone="good" />
-		<StatCard label="K" value={t.k} decimals={2} icon="gauge" />
+		<StatCard label="Покриття сонцем" value={t.k != null ? Math.round(t.k * 100) : null} unit="%" icon="gauge" />
 	</div>
 
 	<section class="fx" aria-label="Фінансовий ефект вкладень">

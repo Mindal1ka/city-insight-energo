@@ -1,7 +1,7 @@
 <!-- Скільки доставити (лише кВт·год): споживання → потрібна станція → поточна → доставити -->
 <script lang="ts">
 	import type { Sizing } from '#lib/api-v2.ts';
-	import { uah } from '#lib/api-ses.ts';
+	import { kText, uah } from '#lib/api-ses.ts';
 	import { num } from '#lib/format.ts';
 	import Icon from '#lib/Icon.svelte';
 
@@ -36,7 +36,7 @@
 			</span>
 		</div>
 		<div class="grid tnum">
-			{#if s.k_after != null}<div class="cell"><span class="l">K після</span><b>{num(s.k_after, 2)}</b></div>{/if}
+			{#if s.k_after != null}<div class="cell"><span class="l">Покриття після</span><b>{kText(s.k_after)}</b></div>{/if}
 			{#if s.capex_uah !== undefined}<div class="cell"><span class="l">Вартість</span><b>{uah(s.capex_uah)}</b></div>{/if}
 			{#if s.saved_uah_year !== undefined}<div class="cell good"><span class="l">Економія/рік</span><b>{uah(s.saved_uah_year)}</b></div>{/if}
 			{#if s.payback_years != null}<div class="cell"><span class="l">Окупність</span><b>{num(s.payback_years, 1)} <small>р.</small></b></div>{/if}

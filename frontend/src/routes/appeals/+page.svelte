@@ -167,7 +167,7 @@
 				<div class="f">
 					<label for="ft">Тип</label>
 					<select id="ft" bind:value={fType}>
-						{#each Object.entries(APPEAL_TYPES) as [k, l] (k)}<option value={k}>{l}</option>{/each}
+						{#each Object.entries(APPEAL_TYPES).filter(([k]) => k !== 'surplus') as [k, l] (k)}<option value={k}>{l}</option>{/each}
 					</select>
 				</div>
 				<div class="f">

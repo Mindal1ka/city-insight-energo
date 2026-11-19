@@ -110,7 +110,7 @@
 		{ k: 'name', label: 'Об’єкт' },
 		{ k: 'dept', label: 'Розпорядник' },
 		{ k: 'month', label: 'кВт·год/міс', num: true },
-		...(restricted ? [] : [{ k: 'k' as Key, label: 'K' }]),
+		...(restricted ? [] : [{ k: 'k' as Key, label: 'Покриття сонцем' }]),
 		{ k: 'gen', label: 'Згенеровано', num: true },
 		{ k: 'cons', label: 'Спожито', num: true },
 		{ k: 'saved', label: 'Заощаджено/рік', num: true },

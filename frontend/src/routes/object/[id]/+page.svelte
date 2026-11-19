@@ -250,7 +250,7 @@
 				<div class="h-side">
 					{#if sens}
 						<div class="kbig">
-							<span class="k-l">K · {pLabel}</span>
+							<span class="k-l">Покриття сонцем · {pLabel}</span>
 							<KBadge {k} cls={kc} size="lg" />
 						</div>
 					{/if}
@@ -290,7 +290,7 @@
 			{/if}
 
 			{#if sens && ins?.sizing}
-				<V2Reco s={ins.sizing} id={b.id} hasStation={!!ses} surplus={kc === 'Надлишок'} />
+				<V2Reco s={ins.sizing} id={b.id} hasStation={!!ses} surplus={false} />
 			{/if}
 		</header>
 

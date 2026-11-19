@@ -62,7 +62,6 @@
 	type Analytic = { href: string; label: string; only?: 'internal' | 'upload' | 'citywide' };
 	const ANALYTICS: Analytic[] = [
 		{ href: '/energy', label: 'Розподіл енергії' },
-		{ href: '/network', label: 'Баланс мережі' },
 		{ href: '/blackout', label: 'Блекаут', only: 'citywide' },
 		{ href: '/appeals', label: 'Звернення', only: 'internal' },
 		{ href: '/overview', label: 'Споживання' },

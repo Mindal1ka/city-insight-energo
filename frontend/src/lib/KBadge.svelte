@@ -24,7 +24,7 @@
 
 	const m = $derived(kClassMeta(cls ?? 'Немає даних'));
 	const hasK = $derived(showK && k != null && isFinite(k));
-	const label = $derived(`${hasK ? `K = ${kText(k)}, ` : ''}${m.short}`);
+	const label = $derived(`${hasK ? `Покриття сонцем ${kText(k)}, ` : ''}${m.short}`);
 </script>
 
 <span

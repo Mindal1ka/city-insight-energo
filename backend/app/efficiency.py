@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import calendar
+import os
 from datetime import date, timedelta
 
 from . import solar
@@ -30,6 +31,9 @@ PAYBACK_PROGRESS_CAP = 999.0
 
 C_OK, C_LOW, C_HIGH, C_NONE, C_NODATA = "Ефективно", "Не вистачає", "Надлишок", "Без СЕС", "Немає даних"
 CLASSES = (C_OK, C_LOW, C_HIGH, C_NONE, C_NODATA)
+# Обмін надлишком між будівлями поки не працює → клас «Надлишок» вимкнено: K > 1,2 теж «Ефективно».
+# Увімкнути, коли з'явиться механізм передачі: SURPLUS_CLASS=1.
+SURPLUS_CLASS = os.environ.get("SURPLUS_CLASS", "0") == "1"
 
 NOTES = [
     "K = згенеровано СЕС ÷ спожито об'єктом за період. 0,8 ≤ K ≤ 1,2 — «Ефективно», K < 0,8 — «Не вистачає», "
@@ -55,7 +59,7 @@ def k_class(k: float | None, has_ses: bool, has_data: bool = True) -> str:
     k = round(k, 2)  # клас — за тим самим K, що бачить користувач
     if k < LOW:
         return C_LOW
-    if k > HIGH:
+    if k > HIGH and SURPLUS_CLASS:
         return C_HIGH
     return C_OK
 

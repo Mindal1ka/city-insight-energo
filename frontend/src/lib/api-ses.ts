@@ -40,6 +40,11 @@ export const K_CLASSES: KClassMeta[] = [
 	{ id: 'Немає даних', short: 'Немає даних', color: '#b9c1cc', soft: '#f3f5f8', ink: '#2b3442', icon: '?', glyph: 'M5 .6 9.4 5 5 9.4.6 5z', shape: 'ромб' }
 ];
 
+/** Обмін надлишком між будівлями поки не працює: клас «Надлишок» і все про передачу приховано. */
+export const SHARE_ENABLED = false;
+/** Класи, які показуємо в фільтрах і легендах */
+export const VISIBLE_CLASSES: KClassMeta[] = K_CLASSES.filter((c) => SHARE_ENABLED || c.id !== 'Надлишок');
+
 const BY_ID = new Map(K_CLASSES.map((c) => [c.id, c]));
 export function kClassMeta(c: KClass | null | undefined): KClassMeta {
 	return BY_ID.get(c as KClass) ?? K_CLASSES[4];
@@ -50,14 +55,14 @@ export function classifyK(k: number | null | undefined, hasSes: boolean | null, 
 	if (hasSes === false) return 'Без СЕС';
 	if (k == null || !isFinite(k)) return 'Немає даних';
 	if (k < t.low) return 'Не вистачає';
-	if (k > t.high) return 'Надлишок';
+	if (k > t.high && SHARE_ENABLED) return 'Надлишок';
 	return 'Ефективно';
 }
 
-/** «0,94» */
+/** Покриття сонцем: K 0,94 → «94 %» (скільки споживання дає власна СЕС) */
 export function kText(k: number | null | undefined): string {
 	if (k == null || !isFinite(k)) return '—';
-	return k.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	return `${Math.round(k * 100)} %`;
 }
 
 // ---------- /api/ses ----------
