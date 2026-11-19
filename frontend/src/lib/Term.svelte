@@ -140,7 +140,7 @@
 		onpointerenter={pointerEnter}
 		onpointerleave={pointerLeave}
 		><span class="t">{entry.term}</span><span class="d">{entry.text}</span
-		>{#if entry.example}<span class="e">{entry.example}</span>{/if}</span
+		>{#if entry.example}<span class="e"><b>Наприклад:</b> {entry.example}</span>{/if}</span
 	>{:else}{#if children}{@render children()}{:else}{key}{/if}{/if}
 
 <style>
@@ -188,8 +188,9 @@
 		width: max-content;
 		max-width: min(23rem, calc(100vw - 16px));
 		padding: 0.75rem 0.9rem;
-		border-radius: 12px;
+		border-radius: 14px;
 		background: #10243d;
+		border: 1px solid rgba(255, 255, 255, 0.08);
 		color: #f3f6fa;
 		box-shadow: 0 12px 32px -8px rgba(10, 20, 35, 0.45);
 		font-family: var(--font);
@@ -223,6 +224,10 @@
 		font-weight: 700;
 		color: #ffd56b;
 	}
+	.e b {
+		font-weight: 600;
+		color: #fff;
+	}
 	.e {
 		padding-top: 0.35rem;
 		border-top: 1px solid rgba(255, 255, 255, 0.15);
@@ -231,11 +236,21 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.term-tip.open {
-			animation: tip-in 0.14s ease-out;
+			animation: tip-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+		}
+		.term-tip.above.open {
+			animation-name: tip-in-up;
 		}
 		@keyframes tip-in {
 			from {
 				opacity: 0;
+				transform: translateY(-4px) scale(0.98);
+			}
+		}
+		@keyframes tip-in-up {
+			from {
+				opacity: 0;
+				transform: translateY(4px) scale(0.98);
 			}
 		}
 	}

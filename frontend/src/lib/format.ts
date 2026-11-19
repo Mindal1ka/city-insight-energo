@@ -125,3 +125,37 @@ export function longDate(iso: string | null | undefined): string {
 	if (!m) return iso;
 	return LONG.format(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
 }
+
+/** Енергія у зручному масштабі для великих чисел: 4 874 090 → { value: 4.87, unit: 'млн кВт·год', decimals: 2 } */
+export function scaleKwh(kwh: number | null | undefined): { value: number | null; unit: string; decimals: number } {
+	if (kwh === null || kwh === undefined || Number.isNaN(kwh)) return { value: null, unit: 'кВт·год', decimals: 0 };
+	const a = Math.abs(kwh);
+	if (a >= 1e6) return { value: kwh / 1e6, unit: 'млн кВт·год', decimals: 2 };
+	if (a >= 1e4) return { value: kwh / 1e3, unit: 'тис. кВт·год', decimals: 0 };
+	if (a >= 1e3) return { value: kwh / 1e3, unit: 'тис. кВт·год', decimals: 1 };
+	return { value: kwh, unit: 'кВт·год', decimals: 0 };
+}
+
+/** Те саме, але рядком: 4 874 090 → «4,87 млн кВт·год» */
+export function kwhText(kwh: number | null | undefined): string {
+	const s = scaleKwh(kwh);
+	return s.value === null ? '—' : `${num(s.value, s.decimals)} ${s.unit}`;
+}
+
+/** Розмір файлу: 1 532 000 → «1,5 МБ» */
+export function fileSize(bytes: number | null | undefined): string {
+	if (bytes === null || bytes === undefined || Number.isNaN(bytes)) return '—';
+	if (bytes >= 1024 * 1024) return `${num(bytes / 1024 / 1024, 1)} МБ`;
+	if (bytes >= 1024) return `${num(bytes / 1024, 0)} КБ`;
+	return `${num(bytes)} Б`;
+}
+
+/** Українська форма слова за числом: plural(3, ['будівля', 'будівлі', 'будівель']) → «будівлі» */
+export function plural(n: number, forms: [string, string, string]): string {
+	const a = Math.abs(Math.trunc(n)) % 100;
+	const b = a % 10;
+	if (a > 10 && a < 20) return forms[2];
+	if (b === 1) return forms[0];
+	if (b >= 2 && b <= 4) return forms[1];
+	return forms[2];
+}

@@ -1,10 +1,16 @@
 <script lang="ts">
-	// Дашборд «Розподілення енергії» — для одного об'єкта або для громади (агреговані значення)
+	// «Розподілення енергії» — для одного об'єкта або для громади (агреговані значення).
+	// Головне: баланс до кінця дня (+/−) і дві смуги «є» vs «потрібно».
+	// Під ним — акумулятор і сонце; пікове споживання й запас для мережі — у «Детальніше».
 	import type { SiteDistribution } from './api.ts';
 	import { num, signed, hh } from './format.ts';
+	import { isReduced } from './motion.ts';
 	import Icon from './Icon.svelte';
 	import SocGauge from './SocGauge.svelte';
 	import DemoPill from './DemoPill.svelte';
+	import CountUp from './CountUp.svelte';
+	import Disclosure from './Disclosure.svelte';
+	import Term from './Term.svelte';
 
 	let {
 		d,
@@ -23,126 +29,161 @@
 	const bat = $derived(d.battery_kwh_now ?? 0);
 	const sol = $derived(d.solar_kwh_rest_of_day ?? 0);
 	const scale = $derived(Math.max(1, d.available_kwh, d.need_kwh_rest_of_day));
-	const who = $derived(scope === 'community' ? 'об’єктам з СЕС' : 'об’єкту');
+	const who = $derived(scope === 'community' ? 'об’єктам з СЕС' : 'закладу');
+	const coverPct = $derived(
+		d.need_kwh_rest_of_day > 0 ? Math.min(100, (d.available_kwh / d.need_kwh_rest_of_day) * 100) : 100
+	);
+
+	// Смуги «ростуть», коли блок з’являється на екрані
+	let seen = $state(false);
+	function onView(node: HTMLElement) {
+		if (isReduced() || typeof IntersectionObserver === 'undefined') {
+			seen = true;
+			return;
+		}
+		const io = new IntersectionObserver(
+			(es) => {
+				if (es.some((e) => e.isIntersecting)) {
+					seen = true;
+					io.disconnect();
+				}
+			},
+			{ threshold: 0.25 }
+		);
+		io.observe(node);
+		return () => io.disconnect();
+	}
+	const w = (v: number) => (seen ? `${(v / scale) * 100}%` : '0%');
 </script>
 
 <div class="dist">
 	<!-- Баланс розподілу -->
-	<section class="panel balance {d.enough ? 'ok' : 'bad'}" aria-labelledby="bal-h-{scope}">
+	<section class="panel balance {!hasSes ? 'none' : d.enough ? 'ok' : 'bad'}" class:seen aria-labelledby="bal-h-{scope}" {@attach onView}>
 		<div class="bal-main">
-			<div class="sign" aria-hidden="true">{d.enough ? '+' : '−'}</div>
+			<div class="sign" aria-hidden="true">{!hasSes ? '↓' : d.enough ? '+' : '−'}</div>
 			<div>
-				<p class="eyebrow">Баланс розподілу до кінця дня</p>
+				<p class="eyebrow"><Term key="надлишок">Баланс</Term> до кінця дня</p>
 				<h2 id="bal-h-{scope}" class="bal-title">
 					{#if !hasSes}
-						Власних джерел немає — уся енергія з мережі
+						Власних джерел не зафіксовано — енергія з мережі
 					{:else if d.enough}
-						Енергії достатньо
+						Енергії вистачить
 					{:else}
-						Енергії не вистачає
+						Енергії не вистачить
 					{/if}
 				</h2>
 				<p class="bal-num">
-					<span class="big-num">{signed(d.balance_kwh, 1)}</span><span class="unit-s">кВт·год</span>
+					<span class="big-num"><CountUp value={d.balance_kwh} format={(n) => signed(n, 1)} /></span><span class="unit-s">кВт·год</span>
 				</p>
 				<p class="bal-text">
 					{#if !hasSes}
-						До кінця дня {who} потрібно {num(d.need_kwh_rest_of_day, 1)} кВт·год — усе буде куплено з мережі.
+						До кінця дня {who} потрібно ще {num(d.need_kwh_rest_of_day, 1)} кВт·год — усе буде куплено з мережі.
 					{:else if d.enough}
-						Акумулятор і сонце покривають потребу до кінця дня з запасом {num(d.balance_kwh, 1)} кВт·год.
+						Акумулятор і сонце покривають потребу до кінця дня, ще й лишається {num(d.balance_kwh, 1)} кВт·год.
 					{:else}
-						Бракує {num(Math.abs(d.balance_kwh), 1)} кВт·год — їх буде докуплено з мережі.
+						Акумулятор і сонце покриють приблизно {num(coverPct, 0)} % потреби. Решту — {num(Math.abs(d.balance_kwh), 1)} кВт·год — докупимо з мережі.
 					{/if}
 				</p>
 			</div>
 		</div>
 
-		<div class="compare" aria-label="Порівняння доступної і потрібної енергії">
+		<div class="compare" role="group" aria-label="Порівняння: скільки енергії є і скільки потрібно до кінця дня">
+			{#if hasSes}
 			<div class="row">
 				<div class="row-head">
-					<span>Доступно</span>
-					<span class="tnum"><b>{num(d.available_kwh, 1)}</b> кВт·год</span>
+					<span>Є: акумулятор + сонце</span>
+					<span class="tnum"><b><CountUp value={d.available_kwh} decimals={1} /></b> кВт·год</span>
 				</div>
 				<div class="track">
-					{#if bat > 0}<span class="seg-bat" style="width: {(bat / scale) * 100}%" title="Акумулятор"></span>{/if}
-					{#if sol > 0}<span class="seg-sol" style="width: {(sol / scale) * 100}%" title="Сонце до кінця дня"></span>{/if}
+					{#if bat > 0}<span class="seg-bat" style:width={w(bat)}></span>{/if}
+					{#if sol > 0}<span class="seg-sol" style:width={w(sol)}></span>{/if}
 				</div>
 				{#if hasSes}
 					<p class="parts">
-						<span><i class="k bat" aria-hidden="true"></i>акумулятор {num(bat, 1)}</span>
+						<span><i class="k bat" aria-hidden="true"></i>в акумуляторі {num(bat, 1)}</span>
 						<span class="plus" aria-hidden="true">+</span>
-						<span><i class="k sol" aria-hidden="true"></i>сонце до кінця дня {num(sol, 1)}</span>
+						<span><i class="k sol" aria-hidden="true"></i>дасть сонце до вечора {num(sol, 1)}</span>
 					</p>
 				{/if}
 			</div>
+			{/if}
 			<div class="row">
 				<div class="row-head">
 					<span>Потрібно до кінця дня</span>
-					<span class="tnum"><b>{num(d.need_kwh_rest_of_day, 1)}</b> кВт·год</span>
+					<span class="tnum"><b><CountUp value={d.need_kwh_rest_of_day} decimals={1} /></b> кВт·год</span>
 				</div>
 				<div class="track">
-					<span class="seg-need" style="width: {(d.need_kwh_rest_of_day / scale) * 100}%"></span>
+					<span class="seg-need" style:width={w(d.need_kwh_rest_of_day)}></span>
 				</div>
 			</div>
 		</div>
 	</section>
 
-	<div class="cards">
-		<!-- Пікове споживання -->
-		<section class="panel kcard">
-			<p class="k-label"><span class="ic navy"><Icon name="gauge" size={18} /></span>Макс. споживання протягом дня</p>
-			<p class="k-val"><span class="big-num">{num(d.peak_kw, 1)}</span><span class="unit-s">кВт</span></p>
-			<p class="k-sub"><Icon name="clock" size={15} /> о {hh(d.peak_hour)}</p>
-			{#if peakNote}<p class="k-note">{peakNote}</p>{/if}
-		</section>
-
+	<div class="cards" class:solo={!hasSes}>
 		{#if hasSes}
 			<!-- а) Акумулятори -->
 			<section class="panel kcard">
-				<p class="k-label"><span class="ic teal"><Icon name="battery" size={18} /></span>а) Накопичено в акумуляторах</p>
+				<p class="k-label"><span class="ic teal"><Icon name="battery" size={18} /></span>В акумуляторах зараз</p>
 				<div class="bat-row">
-					<p class="k-val"><span class="big-num">{num(d.battery_kwh_now, 1)}</span><span class="unit-s">кВт·год</span></p>
 					<SocGauge pct={d.battery_soc_pct} size={170} />
+					<div>
+						<p class="k-val"><span class="big-num"><CountUp value={d.battery_kwh_now} decimals={1} /></span><span class="unit-s">кВт·год</span></p>
+						<p class="k-hint">Стільки енергії запасено на випадок, коли зникне світло. <Term key="рівень заряду">Заряд</Term> — у відсотках від повного.</p>
+					</div>
 				</div>
 			</section>
 
 			<!-- б) Сонячні батареї -->
 			<section class="panel kcard">
-				<p class="k-label"><span class="ic sun"><Icon name="sun" size={18} /></span>б) В сонячних батареях</p>
+				<p class="k-label"><span class="ic sun"><Icon name="sun" size={18} /></span>Сонячні панелі</p>
 				<div class="two">
 					<div>
-						<p class="k-mini">зараз</p>
-						<p class="k-val"><span class="big-num">{num(d.solar_kw_now, 1)}</span><span class="unit-s">кВт</span></p>
+						<p class="k-mini">дають зараз</p>
+						<p class="k-val"><span class="big-num"><CountUp value={d.solar_kw_now} decimals={1} /></span><span class="unit-s"><Term key="кВт" plain>кВт</Term></span></p>
 					</div>
 					<div>
-						<p class="k-mini">до кінця дня</p>
-						<p class="k-val"><span class="big-num">{num(d.solar_kwh_rest_of_day, 1)}</span><span class="unit-s">кВт·год</span></p>
+						<p class="k-mini">дадуть до вечора</p>
+						<p class="k-val"><span class="big-num"><CountUp value={d.solar_kwh_rest_of_day} decimals={1} /></span><span class="unit-s"><Term key="кВт·год" plain>кВт·год</Term></span></p>
 					</div>
 				</div>
+				<p class="k-hint">«Зараз» — потужність у цю мить, «до вечора» — скільки енергії ще наберуть панелі.</p>
 			</section>
 		{:else}
 			<section class="panel kcard cta">
 				<span class="cta-ic" aria-hidden="true"><Icon name="sun" size={30} /></span>
 				<div>
-					<h3>Сонячної станції немає</h3>
-					<p>Акумуляторів і власної генерації на цьому об’єкті немає. Подивіться, скільки міг би дати дах.</p>
+					<h3>Сонячну станцію не зафіксовано</h3>
+					<p>У даних немає ні акумуляторів, ні власної генерації. Подивіться, скільки міг би дати дах.</p>
 					{#if solarHref}
-						<a class="btn" href={solarHref}>СЕС немає — подивитися рекомендацію <Icon name="arrow-right" size={18} /></a>
+						<a class="btn btn-secondary" href={solarHref}>Подивитися розрахунок для даху <Icon name="arrow-right" size={18} /></a>
 					{/if}
 				</div>
 			</section>
 		{/if}
-
-		<!-- Запас розподілу -->
-		<section class="panel kcard grid-card">
-			<p class="k-label"><span class="ic green"><Icon name="grid" size={18} /></span>Запас розподілу · можна видати в мережу</p>
-			<p class="k-val"><span class="big-num">{num(d.reserve_to_grid_kwh, 1)}</span><span class="unit-s">кВт·год</span></p>
-			<p class="note">
-				<Icon name="info" size={16} />
-				<span>Зараз комунальні заклади не можуть продавати надлишок у мережу — це потенціал для енергокооперативу громади.</span>
-			</p>
-		</section>
 	</div>
+
+	<Disclosure summary="Детальніше: пікове споживання і запас для мережі" class="dist-more">
+		<div class="more">
+			<div class="mcard">
+				<p class="k-label"><span class="ic navy"><Icon name="gauge" size={18} /></span>Найбільше споживання за день</p>
+				<p class="k-val"><span class="big-num">{num(d.peak_kw, 1)}</span><span class="unit-s">кВт</span></p>
+				<p class="k-sub"><Icon name="clock" size={15} /> о {hh(d.peak_hour)}</p>
+				<p class="k-hint">
+					<Term key="пікова потужність">Пікова потужність</Term> — коли одночасно працює найбільше техніки.
+					{#if peakNote}{peakNote}{/if}
+				</p>
+			</div>
+			<div class="mcard">
+				<p class="k-label"><span class="ic green"><Icon name="grid" size={18} /></span>Запас, який можна віддати в мережу</p>
+				<p class="k-val"><span class="big-num">{num(d.reserve_to_grid_kwh, 1)}</span><span class="unit-s">кВт·год</span></p>
+				<p class="k-hint">
+					{#if d.reserve_to_grid_kwh > 0}Надлишок понад власні потреби.{:else}Сьогодні надлишку немає — усе споживається на місці.{/if}
+					Зараз комунальні заклади не можуть продавати надлишок у мережу — це потенціал для енергокооперативу громади.
+				</p>
+			</div>
+		</div>
+	</Disclosure>
+
 	{#if hasSes}
 		<p class="foot"><DemoPill align="left" /> <span>Заряд, генерація й прогноз до кінця дня змодельовано.</span></p>
 	{/if}
@@ -173,6 +214,19 @@
 	.bad::before {
 		background: var(--deficit);
 	}
+	.none::before {
+		background: var(--navy-3, #1f4f84);
+	}
+	.none .sign {
+		background: radial-gradient(circle at 30% 25%, #2f6db0, #1f4f84 70%);
+		box-shadow: 0 0 0 10px #e6eef8;
+		font-size: 3.6rem;
+		padding-bottom: 0;
+	}
+	.none .bal-title,
+	.none .bal-num {
+		color: var(--navy, #0f2f52);
+	}
 	.bal-main {
 		display: flex;
 		gap: 1.5rem;
@@ -182,14 +236,14 @@
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 7.5rem;
-		height: 7.5rem;
+		width: 6.5rem;
+		height: 6.5rem;
 		border-radius: 50%;
-		font-size: 5.5rem;
+		font-size: 4.75rem;
 		font-weight: 700;
 		line-height: 1;
 		color: #fff;
-		padding-bottom: 0.4rem;
+		padding-bottom: 0.35rem;
 	}
 	.ok .sign {
 		background: radial-gradient(circle at 30% 25%, #2e9a4f, var(--surplus) 70%);
@@ -199,8 +253,11 @@
 		background: radial-gradient(circle at 30% 25%, #e0602a, var(--deficit) 70%);
 		box-shadow: 0 0 0 10px var(--deficit-soft);
 	}
+	.eyebrow {
+		margin: 0;
+	}
 	.bal-title {
-		font-size: 1.75rem;
+		font-size: 1.6rem;
 		margin: 0.15rem 0 0.2rem;
 	}
 	.ok .bal-title,
@@ -247,7 +304,13 @@
 	}
 	.track span {
 		height: 100%;
-		transition: width 0.8s var(--ease);
+		transition: width 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.track .seg-sol {
+		transition-delay: 0.25s;
+	}
+	.compare .row + .row .track span {
+		transition-delay: 0.4s;
 	}
 	.seg-bat {
 		background: #0f766e;
@@ -285,8 +348,11 @@
 	}
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 1.25rem;
+	}
+	.cards.solo {
+		grid-template-columns: 1fr;
 	}
 	.kcard {
 		display: flex;
@@ -302,7 +368,6 @@
 		color: #2b3645;
 		margin: 0 0 0.5rem;
 		line-height: 1.3;
-		min-height: 2.6em;
 	}
 	.ic {
 		display: grid;
@@ -332,7 +397,7 @@
 		margin: 0;
 	}
 	.k-val .big-num {
-		font-size: 2.4rem;
+		font-size: 2.3rem;
 	}
 	.k-sub {
 		display: flex;
@@ -342,10 +407,10 @@
 		font-weight: 600;
 		color: #3d4857;
 	}
-	.k-note {
-		margin: auto 0 0;
-		padding-top: 0.5rem;
-		font-size: 0.8125rem;
+	.k-hint {
+		margin: 0.5rem 0 0;
+		font-size: 0.9rem;
+		line-height: 1.45;
 		color: var(--muted);
 	}
 	.k-mini {
@@ -358,34 +423,19 @@
 	}
 	.two {
 		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
 	}
 	.bat-row {
 		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		align-items: flex-start;
+		flex-wrap: wrap;
+		gap: 0.75rem 1.25rem;
+		align-items: center;
 	}
-	.bat-row :global(.g) {
-		align-self: center;
-	}
-	.note {
-		display: flex;
-		gap: 0.45rem;
-		margin: auto 0 0;
-		padding: 0.65rem 0.75rem;
-		border-radius: 10px;
-		background: #f3f6fa;
-		font-size: 0.8125rem;
-		line-height: 1.45;
-		color: #3d4857;
-	}
-	.note :global(.icon) {
-		margin-top: 0.1rem;
-		color: var(--navy-3);
+	.bat-row > div {
+		flex: 1 1 12rem;
 	}
 	.cta {
-		grid-column: span 2;
 		flex-direction: row;
 		align-items: flex-start;
 		gap: 1.1rem;
@@ -409,36 +459,65 @@
 		background: var(--sun);
 		color: #3b2400;
 	}
+	.dist :global(.dist-more) {
+		margin-top: -0.5rem;
+	}
+	.more {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+		gap: 1rem;
+	}
+	.mcard {
+		padding: 1rem 1.15rem;
+		border-radius: 14px;
+		background: var(--surface);
+		border: 1px solid var(--card-line, #e2e7ee);
+	}
 	.foot {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.6rem;
-		margin: 0;
+		margin: -0.5rem 0 0;
 		font-size: 0.875rem;
 		color: var(--muted);
 	}
-	@media (max-width: 1200px) {
-		.cards {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+	@media (prefers-reduced-motion: no-preference) {
+		.sign {
+			transform: scale(0.6);
+			opacity: 0;
+			transition:
+				transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+				opacity 0.3s;
+		}
+		.seen .sign {
+			transform: none;
+			opacity: 1;
 		}
 	}
-	@media (max-width: 900px) {
+	@media (prefers-reduced-motion: reduce) {
+		.track span {
+			transition: none;
+		}
+	}
+	@media (max-width: 1000px) {
 		.balance {
 			grid-template-columns: 1fr;
 		}
 	}
-	@media (max-width: 620px) {
+	@media (max-width: 760px) {
 		.cards {
 			grid-template-columns: 1fr;
 		}
-		.cta {
-			grid-column: auto;
-		}
+	}
+	@media (max-width: 620px) {
 		.sign {
-			width: 5rem;
-			height: 5rem;
-			font-size: 3.6rem;
+			width: 4.5rem;
+			height: 4.5rem;
+			font-size: 3.2rem;
+		}
+		.bal-main {
+			gap: 1rem;
 		}
 	}
 </style>

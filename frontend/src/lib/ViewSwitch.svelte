@@ -1,8 +1,9 @@
 <script lang="ts">
-	// Перемикач моменту: «Зараз» або «Літній день» (для демонстрації надлишку) + підпис активного моменту
+	// Перемикач моменту: «Зараз» або «Літній день» (як працювали б станції в сонячний червневий день).
+	// Під перемикачем — одне речення, що саме зараз показано, щоб не треба було здогадуватися.
 	import { page } from '$app/state';
 	import { VIEWS, type ViewKey } from './api.ts';
-	import { moment } from './format.ts';
+	import { moment, longDate } from './format.ts';
 	import { viewFrom } from './view.ts';
 	import Icon from './Icon.svelte';
 
@@ -10,6 +11,12 @@
 
 	const view = $derived(viewFrom(page.url));
 	const m = $derived(moment(now));
+	const summerDay = $derived(longDate(VIEWS.summer.day).replace(/\s?\d{4}\s?р\.?$/, ''));
+
+	const SUB: Record<ViewKey, string> = {
+		now: 'сьогодні',
+		summer: 'для порівняння'
+	};
 
 	function href(v: ViewKey): string {
 		const p = new URLSearchParams(page.url.search);
@@ -21,47 +28,71 @@
 </script>
 
 <div class="vs">
-	<nav class="seg seg-sm" aria-label="Момент перегляду даних">
+	<span class="vs-label" id="vs-label">Показати енергію</span>
+	<nav class="seg seg-sm" aria-labelledby="vs-label">
 		{#each Object.entries(VIEWS) as [key, v] (key)}
 			<a
 				href={href(key as ViewKey)}
 				aria-current={view === key ? 'page' : undefined}
 				data-sveltekit-reset="false"
 				data-sveltekit-replacestate
+				data-sveltekit-noscroll
 			>
 				<Icon name={key === 'now' ? 'clock' : 'sun'} size={16} />
-				{v.label}
+				<span class="opt">
+					<span class="opt-main">{v.label}</span>
+					<span class="opt-sub">{SUB[key as ViewKey]}</span>
+				</span>
 			</a>
 		{/each}
 	</nav>
-	{#if m}
-		<p class="when" aria-live="polite">
-			Дані на <strong class="tnum">{m.date}, {m.time}</strong>
-			<span class="sep" aria-hidden="true">·</span> змодельовано
-		</p>
-	{/if}
+	<p class="when" aria-live="polite">
+		{#if view === 'summer'}
+			Показано сонячний день <strong>{summerDay}, {VIEWS.summer.hour}:00</strong> — так станції працюють
+			улітку.
+		{:else if m}
+			Дані на <strong class="tnum">{m.date}, {m.time}</strong>. Генерацію змодельовано.
+		{/if}
+	</p>
 </div>
 
 <style>
 	.vs {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem 0.9rem;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.35rem;
+		max-width: 24rem;
+	}
+	.vs-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--muted);
 	}
 	.seg-sm a {
-		padding: 0.35rem 0.8rem;
-		font-size: 0.9rem;
+		padding: 0.35rem 0.85rem 0.35rem 0.7rem;
+		font-size: 0.95rem;
+		line-height: 1.15;
+	}
+	.opt {
+		display: flex;
+		flex-direction: column;
+	}
+	.opt-sub {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--muted);
 	}
 	.when {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: 0.875rem;
 		color: var(--muted);
+		line-height: 1.4;
 	}
 	.when strong {
 		color: var(--text);
-	}
-	.sep {
-		margin: 0 0.15rem;
+		font-weight: 600;
 	}
 </style>

@@ -1,16 +1,23 @@
 <script lang="ts">
-	// «Споживання електроенергії»: скільки електрики споживають комунальні будівлі громади і хто найбільше
+	// «Споживання електроенергії»: скільки електрики споживають комунальні будівлі громади і хто найбільше.
+	// Принцип: одне речення «що тут» → 4 картки → дві прості візуалізації; деталі — за «Детальніше».
 	import { api, errMessage, type Summary, type Building } from '#lib/api.ts';
-	import { num, pct, date, dateTime } from '#lib/format.ts';
+	import { num, pct, date, dateTime, scaleKwh, kwhText, plural } from '#lib/format.ts';
 	import Status from '#lib/Status.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
 	import Term from '#lib/Term.svelte';
+	import StatCard from '#lib/StatCard.svelte';
+	import Reveal from '#lib/Reveal.svelte';
+	import Disclosure from '#lib/Disclosure.svelte';
+	import { fadeUp, stagger } from '#lib/motion.ts';
 	import { electricityRating, median, BASE_YEAR } from '../rating/electricity.ts';
+	import { grow } from '../rating/grow.ts';
 
 	let data = $state<Summary | null>(null);
 	let buildings = $state<Building[]>([]);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
+	let showMoreTop = $state(false);
 
 	async function load() {
 		loading = true;
@@ -27,6 +34,7 @@
 
 	const base = $derived(data?.years[BASE_YEAR]);
 	const partial = $derived(data ? Object.entries(data.years).filter(([, y]) => y.partial) : []);
+	const cur = $derived(partial.at(-1) ?? null);
 	const updated = $derived.by(() => {
 		if (!data) return null;
 		const dates = [...Object.values(data.years).map((y) => y.created), ...data.sources.map((s) => s.created)].filter(
@@ -35,18 +43,19 @@
 		return dates.sort().at(-1) ?? null;
 	});
 
-	/** 4 874 090 → «4,87 млн» */
-	function mln(v: number | null | undefined): string {
-		if (v === null || v === undefined) return '—';
-		return v >= 1e6 ? `${num(v / 1e6, 2)} млн` : num(v);
-	}
-
 	const rating = $derived(electricityRating(buildings));
 	const withElec = $derived(buildings.filter((b) => (b.years[BASE_YEAR]?.elec_kwh ?? 0) > 0));
 	const totalElec = $derived(withElec.reduce((s, b) => s + (b.years[BASE_YEAR]?.elec_kwh ?? 0), 0));
 	const typical = $derived(
 		median([...rating.rows.values()].filter((r) => !r.excluded && r.kwhM2 !== null).map((r) => r.kwhM2!))
 	);
+	const noData = $derived(data ? data.buildings - withElec.length : 0);
+
+	const baseScaled = $derived(scaleKwh(base?.elec_kwh));
+	const curScaled = $derived(scaleKwh(cur?.[1].elec_kwh));
+	// Груба оцінка повного поточного року: якщо решта року йтиме так само
+	const projection = $derived(cur && cur[1].coverage > 0 ? cur[1].elec_kwh / cur[1].coverage : null);
+	const projDiff = $derived(projection && base?.elec_kwh ? projection / base.elec_kwh - 1 : null);
 
 	const byCategory = $derived.by(() => {
 		const m = new Map<string, { count: number; kwh: number }>();
@@ -67,8 +76,13 @@
 			.sort((a, b) => (b.years[BASE_YEAR]?.elec_kwh ?? 0) - (a.years[BASE_YEAR]?.elec_kwh ?? 0))
 			.slice(0, 10)
 	);
+	const topMax = $derived(Math.max(1, top[0]?.years[BASE_YEAR]?.elec_kwh ?? 1));
+	const topShown = $derived(showMoreTop ? top : top.slice(0, 5));
 	const topShare = $derived(
 		totalElec ? top.reduce((s, b) => s + (b.years[BASE_YEAR]?.elec_kwh ?? 0), 0) / totalElec : 0
+	);
+	const top5Share = $derived(
+		totalElec ? top.slice(0, 5).reduce((s, b) => s + (b.years[BASE_YEAR]?.elec_kwh ?? 0), 0) / totalElec : 0
 	);
 </script>
 
@@ -78,12 +92,12 @@
 	<div>
 		<h1>Споживання електроенергії</h1>
 		<p class="lead">
-			Скільки електроенергії за рік споживають комунальні будівлі громади, які категорії й будівлі
-			споживають найбільше. Це основа для рішень, де ставити сонячні станції й акумулятори.
+			Скільки електрики за рік витрачають школи, садочки, лікарні та інші комунальні будівлі громади —
+			і хто витрачає найбільше. Саме там економія та сонячні станції дадуть найбільший ефект.
 		</p>
 	</div>
 	{#if updated}
-		<p class="muted">Дані <Term key="UMUNI" /> від <strong>{dateTime(updated)}</strong></p>
+		<p class="muted small fresh">Дані <Term key="UMUNI" plain /> від <strong>{dateTime(updated)}</strong></p>
 	{/if}
 </div>
 
@@ -94,235 +108,287 @@
 
 {#if data && !loading && !error}
 	<section aria-labelledby="kpi-h">
-		<h2 id="kpi-h" class="visually-hidden">Ключові показники</h2>
-		<ul class="kpis">
-			<li class="kpi kpi-main">
-				<span class="kpi-label">Електроенергія за {BASE_YEAR} рік</span>
-				<span class="kpi-value">{mln(base?.elec_kwh)} <span class="kpi-unit"><Term key="кВт·год" plain /></span></span>
-				<span class="kpi-note">усі лічильники {num(withElec.length)} будівель</span>
-			</li>
-			{#each partial as [year, y] (year)}
-				<li class="kpi kpi-warn">
-					<span class="kpi-label">{year} рік — поки неповний</span>
-					<span class="kpi-value">{mln(y.elec_kwh)} <span class="kpi-unit">кВт·год</span></span>
-					<span class="kpi-note">дані охоплюють ≈ {pct(y.coverage)} року (до {date(y.created)})</span>
-				</li>
-			{/each}
-			<li class="kpi">
-				<span class="kpi-label">
-					Типове <Term key="питоме споживання">споживання на 1 м²</Term>
-				</span>
-				<span class="kpi-value">{num(typical, 1)} <span class="kpi-unit">кВт·год/м²</span></span>
-				<span class="kpi-note">медіана по всіх будівлях у рейтингу, {BASE_YEAR}</span>
-			</li>
-			<li class="kpi">
-				<span class="kpi-label">Будівель у базі</span>
-				<span class="kpi-value">{num(data.buildings)}</span>
-				<span class="kpi-note">
-					без даних про електрику: {num(data.buildings - withElec.length)} — <a href="/defects">якість даних</a>
-				</span>
-			</li>
-		</ul>
+		<h2 id="kpi-h" class="visually-hidden">Головне в цифрах</h2>
+		<div class="stats">
+			<Reveal delay={0}>
+				<StatCard
+					label="Електрика за {BASE_YEAR} рік"
+					value={baseScaled.value}
+					decimals={baseScaled.decimals}
+					unit={baseScaled.unit}
+					icon="bolt"
+					hint="Разом по {num(withElec.length)} {plural(withElec.length, ['будівлі', 'будівлях', 'будівлях'])} громади."
+				/>
+			</Reveal>
+			{#if cur}
+				<Reveal delay={70}>
+					<StatCard
+						label="{cur[0]} рік — поки неповний"
+						value={curScaled.value}
+						decimals={curScaled.decimals}
+						unit={curScaled.unit}
+						icon="clock"
+						tone="warn"
+						toneLabel="рік ще не закінчився"
+						hint={projDiff !== null
+							? `Дані за ≈ ${pct(cur[1].coverage)} року. Якщо так триватиме — це на ${pct(Math.abs(projDiff))} ${projDiff >= 0 ? 'більше' : 'менше'}, ніж у ${BASE_YEAR}.`
+							: `Дані лише за ≈ ${pct(cur[1].coverage)} року.`}
+					/>
+				</Reveal>
+			{/if}
+			<Reveal delay={140}>
+				<StatCard
+					label="Типова будівля на 1 м²"
+					value={typical}
+					decimals={1}
+					unit="кВт·год/м²"
+					icon="gauge"
+					href="/rating"
+					hint="Половина будівель витрачає більше, половина — менше. Хто саме — у рейтингу."
+				/>
+			</Reveal>
+			<Reveal delay={210}>
+				<StatCard
+					label="Будівель у базі"
+					value={data.buildings}
+					icon="building"
+					href={noData ? '/defects' : undefined}
+					tone={noData ? 'warn' : 'neutral'}
+					toneLabel="є будівлі без даних"
+					hint={noData
+						? `У ${num(noData)} з них немає даних про електрику — дивіться «Якість даних».`
+						: 'Для всіх є дані про електрику.'}
+				/>
+			</Reveal>
+		</div>
 	</section>
 
-	{#each partial as [year, y] (year)}
-		<div class="notice notice-info">
-			<p>
-				<strong>Чому {year} рік не порівнюємо напряму.</strong> Вивантаження від {date(y.created)}
-				охоплює лише ≈ {pct(y.coverage)} року, тому всі порівняння й рейтинг рахуємо за повним
-				{BASE_YEAR} роком. Якщо решта {year} року йтиме так само, за рік вийде приблизно
-				<strong>{mln(y.elec_kwh / y.coverage)} кВт·год</strong>
-				{#if base?.elec_kwh}
-					({y.elec_kwh / y.coverage >= base.elec_kwh ? 'більше' : 'менше'}, ніж у {BASE_YEAR}, на
-					{pct(Math.abs(y.elec_kwh / y.coverage / base.elec_kwh - 1))}){/if} — це груба оцінка.
-			</p>
-		</div>
-	{/each}
-
-	<div class="grid-2">
-		<section class="card" aria-labelledby="cat-h">
-			<h2 id="cat-h">За категоріями будівель, {BASE_YEAR}</h2>
-			<div class="table-wrap">
-				<table>
-					<caption class="visually-hidden">Споживання електроенергії за категоріями будівель</caption>
-					<thead>
-						<tr>
-							<th scope="col">Категорія</th>
-							<th scope="col" class="num">Будівель</th>
-							<th scope="col">Електроенергія, <span class="unit">кВт·год</span></th>
-							<th scope="col" class="num">
-								<Term key="медіана категорії">Медіана</Term>, <span class="unit">кВт·год/м²</span>
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each byCategory as c (c.name)}
-							<tr>
-								<th scope="row"><a href="/rating?cat={encodeURIComponent(c.name)}">{c.name}</a></th>
-								<td class="num">{num(c.count)}</td>
-								<td>
-									<span class="cat-val"><span class="tnum">{num(c.kwh)}</span> <span class="muted small">· {pct(c.share)}</span></span>
-									<span class="cat-track" aria-hidden="true"><span class="cat-fill" style="width:{(c.kwh / catMax) * 100}%"></span></span>
-								</td>
-								<td class="num">{num(c.med, 1)}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-			<p class="muted small note">
-				Медіану порівнюйте лише всередині категорії: лікарня з цілодобовим обладнанням закономірно
-				споживає на 1 м² більше, ніж музей.
-			</p>
-		</section>
-
-		<section class="card" aria-labelledby="top-h">
-			<h2 id="top-h">10 найбільших споживачів, {BASE_YEAR}</h2>
-			<p class="muted small">
-				Разом — <strong>{pct(topShare)}</strong> усієї електроенергії громади. Тут сонячна станція
-				дасть найбільшу економію в гривнях.
-			</p>
-			<ol class="top">
-				{#each top as b, i (b.id)}
-					{@const r = rating.rows.get(b.id)}
-					<li>
-						<span class="top-n">{i + 1}</span>
-						<span class="top-txt">
-							<a href="/object/{b.id}">{b.name}</a>
-							<span class="muted small">
-								{b.category_short}{#if r?.kwhM2} · {num(r.kwhM2, 1)} кВт·год/м²{/if}
+	<div class="grid-2 main">
+		<Reveal class="cell">
+			<section class="card" aria-labelledby="cat-h">
+				<h2 id="cat-h">Хто споживає найбільше: за типами будівель</h2>
+				<p class="muted sub">Частка від усієї електрики громади за {BASE_YEAR} рік.</p>
+				<ul class="cats" {@attach grow}>
+					{#each byCategory as c, i (c.name)}
+						<li>
+							<div class="cat-line">
+								<a href="/rating?cat={encodeURIComponent(c.name)}" class="cat-name">{c.name}</a>
+								<span class="cat-pct tnum">{pct(c.share)}</span>
+							</div>
+							<span class="track" aria-hidden="true">
+								<span class="fill" style="width:{(c.kwh / catMax) * 100}%; --i:{i}"></span>
 							</span>
-						</span>
-						<span class="top-v tnum">{num(b.years[BASE_YEAR]?.elec_kwh)} <span class="unit">кВт·год</span></span>
-					</li>
-				{/each}
-			</ol>
-			<p class="small"><a href="/solar">Де ставити СЕС →</a></p>
-		</section>
+							<span class="muted small">{kwhText(c.kwh)} · {num(c.count)} {plural(c.count, ['будівля', 'будівлі', 'будівель'])}</span>
+						</li>
+					{/each}
+				</ul>
+				<Disclosure summary="Детальніше: типове споживання на 1 м² у кожній категорії">
+					<div class="table-wrap">
+						<table>
+							<caption class="visually-hidden">Споживання за категоріями будівель</caption>
+							<thead>
+								<tr>
+									<th scope="col">Категорія</th>
+									<th scope="col" class="num">Будівель</th>
+									<th scope="col" class="num">Електрика, <span class="unit">кВт·год</span></th>
+									<th scope="col" class="num">
+										<Term key="медіана категорії">Типово на 1 м²</Term>
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each byCategory as c (c.name)}
+									<tr>
+										<th scope="row">{c.name}</th>
+										<td class="num">{num(c.count)}</td>
+										<td class="num">{num(c.kwh)}</td>
+										<td class="num">{num(c.med, 1)} <span class="unit">кВт·год/м²</span></td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+					<p class="muted small note">
+						Порівнюйте лише всередині категорії: лікарня з цілодобовим обладнанням закономірно витрачає
+						на 1 м² більше, ніж музей.
+					</p>
+				</Disclosure>
+			</section>
+		</Reveal>
+
+		<Reveal class="cell" delay={90}>
+			<section class="card" aria-labelledby="top-h">
+				<h2 id="top-h">Найбільші споживачі</h2>
+				<p class="muted sub">
+					П’ять будівель нижче витрачають <strong class="ink">{pct(top5Share)}</strong> усієї електрики
+					громади. Тут сонячна станція заощадить найбільше.
+				</p>
+				<ol class="top" {@attach grow}>
+					{#each topShown as b, i (b.id)}
+						{@const kwh = b.years[BASE_YEAR]?.elec_kwh ?? 0}
+						<li in:fadeUp={{ delay: i >= 5 ? stagger(i - 5, 50) : 0 }}>
+							<span class="top-n" aria-hidden="true">{i + 1}</span>
+							<span class="top-txt">
+								<a href="/object/{b.id}"><span class="visually-hidden">{i + 1}. </span>{b.name}</a>
+								<span class="track thin" aria-hidden="true">
+									<span class="fill" style="width:{(kwh / topMax) * 100}%; --i:{i}"></span>
+								</span>
+								<span class="muted small">{b.category_short}</span>
+							</span>
+							<span class="top-v tnum">{kwhText(kwh)}</span>
+						</li>
+					{/each}
+				</ol>
+				<div class="top-foot">
+					{#if top.length > 5}
+						<button type="button" class="btn btn-secondary" aria-expanded={showMoreTop} onclick={() => (showMoreTop = !showMoreTop)}>
+							{showMoreTop ? 'Показати лише п’ять' : `Показати всі ${top.length} (разом ${pct(topShare)})`}
+						</button>
+					{/if}
+					<a href="/solar" class="go">Де ставити сонячні станції →</a>
+				</div>
+			</section>
+		</Reveal>
 	</div>
 
-	<details class="card sources">
-		<summary>Джерела даних ({data.sources.length} файли)</summary>
+	{#if cur && projection}
+		<Disclosure summary="Чому {cur[0]} рік не порівнюємо з {BASE_YEAR} напряму" class="card soft">
+			<p>
+				Останнє вивантаження від {date(cur[1].created)} охоплює лише ≈ {pct(cur[1].coverage)} року, тож
+				у ньому менше місяців. Тому рейтинг і порівняння рахуємо за повним {BASE_YEAR} роком. Якщо решта
+				{cur[0]} року йтиме так само, за рік вийде приблизно <strong>{kwhText(projection)}</strong> — це груба
+				оцінка, а не прогноз.
+			</p>
+		</Disclosure>
+	{/if}
+
+	<Disclosure summary="Звідки ці дані" hint="{data.sources.length} {plural(data.sources.length, ['файл', 'файли', 'файлів'])} з UMUNI" class="card soft">
 		<p class="muted small">
-			Вивантаження з UMUNI, на яких зроблено розрахунок. Щоб оновити — завантажте новий файл на
-			сторінці <a href="/upload">«Оновити дані»</a>.
+			Розрахунок зроблено на вивантаженнях з <Term key="UMUNI" plain />. Щоб оновити — завантажте новий
+			файл на сторінці <a href="/upload">«Оновити дані»</a>.
 		</p>
-		<div class="table-wrap">
-			<table>
-				<caption class="visually-hidden">Файли джерел даних</caption>
-				<thead>
-					<tr>
-						<th scope="col">Файл</th>
-						<th scope="col">Вміст</th>
-						<th scope="col" class="num">Рядків</th>
-						<th scope="col">Дата вивантаження</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.sources as s (s.file)}
-						<tr>
-							<td><code>{s.file}</code></td>
-							<td>{s.kind}</td>
-							<td class="num">{num(s.rows)}</td>
-							<td>{s.created ? dateTime(s.created) : '—'}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</details>
+		<ul class="sources">
+			{#each data.sources as s (s.file)}
+				<li>
+					<strong>{s.kind}</strong>
+					<span class="muted small">{num(s.rows)} рядків{s.created ? ` · вивантажено ${dateTime(s.created)}` : ''}</span>
+					<code>{s.file}</code>
+				</li>
+			{/each}
+		</ul>
+	</Disclosure>
 {/if}
 
 <style>
-	.kpis {
-		list-style: none;
-		padding: 0;
-		margin: 0 0 1.25rem;
+	.fresh {
+		margin: 0;
+	}
+	.stats {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
 		gap: 1rem;
+		margin-bottom: 1.5rem;
 	}
-	.kpi {
-		background: var(--surface);
-		border: 1px solid var(--line);
-		border-top: 4px solid var(--navy-3);
-		border-radius: var(--radius);
-		padding: 1rem 1.1rem;
+	.stats > :global(.reveal) {
+		display: grid;
+	}
+	.main :global(.cell) {
+		display: grid;
+		min-width: 0;
+	}
+	.main .card {
+		margin-bottom: 0;
+	}
+	.main {
+		margin-bottom: 1.25rem;
+	}
+	.sub {
+		margin: -0.25rem 0 1rem;
+	}
+	.ink {
+		color: var(--text);
+	}
+	.cats {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.9rem;
+	}
+	.cats li {
+		display: grid;
+		gap: 0.3rem;
+	}
+	.cat-line {
 		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		box-shadow: var(--shadow);
+		justify-content: space-between;
+		gap: 1rem;
+		align-items: baseline;
 	}
-	.kpi-main {
-		border-top-color: var(--sun);
-	}
-	.kpi-warn {
-		border-top-color: #b8c2cf;
-	}
-	.kpi-label {
-		font-size: 0.9rem;
-		color: var(--muted);
+	.cat-name {
 		font-weight: 600;
 	}
-	.kpi-value {
-		font-size: 1.85rem;
+	.cat-pct {
 		font-weight: 700;
-		font-variant-numeric: tabular-nums;
-		line-height: 1.2;
+		font-size: 1.05rem;
 	}
-	.kpi-unit {
-		font-size: 1rem;
-		font-weight: 500;
-		color: var(--muted);
-	}
-	.kpi-note {
-		font-size: 0.875rem;
-		color: var(--muted);
-	}
-	.cat-val {
+	.track {
 		display: block;
-		white-space: nowrap;
+		height: 10px;
+		border-radius: 999px;
+		background: var(--neutral-soft);
+		overflow: hidden;
 	}
-	.cat-track {
-		display: block;
+	.track.thin {
 		height: 6px;
-		margin-top: 0.3rem;
-		border-radius: 3px;
-		background: #eef2f6;
-		min-width: 8rem;
+		margin: 0.3rem 0 0.2rem;
 	}
-	.cat-fill {
+	.fill {
 		display: block;
 		height: 100%;
-		border-radius: 3px;
-		background: var(--sun);
+		border-radius: 999px;
+		background: linear-gradient(90deg, var(--sun), var(--sun-strong));
+		transform-origin: left center;
 	}
-	tbody th {
-		font-weight: 600;
+	.top .fill {
+		background: var(--navy-3);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.fill {
+			transform: scaleX(0);
+			transition: transform 0.8s var(--ease) calc(var(--i, 0) * 60ms + 120ms);
+		}
+		:global(.grown) .fill {
+			transform: none;
+		}
 	}
 	.note {
 		margin: 0.75rem 0 0;
 	}
 	.top {
 		list-style: none;
-		margin: 0 0 0.75rem;
+		margin: 0 0 1rem;
 		padding: 0;
 	}
 	.top li {
 		display: grid;
-		grid-template-columns: 2rem 1fr max-content;
+		grid-template-columns: 2rem minmax(0, 1fr) max-content;
 		gap: 0.75rem;
-		align-items: center;
-		padding: 0.5rem 0;
+		align-items: start;
+		padding: 0.65rem 0;
 		border-bottom: 1px solid #edf0f4;
+	}
+	.top li:last-child {
+		border-bottom: 0;
 	}
 	.top-n {
 		display: grid;
 		place-items: center;
-		width: 1.8rem;
-		height: 1.8rem;
+		width: 1.9rem;
+		height: 1.9rem;
 		border-radius: 50%;
-		background: #eef2f6;
+		background: var(--sun-soft);
+		color: var(--sun-ink);
 		font-weight: 700;
 		font-size: 0.875rem;
 	}
@@ -332,18 +398,46 @@
 		min-width: 0;
 	}
 	.top-v {
-		font-weight: 600;
+		font-weight: 700;
 		white-space: nowrap;
 	}
+	.top-foot {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem 1.25rem;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.go {
+		font-weight: 600;
+	}
+	:global(.disc.card.soft) {
+		padding: 0.25rem 1.25rem;
+		margin: 0 0 1rem;
+	}
+	:global(.disc.card.soft) > :global(.disc-btn) {
+		padding: 0.85rem 0;
+	}
 	.sources {
-		margin-top: 1.25rem;
+		list-style: none;
+		margin: 0.5rem 0 0;
+		padding: 0;
+		display: grid;
+		gap: 0.6rem;
+	}
+	.sources li {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.2rem 0.75rem;
+		align-items: baseline;
 	}
 	code {
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
+		color: var(--muted);
 	}
 	@media (max-width: 520px) {
 		.top li {
-			grid-template-columns: 2rem 1fr;
+			grid-template-columns: 2rem minmax(0, 1fr);
 		}
 		.top-v {
 			grid-column: 2;

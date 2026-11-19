@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 
+from .geocode import load_cache as load_geocode_cache, umuni_ok
 from .import_umuni import AnnualReport, Building, detect_kind, key, read_annual, read_buildings
 
 # --- Коефіцієнти перерахунку (METHODOLOGY.md, розділ 1) ---
@@ -66,7 +67,7 @@ class BuildingView:
     floors: int | None
     heated_area: float | None
     heated_volume: float | None
-    has_coords: bool
+    has_coords: bool  # координати є саме в UMUNI
     years: dict[int, YearData] = field(default_factory=dict)
     in_rating: bool = False
     excluded_reason: str | None = None
@@ -75,6 +76,11 @@ class BuildingView:
     rank: int | None = None
     rank_of: int | None = None
     defects: list[dict] = field(default_factory=list)
+    # координати для карти: UMUNI (якщо в межах громади) або геокодування з data/geocode_cache.csv
+    lat: float | None = None
+    lon: float | None = None
+    geo_source: str | None = None  # 'UMUNI' | 'nominatim' | None
+    geo_precision: str = "немає"  # 'UMUNI' | 'будинок' | 'вулиця' | 'населений пункт' | 'немає'
 
 
 def _sum(*vals):
@@ -163,6 +169,13 @@ class Store:
                         heated_volume=b.heated_volume if b else None,
                         has_coords=bool(b and b.lat),
                     )
+                    if b and umuni_ok(b.lat, b.lon):
+                        views[k].lat, views[k].lon = b.lat, b.lon
+                        views[k].geo_source = views[k].geo_precision = "UMUNI"
+                    elif b and b.lat:
+                        defect(views[k], "Реєстр будівель", "координати", f"{b.lat}, {b.lon}",
+                               "Координати UMUNI поза межами громади (> 30 км від центру Полтави)",
+                               "Виправити координати в UMUNI (переплутані широта/довгота або інше місто)")
                     if not b:
                         defect(views[k], rep.source, "назва+адреса", f"{r.name}; {r.address}",
                                "Будівлю не знайдено в реєстрі будівель", "Перевірити назву й адресу в UMUNI")
@@ -180,6 +193,13 @@ class Store:
                     if r.elec_kwh:
                         yd.elec_kwh_m2 = r.elec_kwh / area
                 bv.years[year] = yd
+
+        # --- координати з кешу геокодування (лише для будівель без коректних координат UMUNI) ---
+        geo = load_geocode_cache(self.data_dir / "geocode_cache.csv")
+        for bv in views.values():
+            g = geo.get(bv.id)
+            if bv.geo_source is None and g and g["source"] != "UMUNI" and g["lat"] is not None:
+                bv.lat, bv.lon, bv.geo_source, bv.geo_precision = g["lat"], g["lon"], g["source"], g["precision"]
 
         # --- правила валідатора ---
         for bv in views.values():

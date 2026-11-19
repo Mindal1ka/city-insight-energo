@@ -5,6 +5,19 @@
 
 	let { months }: { months: SolarMonth[] } = $props();
 
+	// Стовпчики «виростають» при появі й плавно змінюються разом із повзунком (CSS-перехід y/height).
+	let grown = $state(false);
+	let settled = $state(false); // після першої появи — без «драбинки», щоб повзунок відгукувався одразу
+	$effect(() => {
+		const r = requestAnimationFrame(() => requestAnimationFrame(() => (grown = true)));
+		const t = setTimeout(() => (settled = true), 1200);
+		return () => {
+			cancelAnimationFrame(r);
+			clearTimeout(t);
+		};
+	});
+	const uid = $props.id();
+
 	const W = 760;
 	const H = 320;
 	const PAD = { l: 64, r: 12, t: 16, b: 40 };
@@ -20,10 +33,13 @@
 	const bw = $derived(Math.min(22, slot * 0.34));
 
 	function y(v: number): number {
-		return PAD.t + plotH - (v / max) * plotH;
+		return PAD.t + plotH - ((grown ? v : 0) / max) * plotH;
 	}
 	function h(v: number): number {
-		return (v / max) * plotH;
+		return ((grown ? v : 0) / max) * plotH;
+	}
+	function yt(v: number): number {
+		return PAD.t + plotH - (v / max) * plotH;
 	}
 </script>
 
@@ -33,9 +49,9 @@
 		<span><i class="sw self"></i> Генерація, використана самою будівлею</span>
 		<span><i class="sw surplus"></i> Надлишок генерації (пропадає)</span>
 	</div>
-	<svg viewBox="0 0 {W} {H}" role="img" aria-labelledby="sol-title sol-desc">
-		<title id="sol-title">Помісячна генерація СЕС і споживання електроенергії будівлею, кВт·год</title>
-		<desc id="sol-desc">
+	<svg viewBox="0 0 {W} {H}" role="img" aria-labelledby="{uid}-t {uid}-d">
+		<title id="{uid}-t">Помісячна генерація СЕС і споживання електроенергії будівлею, кВт·год</title>
+		<desc id="{uid}-d">
 			{sorted
 				.map(
 					(m) =>
@@ -45,27 +61,27 @@
 		</desc>
 		<defs>
 			<!-- Штрихування надлишку: колір не єдиний носій сенсу -->
-			<pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+			<pattern id="{uid}-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
 				<rect width="6" height="6" fill="var(--sol-surplus)" />
 				<line x1="0" y1="0" x2="0" y2="6" stroke="#fff" stroke-width="2" />
 			</pattern>
 		</defs>
 		{#each ticks as t (t)}
-			<line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke="#e1e6ec" />
-			<text x={PAD.l - 8} y={y(t)} text-anchor="end" dominant-baseline="middle" class="axis">{num(t)}</text>
+			<line x1={PAD.l} x2={W - PAD.r} y1={yt(t)} y2={yt(t)} stroke="#e1e6ec" />
+			<text x={PAD.l - 8} y={yt(t)} text-anchor="end" dominant-baseline="middle" class="axis">{num(t)}</text>
 		{/each}
 		<text x="12" y={PAD.t + plotH / 2} transform="rotate(-90 12 {PAD.t + plotH / 2})" text-anchor="middle" class="axis">кВт·год</text>
 		{#each sorted as m, i (m.month)}
 			{@const cx = PAD.l + slot * i + slot / 2}
-			<g>
+			<g style:--d="{settled ? 0 : i * 35}ms">
 				<title>{MONTHS_FULL[m.month - 1]}: споживання {num(m.cons_kwh)} кВт·год; генерація {num(m.gen_kwh)} кВт·год (власне {num(m.self_kwh)}, надлишок {num(m.surplus_kwh)})</title>
-				<rect x={cx - bw - 1} y={y(m.cons_kwh)} width={bw} height={h(m.cons_kwh)} fill="var(--sol-cons)" />
-				<rect x={cx + 1} y={y(m.self_kwh)} width={bw} height={h(m.self_kwh)} fill="var(--sol-self)" />
-				<rect x={cx + 1} y={y(m.self_kwh + m.surplus_kwh)} width={bw} height={h(m.surplus_kwh)} fill="url(#hatch)" />
+				<rect class="bar" x={cx - bw - 1} width={bw} style:y="{y(m.cons_kwh)}px" style:height="{h(m.cons_kwh)}px" fill="var(--sol-cons)" />
+				<rect class="bar" x={cx + 1} width={bw} style:y="{y(m.self_kwh)}px" style:height="{h(m.self_kwh)}px" fill="var(--sol-self)" />
+				<rect class="bar" x={cx + 1} width={bw} style:y="{y(m.self_kwh + m.surplus_kwh)}px" style:height="{h(m.surplus_kwh)}px" fill="url(#{uid}-hatch)" />
 			</g>
 			<text x={cx} y={H - PAD.b + 18} text-anchor="middle" class="axis">{MONTHS[m.month - 1]}</text>
 		{/each}
-		<line x1={PAD.l} x2={W - PAD.r} y1={y(0)} y2={y(0)} stroke="#6b7684" />
+		<line x1={PAD.l} x2={W - PAD.r} y1={yt(0)} y2={yt(0)} stroke="#6b7684" />
 	</svg>
 	<figcaption class="muted small">
 		Ліва колонка кожного місяця — споживання, права — генерація станції: суцільна частина
@@ -81,6 +97,13 @@
 		width: 100%;
 		height: auto;
 		display: block;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.bar {
+			transition:
+				y 0.45s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms),
+				height 0.45s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms);
+		}
 	}
 	.axis {
 		font-size: 12px;

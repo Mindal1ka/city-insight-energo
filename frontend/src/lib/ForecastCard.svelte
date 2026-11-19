@@ -2,9 +2,11 @@
 	// Картка «Сонце завтра»: скільки виробить станція за прогнозом погоди (Open-Meteo × модель PVGIS).
 	// kw — потужність станції; null → показуємо міський рівень «на 1 кВт панелей».
 	// compact — вузький варіант без перемикача днів (для бокових панелей і списків).
-	import { getForecast, ratioOf, locationName, type Forecast, type ForecastDay } from './api-forecast.ts';
+	import { getForecast, ratioOf, type Forecast, type ForecastDay } from './api-forecast.ts';
 	import { errMessage } from './api.ts';
 	import { num } from './format.ts';
+	import { fadeUp } from './motion.ts';
+	import Disclosure from './Disclosure.svelte';
 
 	let { kw = null, compact = false }: { kw?: number | null; compact?: boolean } = $props();
 
@@ -59,6 +61,17 @@
 		if (ratio >= 0.5) return 'менше, ніж зазвичай';
 		return 'значно менше, ніж зазвичай';
 	});
+
+	// Проста відповідь «мало / середньо / багато» — відносно звичайного дня цієї пори року
+	const level = $derived.by(() => {
+		if (ratio === null) return { key: 'mid', word: 'невідомо скільки' };
+		if (ratio < 0.6) return { key: 'low', word: 'мало' };
+		if (ratio < 1.1) return { key: 'mid', word: 'середньо' };
+		return { key: 'high', word: 'багато' };
+	});
+	const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+	const MONTHS_GEN = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+	const monthGen = $derived(day ? (MONTHS_GEN[Number(day.date.slice(5, 7)) - 1] ?? '') : '');
 
 	// ——— Погодинний міні-графік ———
 	const SW = $derived(compact ? 240 : 320);
@@ -137,11 +150,7 @@
 		{#if !compact && days.length > 1}
 			<div class="fc-days" role="group" aria-label="День прогнозу">
 				{#each days as d (d.date)}
-					<button
-						type="button"
-						aria-pressed={day?.date === d.date}
-						onclick={() => (picked = d.date)}>{d.label}</button
-					>
+					<button type="button" aria-pressed={day?.date === d.date} onclick={() => (picked = d.date)}>{d.label}</button>
 				{/each}
 			</div>
 		{/if}
@@ -156,110 +165,100 @@
 			<button type="button" class="btn btn-secondary" onclick={() => load(true)}>Спробувати ще раз</button>
 		</div>
 	{:else if day}
-		<div class="fc-main">
-			<div class="wx wx-{t}" title={day.weather}>
-				<svg viewBox="0 0 48 48" width={compact ? 40 : 52} height={compact ? 40 : 52} aria-hidden="true">
-					{#if t !== 'cloud'}
-						<g class="sun-g" transform={t === 'part' ? 'translate(-5 -5)' : ''}>
-							<circle cx="24" cy="24" r="8.5" />
-							{#each [0, 45, 90, 135, 180, 225, 270, 315] as a (a)}
-								<line x1="24" y1="9" x2="24" y2="4.5" transform="rotate({a} 24 24)" />
-							{/each}
+		{#key day.date}
+			<div class="fc-main" in:fadeUp={{ y: 6 }}>
+				<div class="wx wx-{t}" aria-hidden="true">
+					<svg viewBox="0 0 48 48" width={compact ? 44 : 56} height={compact ? 44 : 56}>
+						{#if t !== 'cloud'}
+							<g class="sun-g" transform={t === 'part' ? 'translate(-5 -5)' : ''}>
+								<g class="rays">
+									{#each [0, 45, 90, 135, 180, 225, 270, 315] as a (a)}
+										<line x1="24" y1="9" x2="24" y2="4.5" transform="rotate({a} 24 24)" />
+									{/each}
+								</g>
+								<circle cx="24" cy="24" r="8.5" />
+							</g>
+						{/if}
+						{#if t !== 'sun'}
+							<path
+								class="cloud-g"
+								d={t === 'cloud'
+									? 'M13 36h23a7 7 0 0 0 0-14 10 10 0 0 0-19-2 8 8 0 0 0-4 16z'
+									: 'M18 40h20a6 6 0 0 0 0-12 8.5 8.5 0 0 0-16.2-1.6A6.8 6.8 0 0 0 18 40z'}
+							/>
+						{/if}
+					</svg>
+				</div>
+				<div class="fc-num">
+					<p class="fc-say">
+						{cap(day.label)} сонця буде <strong class="lvl lvl-{level.key}">{level.word}</strong>
+					</p>
+					<p class="fc-kwh">
+						<span class="big-num">≈ {num(kwh, digits(kwh))}</span>
+						<span class="unit-s">кВт·год</span>
+						<span class="fc-sub">
+							{#if size}виробить станція {num(size, size < 10 ? 1 : 0)} кВт за день{:else}за день з кожного 1 кВт панелей{/if}
+						</span>
+					</p>
+				</div>
+			</div>
+
+			{#if pts.length > 1}
+				<figure class="spark">
+					<svg viewBox="0 0 {SW} {SH}" width="100%" preserveAspectRatio="none" role="img" aria-labelledby="{uid}-st {uid}-sd">
+						<title id="{uid}-st">Генерація по годинах, {day.label}</title>
+						<desc id="{uid}-sd">{sparkDesc}</desc>
+						<line x1="0" x2={SW} y1={SH - PB} y2={SH - PB} class="base" />
+						<g class="draw">
+							<path d={area} class="area wx-{t}" />
+							<path d={line} class="ln" vector-effect="non-scaling-stroke" />
 						</g>
-					{/if}
-					{#if t !== 'sun'}
-						<path
-							class="cloud-g"
-							d={t === 'cloud'
-								? 'M13 36h23a7 7 0 0 0 0-14 10 10 0 0 0-19-2 8 8 0 0 0-4 16z'
-								: 'M18 40h20a6 6 0 0 0 0-12 8.5 8.5 0 0 0-16.2-1.6A6.8 6.8 0 0 0 18 40z'}
-						/>
-					{/if}
-				</svg>
-				<span class="wx-word">{day.weather}</span>
-			</div>
-
-			<div class="fc-num">
-				<p class="fc-kwh">
-					<span class="big-num">≈ {num(kwh, digits(kwh))}</span><span class="unit-s">кВт·год</span>
-				</p>
-				<p class="fc-sub">
-					{#if size}
-						виробить станція {num(size, size < 10 ? 1 : 0)} кВт за день
-					{:else}
-						на кожен 1 кВт панелей у Полтаві за день
-					{/if}
-				</p>
-			</div>
-		</div>
-
-		{#if ratioPct !== null}
-			<div class="norm">
-				<div class="norm-txt">
-					<strong>{ratioPct} % від норми</strong>
-					<span class="muted">— {verdict}</span>
-				</div>
-				<div
-					class="norm-bar"
-					role="meter"
-					aria-valuemin="0"
-					aria-valuemax="200"
-					aria-valuenow={ratioPct}
-					aria-label="Прогноз у відсотках від багаторічної норми"
-				>
-					<span class="norm-fill wx-{t}" style:width="{Math.min(100, ratioPct / 2)}%"></span>
-					<span class="norm-100" title="норма"></span>
-				</div>
-				<p class="norm-legend muted">
-					норма ≈ {num(normalKwh, digits(normalKwh))} кВт·год (середнє PVGIS для цього місяця){#if day.sun_hours !== null && day.sun_hours !== undefined}
-						· сонця ≈ {num(day.sun_hours, 0)} год{/if}
-				</p>
-			</div>
-		{/if}
-
-		{#if pts.length > 1}
-			<figure class="spark">
-				<svg
-					viewBox="0 0 {SW} {SH}"
-					width="100%"
-					preserveAspectRatio="none"
-					role="img"
-					aria-labelledby="{uid}-st {uid}-sd"
-				>
-					<title id="{uid}-st">Генерація по годинах, {day.label}</title>
-					<desc id="{uid}-sd">{sparkDesc}</desc>
-					<line x1="0" x2={SW} y1={SH - PB} y2={SH - PB} class="base" />
-					<path d={area} class="area wx-{t}" />
-					<path d={line} class="ln" vector-effect="non-scaling-stroke" />
-					{#if peak.v > 0}
-						<circle cx={peak.x} cy={peak.y} r="3" class="pk" vector-effect="non-scaling-stroke" />
-					{/if}
-				</svg>
-				<div class="ticks" aria-hidden="true">
-					{#each hourTicks as tk (tk.h)}
-						<span style:left="{(tk.x / SW) * 100}%">{tk.h}:00</span>
-					{/each}
-				</div>
-				{#if !compact && peak.v > 0}
-					<figcaption class="muted">
-						Пік ≈ {num(peak.v, size ? 1 : 2)} кВт·год о {peak.hour}:00
-					</figcaption>
-				{/if}
-			</figure>
-		{/if}
-
-		<footer class="fc-foot">
-			<span>
-				{#if data?.demo}
-					<span class="pill pill-warn">демо</span> Прогноз ще не підключено — показано приклад
-				{:else}
-					{data?.source ?? 'Open-Meteo'}{fresh ? `, ${fresh}` : ''}
-				{/if}
-			</span>
-			{#if data?.stale}
-				<span class="pill pill-warn" role="note">⚠ дані застарілі: показано останній збережений прогноз</span>
+						{#if peak.v > 0}
+							<circle cx={peak.x} cy={peak.y} r="3" class="pk" vector-effect="non-scaling-stroke" />
+						{/if}
+					</svg>
+					<div class="ticks" aria-hidden="true">
+						{#each hourTicks as tk (tk.h)}
+							<span style:left="{(tk.x / SW) * 100}%">{tk.h}:00</span>
+						{/each}
+					</div>
+				</figure>
 			{/if}
-		</footer>
+		{/key}
+
+		{#if data?.stale || data?.demo}
+			<p class="fc-flags">
+				{#if data?.demo}<span class="pill pill-warn">демо</span> Прогноз ще не підключено — показано приклад{/if}
+				{#if data?.stale}<span class="pill pill-warn" role="note">⚠ дані застарілі: показано останній збережений прогноз</span>{/if}
+			</p>
+		{/if}
+
+		{#if !compact}
+			<Disclosure summary="Детальніше про прогноз">
+				{#if ratioPct !== null}
+					<div class="norm">
+						<div class="norm-txt">
+							<strong>{ratioPct} % від звичайного</strong>
+							<span class="muted">— {verdict}</span>
+						</div>
+						<div class="norm-bar" role="meter" aria-valuemin="0" aria-valuemax="200" aria-valuenow={ratioPct} aria-label="Прогноз у відсотках від багаторічної норми">
+							<span class="norm-fill wx-{t}" style:width="{Math.min(100, ratioPct / 2)}%"></span>
+							<span class="norm-100" title="норма"></span>
+						</div>
+						<p class="norm-legend muted">
+							Риска — звичайний день {monthGen}: ≈ {num(normalKwh, digits(normalKwh))} кВт·год (середнє PVGIS).
+						</p>
+					</div>
+				{/if}
+				<ul class="fc-facts">
+					<li>Погода: {day.weather}{#if day.sun_hours !== null && day.sun_hours !== undefined}, сонця ≈ {num(day.sun_hours, 0)} год{/if}</li>
+					{#if peak.v > 0}<li>Найбільше — о {peak.hour}:00, ≈ {num(peak.v, size ? 1 : 2)} кВт·год</li>{/if}
+					<li>Джерело: {data?.source ?? 'Open-Meteo'}{fresh ? `, ${fresh}` : ''} × модель PVGIS</li>
+				</ul>
+			</Disclosure>
+		{:else}
+			<p class="fc-foot">{data?.source ?? 'Open-Meteo'}{fresh ? `, ${fresh}` : ''}</p>
+		{/if}
 	{:else}
 		<p class="muted">Прогнозу на найближчі дні немає.</p>
 	{/if}
@@ -345,16 +344,6 @@
 		gap: 0.15rem;
 		min-width: 4.5rem;
 	}
-	.wx-word {
-		font-size: 0.8125rem;
-		font-weight: 600;
-		color: var(--sun-ink);
-		text-align: center;
-		line-height: 1.2;
-	}
-	.wx-cloud .wx-word {
-		color: var(--muted);
-	}
 	.sun-g circle {
 		fill: var(--sun);
 		stroke: var(--sun-strong);
@@ -374,20 +363,96 @@
 	.fc-num {
 		min-width: 0;
 	}
+	.fc-say {
+		margin: 0 0 0.15rem;
+		font-size: 1.15rem;
+		font-weight: 600;
+		line-height: 1.3;
+	}
+	.compact .fc-say {
+		font-size: 1rem;
+	}
+	.lvl {
+		padding: 0 0.35rem;
+		border-radius: 6px;
+		white-space: nowrap;
+	}
+	.lvl-low {
+		background: #e9edf2;
+		color: #3d4856;
+	}
+	.lvl-mid {
+		background: var(--sun-soft);
+		color: var(--sun-ink);
+	}
+	.lvl-high {
+		background: #ffe2a8;
+		color: #6d3f00;
+	}
 	.fc-kwh {
 		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0 0.35rem;
 	}
 	.fc-kwh .big-num {
-		font-size: 2.1rem;
+		font-size: 1.9rem;
 		color: var(--text);
 	}
 	.compact .fc-kwh .big-num {
-		font-size: 1.6rem;
+		font-size: 1.5rem;
 	}
 	.fc-sub {
-		margin: 0.15rem 0 0;
 		color: var(--muted);
 		font-size: 0.9rem;
+	}
+	.fc-flags {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--muted);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		align-items: center;
+	}
+	.fc-facts {
+		margin: 0.6rem 0 0;
+		padding-left: 1.1rem;
+		font-size: 0.875rem;
+		color: var(--muted);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.rays {
+			transform-origin: 24px 24px;
+			animation: spin 40s linear infinite;
+		}
+		.spark .draw {
+			animation: reveal 1.1s cubic-bezier(0.22, 1, 0.36, 1) both 0.15s;
+		}
+		.spark .pk {
+			animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both 1.1s;
+			transform-box: fill-box;
+			transform-origin: center;
+		}
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	@keyframes reveal {
+		from {
+			clip-path: inset(0 100% 0 0);
+		}
+		to {
+			clip-path: inset(0 0 0 0);
+		}
+	}
+	@keyframes pop {
+		from {
+			transform: scale(0);
+		}
 	}
 	.norm {
 		display: flex;
@@ -480,19 +545,13 @@
 	.ticks span:last-child {
 		transform: translateX(-100%);
 	}
-	.spark figcaption {
-		font-size: 0.8125rem;
-		margin-top: 0.2rem;
-	}
 	.fc-foot {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.35rem 0.6rem;
+		margin: 0;
 		font-size: 0.8125rem;
 		color: var(--muted);
-		border-top: 1px dashed #e7dcc4;
-		padding-top: 0.55rem;
+	}
+	.fc :global(.disc) {
+		margin-top: 0;
 	}
 	.fc-err p {
 		margin: 0 0 0.5rem;

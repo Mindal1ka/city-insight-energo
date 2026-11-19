@@ -1,15 +1,21 @@
 <script lang="ts">
-	// Картка (паспорт) будівлі: атрибути, споживання 2025 проти 2026, порівняння з медіаною, клас, дефекти
+	// Паспорт даних будівлі: що про неї відомо з UMUNI, скільки електрики витрачає,
+	// як це порівняно зі схожими будівлями і які проблеми в даних треба виправити.
 	import { page } from '$app/state';
-	import { api, errMessage, ApiError, type BuildingFull, type Building, type YearData } from '#lib/api.ts';
-	import { num, pct } from '#lib/format.ts';
+	import { api, errMessage, ApiError, type BuildingFull, type Building } from '#lib/api.ts';
+	import { num, pct, scaleKwh, plural } from '#lib/format.ts';
 	import { classInfo } from '#lib/classes.ts';
 	import ClassBadge from '#lib/ClassBadge.svelte';
 	import CompareBar from '#lib/CompareBar.svelte';
 	import Status from '#lib/Status.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
 	import Term from '#lib/Term.svelte';
-	import { electricityRating, isElecRelevant, ratioWords, BASE_YEAR } from '../../rating/electricity.ts';
+	import StatCard from '#lib/StatCard.svelte';
+	import Reveal from '#lib/Reveal.svelte';
+	import Disclosure from '#lib/Disclosure.svelte';
+	import Icon from '#lib/Icon.svelte';
+	import { electricityRating, isElecRelevant, ratioWords, LEVEL_WORDS, BASE_YEAR } from '../../rating/electricity.ts';
+	import { groupDefects, SEVERITY_LABEL } from '../../defects/groups.ts';
 
 	let b = $state<BuildingFull | null>(null);
 	let all = $state<Building[]>([]);
@@ -41,38 +47,37 @@
 	});
 
 	const years = $derived(b ? Object.keys(b.years).sort() : []);
-	const baseYear = BASE_YEAR;
 	// Рейтинг і клас — за електроенергією (рахуємо на клієнті по всіх будівлях)
 	const er = $derived(b && all.length ? (electricityRating(all).rows.get(b.id) ?? null) : null);
 	const info = $derived(classInfo(er?.cls));
-	const defects = $derived(b ? (showAllDefects ? b.defects : b.defects.filter(isElecRelevant)) : []);
-	const hiddenDefects = $derived(b ? b.defects.length - b.defects.filter(isElecRelevant).length : 0);
+	const elecDefects = $derived(b ? b.defects.filter(isElecRelevant) : []);
+	const defects = $derived(b ? (showAllDefects ? b.defects : elecDefects) : []);
+	const hiddenDefects = $derived(b ? b.defects.length - elecDefects.length : 0);
+	const groups = $derived(groupDefects(defects));
+	// Чи є серед проблем такі, що впливають на розрахунок (а не лише довідкові поля)
+	const elecGroups = $derived(groupDefects(elecDefects));
+	const serious = $derived(elecGroups.some((g) => g.severity !== 'low'));
 
-	// Рядки таблиці: лише електроенергія
-	const resources: { key: keyof YearData; label: string; unit: string; digits: number }[] = [
-		{ key: 'elec_kwh', label: 'Електроенергія', unit: 'кВт·год', digits: 0 },
-		{ key: 'elec_kwh_m2', label: 'Споживання на 1 м²', unit: 'кВт·год/м²', digits: 1 }
-	];
+	const kwhBase = $derived(b?.years[BASE_YEAR]?.elec_kwh ?? null);
+	const kwhScaled = $derived(scaleKwh(kwhBase));
+	const yearMax = $derived(Math.max(1, ...years.map((y) => b?.years[y]?.elec_kwh ?? 0)));
 
-	function cell(y: string, key: keyof YearData): number | null {
-		const v = b?.years[y]?.[key];
-		return typeof v === 'number' ? v : null;
-	}
-
-
-	// Тип запису: «дефект даних» або «аномалія споживання» (якщо бекенд його надсилає)
-	function kindOf(t: string | undefined): string {
-		return t ?? 'дефект даних';
-	}
+	const cmpTone = $derived(
+		er?.ratio == null ? 'neutral' : er.ratio > 1.5 ? 'bad' : er.ratio > 1.1 ? 'warn' : er.ratio < 0.9 ? 'good' : 'neutral'
+	);
 </script>
 
 <svelte:head>
-	<title>{b ? b.name : 'Картка будівлі'} · City Insight Map · Енергія</title>
+	<title>{b ? b.name : 'Паспорт будівлі'} · City Insight Map · Енергія</title>
 </svelte:head>
 
-<p class="no-print back"><a href="/rating{b ? `?cat=${encodeURIComponent(b.category_short)}` : ''}">← До рейтингу</a></p>
+<p class="no-print back">
+	<a href="/rating{b ? `?cat=${encodeURIComponent(b.category_short)}` : ''}" data-sveltekit-reset="false">
+		<Icon name="arrow-left" size={16} /> До рейтингу
+	</a>
+</p>
 
-{#if loading}<Skeleton variant="page" count={2} rows={4} />{/if}
+{#if loading}<Skeleton variant="page" count={4} rows={4} />{/if}
 <Status loading={false} {error} retry={() => load(id)} />
 
 {#if notFound && !loading}
@@ -84,146 +89,199 @@
 {#if b && !loading}
 	<div class="page-head">
 		<div>
-			<p class="muted kicker">Паспорт даних будівлі · {b.category_short}</p>
+			<p class="kicker">Паспорт даних · {b.category_short}</p>
 			<h1>{b.name}</h1>
 			<p class="lead">{b.address}</p>
+			<p class="lead plain">Усе, що відомо про будівлю з даних <Term key="UMUNI" plain />: скільки електрики вона витрачає і як це порівняно зі схожими будівлями.</p>
 		</div>
 		<div class="actions no-print">
-			<a class="btn" href="/object/{b.id}">Сонце, акумулятор і автономність →</a>
+			<a class="btn" href="/object/{b.id}"><Icon name="sun" size={18} /> Сонце й автономність</a>
 			<button type="button" class="btn btn-secondary" onclick={() => window.print()}>Друк / PDF</button>
 		</div>
 	</div>
 
-	<div class="grid-2">
-		<section class="card" aria-labelledby="attr-h">
-			<h2 id="attr-h">Характеристики</h2>
-			<dl class="attrs">
-				<dt>Категорія</dt>
-				<dd>{b.category ?? b.category_short}</dd>
-				<dt>Площа</dt>
-				<dd>{b.heated_area !== null ? `${num(b.heated_area, 1)} м²` : 'не вказано'}</dd>
-				<dt>Поверховість</dt>
-				<dd>{b.floors ?? 'не вказано'}</dd>
-				<dt>Рік забудови</dt>
-				<dd>{b.year_built ?? 'не вказано'}</dd>
-				<dt>Координати</dt>
-				<dd>{b.has_coords ? 'є' : 'немає (потрібне геокодування)'}</dd>
-				<dt>Номер у <Term key="UMUNI" plain /></dt>
-				<dd>{b.id > 0 ? b.id : 'немає в реєстрі будівель'}</dd>
-			</dl>
-		</section>
+	<section class="stats" aria-label="Головне в цифрах">
+		<Reveal>
+			<StatCard
+				label="Електрика за {BASE_YEAR} рік"
+				value={kwhScaled.value}
+				decimals={kwhScaled.decimals}
+				unit={kwhScaled.unit}
+				icon="bolt"
+				hint={kwhBase ? 'Усі лічильники будівлі за повний рік.' : 'Немає даних за цей рік.'}
+			/>
+		</Reveal>
+		<Reveal delay={70}>
+			<StatCard
+				label="На 1 м² за рік"
+				value={er?.kwhM2 ?? null}
+				decimals={1}
+				unit="кВт·год/м²"
+				icon="gauge"
+				tone={cmpTone}
+				toneLabel={cmpTone === 'good' ? 'економніше за типову' : cmpTone === 'neutral' ? undefined : 'більше за типову'}
+				hint={er?.ratio != null
+					? ratioWords(er.ratio) === LEVEL_WORDS
+						? `Приблизно як у типової будівлі категорії (${num(er.median, 1)}).`
+						: `Це ${ratioWords(er.ratio)}, ніж у типової будівлі категорії (${num(er.median, 1)}).`
+					: 'Не рахується: бракує даних.'}
+			/>
+		</Reveal>
+		<Reveal delay={140}>
+			<StatCard
+				label="Місце в рейтингу"
+				value={er && !er.excluded ? er.rank : null}
+				icon="chart"
+				unit={er && !er.excluded ? `з ${er.rankOf}` : ''}
+				href={er && !er.excluded ? `/rating?cat=${encodeURIComponent(b.category_short)}` : undefined}
+				hint={er && !er.excluded
+					? '1 — та, що витрачає найбільше на 1 м² серед схожих.'
+					: 'Будівля поки не в рейтингу — причина нижче.'}
+			/>
+		</Reveal>
+		<Reveal delay={210}>
+			<StatCard
+				label="Проблем у даних"
+				value={elecDefects.length}
+				icon={serious ? 'alert' : elecDefects.length ? 'info' : 'check'}
+				tone={serious ? 'warn' : elecDefects.length ? 'neutral' : 'good'}
+				toneLabel={serious ? 'треба виправити' : 'все гаразд'}
+				href={elecDefects.length ? '#def-h' : undefined}
+				hint={serious
+					? 'Впливають на розрахунок. Що саме і як виправити — внизу сторінки.'
+					: elecDefects.length
+						? 'Лише довідкові поля — на розрахунок електрики не впливають.'
+						: 'Дані про електрику без помилок.'}
+			/>
+		</Reveal>
+	</section>
 
-		<section class="card" aria-labelledby="cls-h">
-			<h2 id="cls-h">Електроенергія порівняно зі схожими, {baseYear}</h2>
-			{#if er && !er.excluded}
-				<p class="cls-line">
-					<ClassBadge cls={er.cls} />
-					<span>Місце <strong>{er.rank}</strong> з {er.rankOf} у категорії «{b.category_short}» (1 = найбільше споживає на 1 м²)</span>
-				</p>
-				<CompareBar value={er.kwhM2} median={er.median} category={b.category_short} year={baseYear} />
-				<p>
-					<Term key="питоме споживання">Споживання на 1 м²</Term>: {ratioWords(er.ratio)}{#if er.ratio !== null && ratioWords(er.ratio) !== 'на рівні медіани'}, ніж
-						<Term key="медіана категорії">медіана категорії</Term>{/if}.
-					{#if info}<Term key="умовний клас">Клас</Term> <strong>{info.letter}</strong> означає «{info.text}» ({info.range}).{/if}
-				</p>
-			{:else if er}
-				<div class="notice notice-warn">
-					<p>
-						<strong>Будівля не входить до рейтингу.</strong> Причина: {er.excluded}.
-						Після виправлення даних в UMUNI вона з’явиться в рейтингу автоматично.
+	<div class="grid-2 main">
+		<Reveal class="cell">
+			<section class="card" aria-labelledby="cls-h">
+				<h2 id="cls-h">Порівняно зі схожими будівлями</h2>
+				{#if er && !er.excluded}
+					<p class="cls-line">
+						<ClassBadge cls={er.cls} />
+						<span class="muted">категорія «{b.category_short}», {BASE_YEAR} рік</span>
 					</p>
-				</div>
-			{/if}
-			<p class="muted small disclaimer">
-				Клас — <strong>аналітична оцінка</strong> відносно медіани схожих будівель громади, а
-				<strong>не офіційний енергетичний сертифікат</strong> будівлі.
-			</p>
-		</section>
+					<CompareBar value={er.kwhM2} median={er.median} category={b.category_short} year={BASE_YEAR} />
+					<p>
+						На кожен квадратний метр будівля витрачає <strong>{ratioWords(er.ratio)}</strong>{#if ratioWords(er.ratio) !== LEVEL_WORDS}, ніж
+							<Term key="медіана категорії">типова будівля</Term> цієї категорії{/if}.
+					</p>
+					<Disclosure summary="Що означає клас {info?.letter ?? ''}">
+						<p class="small">
+							{#if info}<Term key="умовний клас">Клас</Term> <strong>{info.letter}</strong> — «{info.text}» ({info.range}).{/if}
+							Клас — <strong>аналітична оцінка</strong> відносно схожих будівель громади, а
+							<strong>не офіційний енергетичний сертифікат</strong>.
+						</p>
+					</Disclosure>
+				{:else if er}
+					<div class="notice notice-warn">
+						<p>
+							<strong>Будівля поки не в рейтингу.</strong> Причина: {er.excluded}. Після виправлення даних в
+							UMUNI вона з’явиться в рейтингу автоматично.
+						</p>
+					</div>
+				{/if}
+			</section>
+		</Reveal>
+
+		<Reveal class="cell" delay={90}>
+			<section class="card" aria-labelledby="cons-h">
+				<h2 id="cons-h">Електрика за роками</h2>
+				<ul class="years">
+					{#each years as y, i (y)}
+						{@const v = b.years[y]?.elec_kwh ?? null}
+						<li>
+							<span class="y-l">
+								<strong>{y}</strong>
+								{#if b.years[y].partial}<span class="pill pill-warn">неповний рік · {pct(b.years[y].coverage)}</span>{/if}
+							</span>
+							<span class="y-track" aria-hidden="true">
+								<span class="y-fill" class:partial={b.years[y].partial} style="width:{((v ?? 0) / yearMax) * 100}%; --i:{i}"></span>
+							</span>
+							<span class="y-v tnum">{num(v)} <span class="unit">кВт·год</span></span>
+						</li>
+					{/each}
+				</ul>
+				<p class="muted small">
+					Неповний рік не можна напряму порівнювати з повним: у ньому менше місяців.
+				</p>
+				<Disclosure summary="Характеристики будівлі">
+					<dl class="attrs">
+						<dt>Категорія</dt>
+						<dd>{b.category ?? b.category_short}</dd>
+						<dt>Площа</dt>
+						<dd>{b.heated_area !== null ? `${num(b.heated_area, 1)} м²` : 'не вказано'}</dd>
+						<dt>Поверхів</dt>
+						<dd>{b.floors ?? 'не вказано'}</dd>
+						<dt>Рік забудови</dt>
+						<dd>{b.year_built ?? 'не вказано'}</dd>
+						<dt>На карті</dt>
+						<dd>{b.has_coords ? 'так' : 'ні — немає координат'}</dd>
+						<dt>Номер у UMUNI</dt>
+						<dd>{b.id > 0 ? b.id : 'немає в реєстрі будівель'}</dd>
+						{#each years as y (y)}
+							<dt>На 1 м², {y}</dt>
+							<dd>{num(b.years[y]?.elec_kwh_m2 ?? null, 1)} кВт·год/м²</dd>
+						{/each}
+					</dl>
+				</Disclosure>
+			</section>
+		</Reveal>
 	</div>
 
-	<section class="card consumption" aria-labelledby="cons-h">
-		<h2 id="cons-h">Споживання електроенергії</h2>
-		<div class="table-wrap">
-			<table>
-				<caption>
-					Річне споживання за роками
-					<span class="muted">— дані UMUNI; неповний рік позначено окремо</span>
-				</caption>
-				<thead>
-					<tr>
-						<th scope="col">Ресурс</th>
-						<th scope="col">Одиниця</th>
-						{#each years as y (y)}
-							<th scope="col" class="num">
-								{y}
-								{#if b.years[y].partial}
-									<br /><span class="pill pill-warn">неповний рік, {pct(b.years[y].coverage)}</span>
-								{/if}
-							</th>
-						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					{#each resources as r (r.key)}
-						<tr>
-							<th scope="row">{r.label}</th>
-							<td class="unit">{r.unit}</td>
-							{#each years as y (y)}
-								<td class="num">{num(cell(y, r.key), r.digits)}</td>
-							{/each}
-						</tr>
+	<Reveal>
+		<section class="card defs" aria-labelledby="def-h">
+			<h2 id="def-h">Що виправити в даних</h2>
+			{#if hiddenDefects > 0}
+				<label class="toggle no-print">
+					<input type="checkbox" bind:checked={showAllDefects} />
+					Показати також тепло, газ і воду ({hiddenDefects})
+				</label>
+			{/if}
+			{#if defects.length === 0}
+				<p class="all-ok"><Icon name="check" size={20} /> Проблем у даних про електроенергію не знайдено.</p>
+			{:else}
+				<ul class="dgroups">
+					{#each groups as g (g.key)}
+						<li class="sev-{g.severity}">
+							<span class="pill pill-{g.severity}">{SEVERITY_LABEL[g.severity]}</span>
+							<p class="dg-t"><strong>{g.title}</strong>{#if g.items.length > 1} <span class="muted">· {g.items.length} {plural(g.items.length, ['запис', 'записи', 'записів'])}</span>{/if}</p>
+							<p class="dg-todo"><Icon name="check" size={16} /> <span><strong>Що робити:</strong> {g.todo}</span></p>
+						</li>
 					{/each}
-				</tbody>
-			</table>
-		</div>
-		<p class="muted small">
-			«—» означає, що показника немає у вивантаженні. Неповний рік не можна напряму
-			порівнювати з повним: у ньому менше місяців.
-		</p>
-	</section>
-
-	<section class="card" aria-labelledby="def-h">
-		<h2 id="def-h">Дефекти даних і аномалії ({defects.length})</h2>
-		{#if hiddenDefects > 0}
-			<label class="toggle no-print">
-				<input type="checkbox" bind:checked={showAllDefects} />
-				Показати також записи про тепло, газ і воду ({hiddenDefects})
-			</label>
-		{/if}
-		{#if defects.length === 0}
-			<p class="notice notice-ok">Дефектів даних, що стосуються електроенергії, не знайдено.</p>
-		{:else}
-			<div class="table-wrap">
-				<table>
-					<caption class="visually-hidden">Дефекти даних і аномалії цієї будівлі</caption>
-					<thead>
-						<tr>
-							<th scope="col">Тип</th>
-							<th scope="col">Що не так</th>
-							<th scope="col">Поле</th>
-							<th scope="col">Значення</th>
-							<th scope="col">Що робити</th>
-							<th scope="col">Набір даних</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each defects as d, i (i)}
-							<tr>
-								<td>
-									<span class="pill {kindOf(d.тип) === 'аномалія споживання' ? 'pill-bad' : 'pill-warn'}">{kindOf(d.тип)}</span>
-								</td>
-								<td>{d.правило}</td>
-								<td>{d.поле}</td>
-								<td>{d.значення ?? '—'}</td>
-								<td>{d.що_робити}</td>
-								<td class="small muted">{d.набір}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</section>
+				</ul>
+				<Disclosure summary="Технічні подробиці для фахівця з даних" hint="{defects.length} {plural(defects.length, ['запис', 'записи', 'записів'])}">
+					<div class="table-wrap">
+						<table>
+							<caption class="visually-hidden">Записи про проблеми в даних цієї будівлі</caption>
+							<thead>
+								<tr>
+									<th scope="col">Правило</th>
+									<th scope="col">Поле</th>
+									<th scope="col">Значення</th>
+									<th scope="col">Набір даних</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each defects as d, i (i)}
+									<tr>
+										<td>{d.правило}</td>
+										<td>{d.поле}</td>
+										<td>{d.значення === '' || d.значення === null ? '—' : d.значення}</td>
+										<td class="small muted">{d.набір}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</Disclosure>
+			{/if}
+		</section>
+	</Reveal>
 
 	<p class="muted small print-only">
 		Аналітична оцінка на даних UMUNI. Не є офіційним енергосертифікатом.
@@ -231,33 +289,105 @@
 {/if}
 
 <style>
+	.back {
+		margin: 0 0 0.75rem;
+	}
+	.back a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-weight: 600;
+	}
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
 	}
-	.toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 500;
-		margin-bottom: 0.75rem;
-		cursor: pointer;
-	}
-	.toggle input {
-		width: 1.1rem;
-		height: 1.1rem;
-	}
-	.back {
-		margin: 0 0 0.75rem;
-	}
 	.kicker {
 		margin: 0 0 0.25rem;
 		font-weight: 600;
 		font-size: 0.9rem;
+		color: var(--sun-ink);
 	}
 	h1 {
 		max-width: 60ch;
+	}
+	.lead.plain {
+		margin-top: 0.4rem;
+		font-size: 0.95rem;
+	}
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+		gap: 1rem;
+		margin-bottom: 1.5rem;
+	}
+	.stats > :global(.reveal) {
+		display: grid;
+	}
+	.main {
+		margin-bottom: 1.25rem;
+	}
+	.main :global(.cell) {
+		display: grid;
+		min-width: 0;
+	}
+	.main .card {
+		margin-bottom: 0;
+	}
+	.cls-line {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 0.9rem;
+		align-items: center;
+	}
+	.years {
+		list-style: none;
+		margin: 0 0 0.75rem;
+		padding: 0;
+		display: grid;
+		gap: 0.9rem;
+	}
+	.years li {
+		display: grid;
+		gap: 0.3rem;
+	}
+	.y-l {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+	}
+	.y-track {
+		display: block;
+		height: 12px;
+		border-radius: 999px;
+		background: var(--neutral-soft);
+		overflow: hidden;
+	}
+	.y-fill {
+		display: block;
+		height: 100%;
+		border-radius: 999px;
+		background: var(--navy-3);
+		transform-origin: left center;
+	}
+	.y-fill.partial {
+		background: repeating-linear-gradient(135deg, var(--sun) 0 8px, var(--sun-strong) 8px 16px);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.y-fill {
+			animation: grow-x 0.8s var(--ease) both;
+			animation-delay: calc(var(--i, 0) * 120ms + 250ms);
+		}
+		@keyframes grow-x {
+			from {
+				transform: scaleX(0);
+			}
+		}
+	}
+	.y-v {
+		font-weight: 600;
 	}
 	.attrs {
 		display: grid;
@@ -272,19 +402,72 @@
 	dd {
 		margin: 0;
 	}
-	.cls-line {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem 0.9rem;
+	.toggle {
+		display: inline-flex;
 		align-items: center;
+		gap: 0.5rem;
+		font-weight: 500;
+		margin-bottom: 0.75rem;
+		cursor: pointer;
 	}
-	.disclaimer {
-		border-top: 1px solid var(--line);
-		padding-top: 0.6rem;
-		margin-top: 0.75rem;
+	.toggle input {
+		width: 1.1rem;
+		height: 1.1rem;
 	}
-	.consumption {
-		margin-top: 1.25rem;
+	.all-ok {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		color: var(--ok);
+		font-weight: 600;
+	}
+	.dgroups {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+	}
+	.dgroups li {
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--line-strong);
+		border-radius: 10px;
+	}
+	.dgroups li.sev-high {
+		border-left-color: var(--bad);
+	}
+	.dgroups li.sev-mid {
+		border-left-color: var(--sun-strong);
+	}
+	.dgroups p {
+		margin: 0.35rem 0 0;
+	}
+	.pill-high {
+		background: var(--bad-soft);
+		border-color: var(--bad);
+		color: var(--bad);
+	}
+	.pill-mid {
+		background: var(--sun-soft);
+		border-color: var(--sun-ink);
+		color: var(--sun-ink);
+	}
+	.dg-todo {
+		display: flex;
+		gap: 0.4rem;
+		align-items: flex-start;
+		color: var(--ok);
+	}
+	.dg-todo span {
+		color: var(--text);
+	}
+	.dg-todo :global(svg) {
+		flex: none;
+		margin-top: 0.2rem;
+	}
+	.defs h2 {
+		scroll-margin-top: 6rem;
 	}
 	.print-only {
 		display: none;

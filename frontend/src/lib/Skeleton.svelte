@@ -68,7 +68,7 @@
 	.sk-kpis,
 	.sk-cards {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
 		gap: 1rem;
 		margin-bottom: 1.25rem;
 	}
@@ -77,10 +77,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		padding: 1rem 1.1rem;
+		padding: 1.15rem 1.25rem 1.2rem;
 		background: var(--surface);
-		border: 1px solid #e3e8ef;
-		border-radius: var(--radius);
+		border: 1px solid var(--card-line);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow);
+	}
+	.sk-kpi {
+		min-height: 9.5rem;
 	}
 	.sk-card {
 		min-height: 11rem;
@@ -91,7 +95,7 @@
 	}
 	.sk-big {
 		display: block;
-		height: 1.9rem;
+		height: 2.2rem;
 		width: 65%;
 	}
 	.sk-block {
@@ -101,8 +105,9 @@
 	}
 	.sk-table {
 		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
+		border: 1px solid var(--card-line);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow);
 		overflow: hidden;
 	}
 	.sk-head {

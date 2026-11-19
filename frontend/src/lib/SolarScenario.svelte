@@ -53,12 +53,33 @@
 			payback: savings > 0 ? capexTotal / savings : null
 		};
 	}
+
+	/** Українська множина: plural(3, 'рік', 'роки', 'років') → «роки» */
+	export function plural(n: number, one: string, few: string, many: string): string {
+		const a = Math.abs(Math.trunc(n));
+		const n10 = a % 10;
+		const n100 = a % 100;
+		if (n10 === 1 && n100 !== 11) return one;
+		if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return few;
+		return many;
+	}
+
+	/** Окупність словами, з округленням угору (чесно): 3,4 → «окупиться за 4 роки» */
+	export function paybackWords(years: number | null | undefined): string {
+		if (years === null || years === undefined || !Number.isFinite(years)) return 'не окупиться';
+		if (years < 1) return 'окупиться менш ніж за рік';
+		const n = Math.ceil(years - 0.05);
+		return `окупиться за ${n} ${plural(n, 'рік', 'роки', 'років')}`;
+	}
 </script>
 
 <script lang="ts">
 	import type { SolarItem } from './api.ts';
 	import { num } from './format.ts';
 	import SolarChart from './SolarChart.svelte';
+	import StatCard from './StatCard.svelte';
+	import Disclosure from './Disclosure.svelte';
+	import { fadeUp } from './motion.ts';
 
 	let {
 		item,
@@ -96,167 +117,237 @@
 	const sliderMax = $derived(Math.max(5, Math.ceil(Math.max(roofMax ?? 0, kwRec * 2.5))));
 	const step = $derived(sliderMax > 60 ? 1 : 0.5);
 
-	const rec = $derived(simulate(monthly, kwRec, kwRec, params));
 	const sim = $derived(simulate(monthly, kwRec, kwNow, params));
 	const surplusShare = $derived(sim.gen > 0 ? sim.surplus / sim.gen : 0);
 	const overRoof = $derived(roofMax !== null && kwNow > roofMax + 0.05);
 
 	const verdict = $derived.by(() => {
-		if (kwNow <= 0) return { tone: 'info', text: 'Вкажіть потужність станції, щоб побачити розрахунок.' };
+		if (kwNow <= 0) return { tone: 'info', text: 'Виберіть потужність станції, щоб побачити розрахунок.' };
 		if (overRoof)
-			return {
-				tone: 'bad',
-				text: `На дах не вміститься: за площею ${num(roof)} м² максимум ≈ ${num(roofMax, 1)} кВт.`
-			};
+			return { tone: 'bad', text: `Стільки панелей не вміститься на дах: максимум ≈ ${num(roofMax, 1)} кВт.` };
 		if (surplusShare > 0.02)
 			return {
 				tone: 'warn',
-				text: `${num(surplusShare * 100)} % генерації (${num(sim.surplus)} кВт·год/рік) — надлишок, який заклад не може продати. Гроші за цю частину панелей не повертаються.`
+				text: `Забагато: ${num(surplusShare * 100)} % енергії пропадатиме — заклад не може продати надлишок. Гроші за ці панелі не повернуться.`
 			};
 		if (kwNow < kwRec * 0.9)
-			return {
-				tone: 'info',
-				text: `Можна більше: до ${num(kwRec, 1)} кВт уся генерація ще споживається самою будівлею.`
-			};
-		return { tone: 'ok', text: 'Оптимальний розмір: уся генерація споживається будівлею, надлишку немає.' };
+			return { tone: 'info', text: `Можна більше: до ${num(kwRec, 1)} кВт будівля все ще використає всю енергію сама.` };
+		return { tone: 'ok', text: 'Оптимальний розмір: будівля сама використовує всю енергію станції.' };
 	});
-
-	function delta(v: number | null, base: number | null, unit: string, digits = 0): string {
-		if (v === null || base === null) return '';
-		const d = v - base;
-		if (Math.abs(d) < Math.pow(10, -digits) / 2) return 'як у рекомендованого розміру';
-		return `${d > 0 ? '▲ +' : '▼ −'}${num(Math.abs(d), digits)} ${unit} проти рекомендованого`;
-	}
+	const pbYears = $derived(sim.payback);
+	const pbUnit = $derived(pbYears === null ? '' : 'року'); // «3,4 року» — дробові числа завжди «року»
+	const fill = $derived(Math.min(100, (kwNow / sliderMax) * 100));
+	const recPos = $derived(Math.min(100, (kwRec / sliderMax) * 100));
 </script>
 
 <section class="card scen" aria-labelledby="{uid}-h">
-	<h2 id="{uid}-h">А якщо інша потужність?</h2>
-	<p class="muted intro">
-		Змініть потужність станції або площу даху — покриття, надлишок, економія й окупність перераховуються
-		одразу.
-	</p>
+	<h2 id="{uid}-h">А якщо поставити іншу станцію?</h2>
+	<p class="muted intro">Посуньте повзунок — цифри й графік зміняться одразу.</p>
 
-	<div class="controls">
-		<div class="field kwf">
-			<label for="{uid}-kw">Потужність станції, кВт</label>
-			<div class="kwrow">
-				<input
-					type="range"
-					min="0.5"
-					max={sliderMax}
-					{step}
-					bind:value={kwInput}
-					aria-label="Потужність станції, кВт (повзунок)"
-					aria-valuetext="{num(kwNow, 1)} кВт"
-				/>
-				<input id="{uid}-kw" type="number" min="0.5" step="0.1" inputmode="decimal" bind:value={kwInput} />
-			</div>
-			<div class="quick">
-				<button type="button" class="chip" aria-pressed={Math.abs(kwNow - kwRec) < 0.05} onclick={() => (kwInput = kwRec)}
-					>Рекомендовано · {num(kwRec, 1)} кВт</button
-				>
-				{#if roofMax}
-					<button type="button" class="chip" aria-pressed={Math.abs(kwNow - roofMax) < 0.05} onclick={() => (kwInput = roofMax)}
-						>Увесь дах · {num(roofMax, 1)} кВт</button
-					>
-				{/if}
-			</div>
+	<div class="kwbox">
+		<div class="kwtop">
+			<label for="{uid}-kw" class="kwlabel">Потужність станції</label>
+			<output for="{uid}-kw" class="kwval" aria-hidden="true"><span>{num(kwNow, kwNow < 10 ? 1 : 0)}</span> кВт</output>
 		</div>
-		<div class="field roof">
-			<label for="{uid}-roof">Площа даху, м²</label>
-			<input id="{uid}-roof" type="number" min="1" step="10" inputmode="decimal" bind:value={roof} />
-			<small class="muted"
-				>під панелі — {num(usableShare * 100)} % даху, {num(m2PerKw)} м² на 1 кВт → максимум
-				<strong>{num(roofMax, 1)} кВт</strong></small
+		<div class="rangebox" style:--fill="{fill}%" style:--rec={recPos}>
+			<input
+				id="{uid}-kw"
+				class="big-range"
+				type="range"
+				min="0.5"
+				max={sliderMax}
+				{step}
+				bind:value={kwInput}
+				aria-valuetext="{num(kwNow, 1)} кіловат"
+			/>
+			<span class="rec-mark" aria-hidden="true"><i></i>рекомендовано</span>
+		</div>
+		<div class="quick">
+			<button type="button" class="chip press" aria-pressed={Math.abs(kwNow - kwRec) < 0.05} onclick={() => (kwInput = kwRec)}
+				>✓ Рекомендовано · {num(kwRec, 1)} кВт</button
 			>
+			{#if roofMax}
+				<button type="button" class="chip press" aria-pressed={Math.abs(kwNow - roofMax) < 0.05} onclick={() => (kwInput = roofMax)}
+					>Увесь дах · {num(roofMax, 1)} кВт</button
+				>
+			{/if}
 		</div>
 	</div>
 
-	<ul class="res" aria-live="polite">
-		<li>
-			<span>Покриття потреби</span>
-			<strong>{num(sim.coverage * 100)} %</strong>
-			<small>{num(sim.self)} з {num(sim.cons)} кВт·год/рік — власне сонце</small>
-		</li>
-		<li class:warn={surplusShare > 0.02}>
-			<span>Надлишок (пропадає)</span>
-			<strong>{num(sim.surplus)} <em>кВт·год/рік</em></strong>
-			<small>{sim.gen > 0 ? `${num(surplusShare * 100)} % генерації` : '—'}</small>
-		</li>
-		<li>
-			<span>Економія</span>
-			<strong>{num(sim.savings)} <em>грн/рік</em></strong>
-			<small>{delta(sim.savings, rec.savings, 'грн')}</small>
-		</li>
-		<li>
-			<span>Вартість</span>
-			<strong>{num(sim.capexTotal)} <em>грн</em></strong>
-			<small>{num(params.fixed)} грн + {num(kwNow, 1)} кВт × {num(params.capex)} грн</small>
-		</li>
-		<li class="pb">
-			<span>Проста окупність</span>
-			<strong>{sim.payback !== null ? num(sim.payback, 1) : '—'} <em>років</em></strong>
-			<small>{delta(sim.payback, rec.payback, 'року', 1)}</small>
-		</li>
-	</ul>
+	<div class="res" aria-live="polite">
+		<StatCard
+			label="Покриє потреби"
+			value={sim.coverage * 100}
+			unit="%"
+			icon="sun"
+			hint="З кожних 100 кВт·год електроенергії {num(sim.coverage * 100)} дасть власне сонце."
+		/>
+		<StatCard
+			label="Економія на рік"
+			value={sim.savings / 1000}
+			unit="тис. грн"
+			icon="wallet"
+			hint="Стільки менше заплатимо за світло."
+		/>
+		<StatCard
+			label="Окупиться за"
+			value={pbYears}
+			decimals={1}
+			unit={pbUnit}
+			icon="clock"
+			tone={pbYears === null ? 'neutral' : surplusShare > 0.02 || overRoof ? 'warn' : 'good'}
+			toneLabel={surplusShare > 0.02 ? 'довше, ніж могло б' : 'добре'}
+			hint="Станція коштуватиме ≈ {sim.capexTotal >= 1e6 ? `${num(sim.capexTotal / 1e6, 2)} млн` : `${num(Math.round(sim.capexTotal / 1000))} тис.`} грн."
+		/>
+	</div>
 
-	<p class="verdict v-{verdict.tone}" role="status">
-		<span class="vi" aria-hidden="true">{verdict.tone === 'ok' ? '✓' : verdict.tone === 'info' ? 'i' : '!'}</span>
-		{verdict.text}
-	</p>
+	{#key verdict.tone}
+		<p class="verdict v-{verdict.tone}" role="status" in:fadeUp={{ y: 6 }}>
+			<span class="vi" aria-hidden="true">{verdict.tone === 'ok' ? '✓' : verdict.tone === 'info' ? 'i' : '!'}</span>
+			<span>{verdict.text}</span>
+		</p>
+	{/key}
 
 	<SolarChart months={sim.months} />
 
-	<details class="how">
-		<summary>Як ми рахуємо (припущення)</summary>
-		<ul>
+	<Disclosure summary="Технічні деталі розрахунку">
+		<div class="tech">
+			<div class="field roof">
+				<label for="{uid}-roof">Площа даху, м²</label>
+				<input id="{uid}-roof" type="number" min="1" step="10" inputmode="decimal" bind:value={roof} />
+				<small class="muted"
+					>під панелі — {num(usableShare * 100)} % даху, {num(m2PerKw)} м² на 1 кВт → максимум
+					<strong>{num(roofMax, 1)} кВт</strong></small
+				>
+			</div>
+			<div class="field">
+				<label for="{uid}-kwn">Точна потужність, кВт</label>
+				<input id="{uid}-kwn" type="number" min="0.5" step="0.1" inputmode="decimal" bind:value={kwInput} />
+			</div>
+		</div>
+		<dl class="facts">
+			<div><dt>Генерація за рік</dt><dd>{num(sim.gen)} кВт·год</dd></div>
+			<div><dt>Використає будівля</dt><dd>{num(sim.self)} з {num(sim.cons)} кВт·год</dd></div>
+			<div><dt>Надлишок (пропадає)</dt><dd>{num(sim.surplus)} кВт·год ({num(surplusShare * 100)} %)</dd></div>
+			<div><dt>Вартість</dt><dd>{num(params.fixed)} грн + {num(kwNow, 1)} кВт × {num(params.capex)} грн = {num(sim.capexTotal)} грн</dd></div>
+			<div><dt>Економія</dt><dd>{num(sim.self)} кВт·год × {num(params.tariff, 2)} грн = {num(sim.savings)} грн/рік</dd></div>
+			<div><dt>Проста окупність</dt><dd>{pbYears !== null ? `${num(pbYears, 1)} року` : 'не окупиться'}</dd></div>
+		</dl>
+		<ul class="how">
+			<li>Генерація на 1 кВт — PVGIS для Полтави, середній рік; множиться на вибрану потужність.</li>
 			<li>
-				Генерація на 1 кВт — PVGIS для Полтави, середній рік; береться з розрахунку сервера й множиться на вибрану
-				потужність.
+				Удень будівля споживає {num(params.daytime * 100)} % своєї електроенергії; використати сама вона може лише цю
+				частину. Решта генерації — надлишок, бо продавати його комунальний заклад зараз не може.
 			</li>
-			<li>
-				Удень будівля споживає {num(params.daytime * 100)} % своєї електроенергії; використати сама вона може лише
-				цю частину. Решта генерації — надлишок, бо продавати його комунальний заклад зараз не може.
-			</li>
-			<li>
-				Вартість = {num(params.fixed)} грн на об’єкт (проєкт, підключення) + {num(params.capex)} грн за кВт; тариф
-				{num(params.tariff, 2)} грн/кВт·год.
-			</li>
-			<li>Окупність проста: без кредиту, інфляції та деградації панелей. Це оцінка, а не проєкт станції.</li>
+			<li>Окупність проста: без кредиту, інфляції та зносу панелей. Це оцінка, а не проєкт станції.</li>
 		</ul>
-	</details>
+	</Disclosure>
 </section>
 
 <style>
 	.intro {
 		margin-top: -0.25rem;
 	}
-	.controls {
-		display: grid;
-		grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-		gap: 1rem 1.5rem;
-		margin-bottom: 1rem;
+	.kwbox {
+		max-width: 760px;
+		margin-bottom: 1.25rem;
 	}
-	@media (max-width: 760px) {
-		.controls {
-			grid-template-columns: 1fr;
-		}
-	}
-	.kwrow {
+	.kwtop {
 		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.kwlabel {
+		font-weight: 700;
+		font-size: 1rem;
+	}
+	.kwval {
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--sun-ink);
+	}
+	.kwval span {
+		font-size: 2.2rem;
+		font-weight: 800;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
+	}
+	.rangebox {
+		position: relative;
+	}
+	.rangebox {
+		padding-bottom: 1.1rem;
+	}
+	.rec-mark {
+		position: absolute;
+		left: calc(16px + (100% - 32px) * var(--rec) / 100);
+		top: 34px;
+		display: flex;
+		flex-direction: column;
 		align-items: center;
-		gap: 0.75rem;
+		font-size: 0.72rem;
+		font-weight: 600;
+		color: var(--surplus-ink);
+		pointer-events: none;
+		transform: translateX(-50%);
+		white-space: nowrap;
 	}
-	.kwrow input[type='range'] {
-		flex: 1;
-		accent-color: var(--sun-strong);
-		min-width: 0;
+	.rec-mark i {
+		width: 2px;
+		height: 6px;
+		background: var(--surplus-ink);
 	}
-	.kwrow input[type='number'] {
-		width: 7rem;
+	.big-range {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 100%;
+		height: 44px;
+		background: transparent;
+		cursor: pointer;
+		margin: 0;
 	}
-	.roof input {
-		width: 9rem;
+	.big-range::-webkit-slider-runnable-track {
+		height: 12px;
+		border-radius: 999px;
+		background: linear-gradient(90deg, var(--sun-strong) 0 var(--fill), #e7eaef var(--fill) 100%);
+	}
+	.big-range::-moz-range-track {
+		height: 12px;
+		border-radius: 999px;
+		background: #e7eaef;
+	}
+	.big-range::-moz-range-progress {
+		height: 12px;
+		border-radius: 999px;
+		background: var(--sun-strong);
+	}
+	.big-range::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 32px;
+		height: 32px;
+		margin-top: -10px;
+		border-radius: 50%;
+		background: #fff;
+		border: 4px solid var(--sun-strong);
+		box-shadow: 0 2px 8px rgba(138, 79, 0, 0.3);
+		transition: transform var(--dur-fast, 150ms) var(--ease-out, ease);
+	}
+	.big-range::-moz-range-thumb {
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		background: #fff;
+		border: 4px solid var(--sun-strong);
+	}
+	.big-range:hover::-webkit-slider-thumb,
+	.big-range:active::-webkit-slider-thumb {
+		transform: scale(1.12);
+	}
+	.big-range:focus-visible {
+		outline: 3px solid var(--focus);
+		outline-offset: 4px;
+		border-radius: 8px;
 	}
 	.quick {
 		display: flex;
@@ -266,9 +357,10 @@
 	}
 	.chip {
 		font: inherit;
-		font-size: 0.8125rem;
+		font-size: 0.875rem;
 		font-weight: 600;
-		padding: 0.25rem 0.65rem;
+		padding: 0.35rem 0.8rem;
+		min-height: 34px;
 		border-radius: 999px;
 		border: 1px solid var(--line-strong);
 		background: #fff;
@@ -279,64 +371,33 @@
 		background: var(--sun-soft);
 		border-color: var(--sun-strong);
 		color: var(--sun-ink);
+		box-shadow: inset 0 0 0 1px var(--sun-strong);
 	}
 	.res {
-		list-style: none;
-		padding: 0;
-		margin: 0 0 0.75rem;
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-		gap: 0.75rem;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.85rem;
+		margin-bottom: 0.9rem;
 	}
-	.res li {
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
-		padding: 0.65rem 0.85rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-		background: #fbfcfd;
-	}
-	.res li.warn {
-		border-color: var(--sol-surplus);
-		background: var(--warn-soft);
-	}
-	.res li.pb {
-		border-color: var(--sol-self);
-		background: var(--ok-soft);
-	}
-	.res span {
-		font-size: 0.8125rem;
-		font-weight: 600;
-		color: var(--muted);
-	}
-	.res strong {
-		font-size: 1.35rem;
-		font-variant-numeric: tabular-nums;
-	}
-	.res em {
-		font-style: normal;
-		font-size: 0.85rem;
-		color: var(--muted);
-		font-weight: 600;
-	}
-	.res small {
-		font-size: 0.8rem;
-		color: var(--muted);
+	@media (max-width: 640px) {
+		.res {
+			grid-template-columns: 1fr;
+		}
 	}
 	.verdict {
 		display: flex;
 		align-items: flex-start;
-		gap: 0.5rem;
-		padding: 0.6rem 0.85rem;
+		gap: 0.55rem;
+		padding: 0.65rem 0.9rem;
 		border-radius: var(--radius);
 		border: 1px solid var(--line);
-		margin-bottom: 1rem;
+		margin: 0 0 1rem;
+		font-weight: 500;
 	}
 	.vi {
 		flex: none;
-		width: 1.35rem;
-		height: 1.35rem;
+		width: 1.4rem;
+		height: 1.4rem;
 		border-radius: 50%;
 		display: inline-grid;
 		place-items: center;
@@ -370,11 +431,41 @@
 		background: var(--accent-soft);
 		border-color: var(--accent);
 	}
-	.how {
-		margin-top: 0.75rem;
+	.tech {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem 1.5rem;
+		margin-bottom: 0.75rem;
 	}
-	.how ul {
-		margin: 0.5rem 0 0;
+	.tech input {
+		width: 9rem;
+	}
+	.roof small {
+		display: block;
+		max-width: 36ch;
+	}
+	.facts {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 0.5rem 1.25rem;
+		margin: 0 0 0.75rem;
+	}
+	.facts div {
+		border-left: 3px solid var(--line);
+		padding-left: 0.6rem;
+	}
+	.facts dt {
+		font-size: 0.8125rem;
+		color: var(--muted);
+		font-weight: 600;
+	}
+	.facts dd {
+		margin: 0;
+		font-variant-numeric: tabular-nums;
+	}
+	.how {
+		margin: 0;
 		padding-left: 1.2rem;
+		font-size: 0.9rem;
 	}
 </style>

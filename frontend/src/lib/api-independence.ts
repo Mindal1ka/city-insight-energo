@@ -78,6 +78,8 @@ export interface IndependenceList {
 	categories: IndependenceCategory[];
 	items: IndependenceItem[];
 	notes?: string[];
+	/** Як рахується індекс (текст для блоку «Як ми рахуємо») */
+	formula?: { text: string; weights?: Record<string, number> };
 	/** true — показано локальний макет (бекенд ще не віддає метод) */
 	mock?: boolean;
 }

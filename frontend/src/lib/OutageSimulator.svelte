@@ -6,6 +6,8 @@
 	import DemoPill from './DemoPill.svelte';
 	import Icon from './Icon.svelte';
 	import Term from './Term.svelte';
+	import CountUp from './CountUp.svelte';
+	import Disclosure from './Disclosure.svelte';
 
 	let {
 		siteId,
@@ -61,13 +63,22 @@
 		return { sun, bat, gap: Math.max(0, t.load_kwh - sun - bat) };
 	};
 	const zero = $derived(!!r && !r.survives_all && r.survives_hours < 0.05);
+	const okPct = $derived(
+		!r ? 0 : r.survives_all ? 100 : Math.max(0, Math.min(100, (r.survives_hours / Math.max(0.01, r.hours)) * 100))
+	);
+	const srText = $derived.by(() => {
+		if (!r) return '';
+		if (r.survives_all) return `Заклад протримається всі ${r.hours} год: з ${hh(r.start_hour)} до ${clock(r.hours)}.`;
+		if (zero) return `Резерв не зафіксовано: з ${hh(r.start_hour)} бракуватиме ${num(r.unmet_kwh, 1)} кВт·год.`;
+		return `Заклад протримається ${duration(r.survives_hours)} з ${r.hours} год, приблизно до ${clock(r.survives_hours)}. Бракуватиме ${num(r.unmet_kwh, 1)} кВт·год.`;
+	});
 </script>
 
 <section class="panel os" aria-labelledby="os-h">
 	<div class="panel-head">
 		<div>
-			<h2 id="os-h">Що буде, якщо вимкнуть світло</h2>
-			<p class="muted sub">Оберіть, коли і на скільки зникне мережа, — порахуємо, скільки заклад протримається на <Term key="акумулятор">акумуляторі</Term> і сонці.</p>
+			<h3 id="os-h">Перевірте самі</h3>
+			<p class="muted sub">Оберіть, коли і на скільки зникне світло, — одразу побачите, скільки заклад протримається на <Term key="акумулятор">акумуляторі</Term> і сонці.</p>
 		</div>
 		<DemoPill text="Навантаження — типовий добовий профіль за реальним річним споживанням UMUNI; СЕС і акумулятор змодельовані" />
 	</div>
@@ -100,62 +111,85 @@
 	{#if error}
 		<div class="notice notice-error" role="alert"><p><strong>Не вдалося порахувати.</strong> {error}</p></div>
 	{:else if r}
-		<div class="result {r.survives_all ? 'ok' : 'bad'}" class:stale={loading} role="status" aria-live="polite">
-			<span class="r-sign" aria-hidden="true">{r.survives_all ? '✓' : '!'}</span>
-			<div>
-				<p class="r-title">
+		<div class="result {r.survives_all ? 'ok' : 'bad'}" class:stale={loading}>
+			<span class="r-sign" aria-hidden="true">{#key r.survives_all}<span class="r-glyph">{r.survives_all ? '✓' : '!'}</span>{/key}</span>
+			<div class="r-body">
+				<p class="r-title" aria-hidden="true">
 					{#if r.survives_all}
-						Заклад протримається всі {r.hours} год
+						Протримається всі {r.hours} год
 					{:else if zero}
-						Заклад зупиниться одразу
+						Резерв не зафіксовано
 					{:else}
-						Заклад протримається {duration(r.survives_hours)} з {r.hours} год
+						Протримається <CountUp value={r.survives_hours} format={duration} duration={600} /> з {r.hours} год
 					{/if}
 				</p>
-				<p class="r-text">
+				<p class="r-text" aria-hidden="true">
 					{#if r.survives_all}
 						Світло зникне о {hh(r.start_hour)} і повернеться о {clock(r.hours)} — сонця й акумулятора вистачить на весь цей час.
 					{:else if zero}
-						Світло зникне о {hh(r.start_hour)}: акумулятора немає або він порожній, а сонця в цей час замало. Бракуватиме {num(r.unmet_kwh, 1)} кВт·год.
+						Світло зникне о {hh(r.start_hour)}: у даних немає зарядженого акумулятора, а сонця в цей час замало. Бракуватиме {num(r.unmet_kwh, 1)} кВт·год.
 					{:else}
 						Світло зникне о {hh(r.start_hour)}{#if r.soc_start_pct != null}, акумулятор заряджений на {num(r.soc_start_pct, 0)} %{/if} — енергії вистачить приблизно до {clock(r.survives_hours)}. Далі бракуватиме {num(r.unmet_kwh, 1)} кВт·год: потрібен генератор або більший акумулятор.
 					{/if}
 				</p>
+				<p class="r-demo"><DemoPill align="left" text="Навантаження — типовий профіль за реальним річним споживанням UMUNI; СЕС і акумулятор змодельовані" /></p>
+				<p class="visually-hidden" role="status" aria-live="polite">{srText}</p>
 			</div>
 		</div>
 
-		<figure class="tl">
-			<div class="cols" style="--n: {tl.length}" aria-hidden="true">
-				{#each tl as t, i (i)}
-					{@const p = parts(t)}
-					<div class="col" title="{hh(t.hour)}: потрібно {num(t.load_kwh, 1)} кВт·год, сонце {num(p.sun, 1)}, акумулятор {num(p.bat, 1)}, бракує {num(p.gap, 1)}; в акумуляторі лишилось {num(t.battery_kwh_after, 1)} кВт·год">
-						<div class="stack" style="height: {(t.load_kwh / max) * 100}%">
-							{#if p.gap > 0}<span class="gap" style="flex-grow: {p.gap}"></span>{/if}
-							{#if p.bat > 0}<span class="bat" style="flex-grow: {p.bat}"></span>{/if}
-							{#if p.sun > 0}<span class="sun" style="flex-grow: {p.sun}"></span>{/if}
-						</div>
-						<span class="mark {t.covered ? 'y' : 'n'}">{t.covered ? '✓' : '✕'}</span>
-						<span class="hl tnum">{String(t.hour).padStart(2, '0')}</span>
-					</div>
-				{/each}
+		<!-- Проста стрічка часу: скільки з відключення буде світло -->
+		<div class="run" class:stale={loading} aria-hidden="true">
+			<div class="run-track">
+				<span class="run-ok" style:width="{okPct}%">
+					{#if okPct >= 18}<span class="run-lbl">✓ є світло</span>{/if}
+				</span>
+				<span class="run-gap" style:width="{100 - okPct}%">
+					{#if 100 - okPct >= 18}<span class="run-lbl">✕ без світла</span>{/if}
+				</span>
+				{#if okPct > 0 && okPct < 100}
+					<span class="run-cut" style:left="{okPct}%"><b>{clock(r.survives_hours)}</b></span>
+				{/if}
 			</div>
-			<table class="visually-hidden">
-				<caption>Погодинно під час відключення</caption>
-				<thead><tr><th>Година</th><th>Потрібно, кВт·год</th><th>Сонце</th><th>Акумулятор</th><th>Чи вистачає</th></tr></thead>
-				<tbody>
+			<div class="run-scale tnum">
+				<span><b>{hh(r.start_hour)}</b> світло зникло</span>
+				<span><b>{clock(r.hours)}</b> світло повернулось</span>
+			</div>
+		</div>
+
+		<Disclosure summary="Погодинно: звідки береться енергія" hint="{tl.length} год">
+			<figure class="tl">
+				<div class="cols" style="--n: {tl.length}" aria-hidden="true">
 					{#each tl as t, i (i)}
-						<tr><td>{hh(t.hour)}</td><td>{num(t.load_kwh, 1)}</td><td>{num(t.solar_kwh, 1)}</td><td>{num(t.from_battery_kwh, 1)}</td><td>{t.covered ? 'так' : 'ні'}</td></tr>
+						{@const p = parts(t)}
+						<div class="col" style="--i: {i}" title="{hh(t.hour)}: потрібно {num(t.load_kwh, 1)} кВт·год, сонце {num(p.sun, 1)}, акумулятор {num(p.bat, 1)}, бракує {num(p.gap, 1)}; в акумуляторі лишилось {num(t.battery_kwh_after, 1)} кВт·год">
+							<div class="stack" style="height: {(t.load_kwh / max) * 100}%">
+								<span class="gap" style="flex-grow: {p.gap}"></span>
+								<span class="bat" style="flex-grow: {p.bat}"></span>
+								<span class="sun" style="flex-grow: {p.sun}"></span>
+							</div>
+							<span class="mark {t.covered ? 'y' : 'n'}">{t.covered ? '✓' : '✕'}</span>
+							<span class="hl tnum">{String(t.hour).padStart(2, '0')}</span>
+						</div>
 					{/each}
-				</tbody>
-			</table>
-			<figcaption class="legend">
-				<span><i class="k sun"></i>сонце</span>
-				<span><i class="k bat"></i>акумулятор</span>
-				<span><i class="k gap"></i>бракує (✕ — година без світла)</span>
-				<span class="muted">висота стовпчика — скільки енергії потрібно закладу за годину</span>
-			</figcaption>
-		</figure>
-		{#if r.note}<p class="note muted small"><Icon name="info" size={15} /> {r.note}</p>{/if}
+				</div>
+				<table class="visually-hidden">
+					<caption>Погодинно під час відключення</caption>
+					<thead><tr><th>Година</th><th>Потрібно, кВт·год</th><th>Сонце</th><th>Акумулятор</th><th>Чи вистачає</th></tr></thead>
+					<tbody>
+						{#each tl as t, i (i)}
+							<tr><td>{hh(t.hour)}</td><td>{num(t.load_kwh, 1)}</td><td>{num(t.solar_kwh, 1)}</td><td>{num(t.from_battery_kwh, 1)}</td><td>{t.covered ? 'так' : 'ні'}</td></tr>
+						{/each}
+					</tbody>
+				</table>
+				<figcaption class="legend">
+					<span><i class="k sun"></i>сонце</span>
+					<span><i class="k bat"></i>акумулятор</span>
+					<span><i class="k gap"></i>бракує (✕ — година без світла)</span>
+					<span class="muted">висота стовпчика — скільки енергії потрібно закладу за годину</span>
+				</figcaption>
+			</figure>
+			{#if r.note}<p class="note muted small"><Icon name="info" size={15} /> {r.note}</p>{/if}
+		</Disclosure>
 	{:else if loading}
 		<p class="muted" role="status">Рахуємо…</p>
 	{/if}
@@ -288,6 +322,16 @@
 	.bad .r-sign {
 		background: var(--deficit);
 	}
+	.r-body {
+		min-width: 0;
+		flex: 1;
+	}
+	.r-demo {
+		margin: 0.5rem 0 0;
+	}
+	.r-glyph {
+		display: inline-block;
+	}
 	.r-title {
 		margin: 0 0 0.2rem;
 		font-size: 1.45rem;
@@ -303,6 +347,84 @@
 	.r-text {
 		margin: 0;
 		color: #2b3645;
+	}
+	/* Стрічка часу відключення */
+	.run {
+		transition: opacity 0.2s;
+	}
+	.run-track {
+		position: relative;
+		display: flex;
+		height: 2.6rem;
+		border-radius: 12px;
+		overflow: visible;
+		background: #edf1f5;
+	}
+	.run-ok,
+	.run-gap {
+		position: relative;
+		display: flex;
+		align-items: center;
+		height: 100%;
+		overflow: hidden;
+		white-space: nowrap;
+		transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.run-ok {
+		background: linear-gradient(90deg, #2e9a4f, var(--surplus));
+		border-radius: 12px 0 0 12px;
+		color: #fff;
+	}
+	.run-gap {
+		background: repeating-linear-gradient(135deg, var(--deficit) 0 8px, #d9561d 8px 16px);
+		border-radius: 0 12px 12px 0;
+		color: #fff;
+	}
+	.run-ok:only-child,
+	.run-gap[style*='width: 100%'] {
+		border-radius: 12px;
+	}
+	.run-lbl {
+		padding: 0 0.85rem;
+		font-weight: 700;
+		font-size: 0.95rem;
+		text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+	}
+	.run-cut {
+		position: absolute;
+		top: -0.45rem;
+		bottom: -0.45rem;
+		width: 3px;
+		margin-left: -1.5px;
+		background: var(--ink, #0f1b2d);
+		border-radius: 2px;
+		transition: left 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.run-cut b {
+		position: absolute;
+		top: -1.55rem;
+		left: 50%;
+		transform: translateX(-50%);
+		padding: 0.05rem 0.5rem;
+		border-radius: 999px;
+		background: var(--ink, #0f1b2d);
+		color: #fff;
+		font-size: 0.8125rem;
+		white-space: nowrap;
+	}
+	.run-scale {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: 0.45rem;
+		font-size: 0.875rem;
+		color: var(--muted);
+	}
+	.run-scale b {
+		color: var(--text);
+	}
+	.run:has(.run-cut) {
+		padding-top: 1.4rem;
 	}
 	.tl {
 		margin: 0;
@@ -334,7 +456,40 @@
 	}
 	.stack span {
 		flex-basis: 0;
-		min-height: 2px;
+		min-height: 0;
+		transition: flex-grow 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.stack {
+		transition: height 0.55s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 18ms);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.col {
+			animation: col-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 25ms) backwards;
+		}
+		@keyframes col-in {
+			from {
+				opacity: 0;
+				transform: translateY(10px);
+			}
+		}
+		.r-glyph {
+			animation: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+		}
+		@keyframes pop {
+			from {
+				transform: scale(0.3);
+				opacity: 0;
+			}
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.stack,
+		.stack span,
+		.run-ok,
+		.run-gap,
+		.run-cut {
+			transition: none;
+		}
 	}
 	.sun,
 	.k.sun {

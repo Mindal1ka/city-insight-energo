@@ -1,19 +1,34 @@
 <script lang="ts">
 	// Рейтинг будівель за питомим споживанням електроенергії (кВт·год/м² за рік) у межах категорії.
 	// 1 = найбільше споживає на 1 м² — з неї варто почати енергоаудит.
+	// Список, а не широка таблиця: 4 зрозумілі колонки, решта — у розгортанні рядка.
 	import { page } from '$app/state';
+	import { flip } from 'svelte/animate';
 	import { api, errMessage, type Building } from '#lib/api.ts';
-	import { num } from '#lib/format.ts';
+	import { num, kwhText, plural } from '#lib/format.ts';
+	import { classInfo, CLASSES } from '#lib/classes.ts';
 	import ClassBadge from '#lib/ClassBadge.svelte';
 	import Status from '#lib/Status.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
 	import Term from '#lib/Term.svelte';
+	import StatCard from '#lib/StatCard.svelte';
+	import Reveal from '#lib/Reveal.svelte';
+	import Disclosure from '#lib/Disclosure.svelte';
+	import Icon from '#lib/Icon.svelte';
+	import { fadeUp, stagger, reducedMotion } from '#lib/motion.ts';
 	import { electricityRating, ratioWords, BASE_YEAR, type ElecRow } from './electricity.ts';
+	import { grow } from './grow.ts';
 
 	let buildings = $state<Building[]>([]);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 	let query = $state('');
+	type SortKey = 'most' | 'least' | 'name';
+	let sort = $state<SortKey>('most');
+	let expanded = $state<number | null>(null);
+	// Довгий список показуємо не весь одразу: спершу верхівку рейтингу
+	const FIRST = 15;
+	let showAll = $state(false);
 
 	async function load() {
 		loading = true;
@@ -43,54 +58,68 @@
 		return r.b.name.toLocaleLowerCase('uk').includes(s) || r.b.address.toLocaleLowerCase('uk').includes(s);
 	}
 
+	const SORTS: { key: SortKey; label: string }[] = [
+		{ key: 'most', label: 'Найбільше на 1 м²' },
+		{ key: 'least', label: 'Найменше на 1 м²' },
+		{ key: 'name', label: 'За назвою' }
+	];
+
 	const inCat = $derived(rating.byCategory[current] ?? []);
-	const rated = $derived(
-		inCat.filter((r) => !r.excluded && matches(r, query.trim())).sort((a, b) => a.rank! - b.rank!)
-	);
-	const excluded = $derived(inCat.filter((r) => r.excluded && matches(r, query.trim())));
+	const rated = $derived.by(() => {
+		const list = inCat.filter((r) => !r.excluded && matches(r, query.trim()));
+		if (sort === 'name') return list.sort((a, b) => a.b.name.localeCompare(b.b.name, 'uk'));
+		if (sort === 'least') return list.sort((a, b) => b.rank! - a.rank!);
+		return list.sort((a, b) => a.rank! - b.rank!);
+	});
+	const visible = $derived(showAll || query.trim() ? rated : rated.slice(0, FIRST));
+	const excluded = $derived(inCat.filter((r) => r.excluded));
 	const totalRated = $derived(inCat.filter((r) => !r.excluded).length);
-	const totalExcluded = $derived(inCat.length - totalRated);
-	// Шкала для міні-барів: найбільше значення в категорії
+	const muchMore = $derived(inCat.filter((r) => !r.excluded && (r.ratio ?? 0) > 1.5).length);
+	// Шкала для смужок: найбільше значення в категорії
 	const scaleMax = $derived(Math.max(1, ...inCat.filter((r) => !r.excluded).map((r) => r.kwhM2 ?? 0)));
+
+	const flipMs = $derived(reducedMotion.current ? 0 : 380);
+
+	function toggle(id: number) {
+		expanded = expanded === id ? null : id;
+	}
+
+	/** Колір смужки за умовним класом: лише допоміжний, поряд завжди є літера й текст */
+	function tone(cls: string | null): string {
+		if (!cls) return 'mid';
+		if ('AB'.includes(cls)) return 'good';
+		if ('CD'.includes(cls)) return 'mid';
+		return 'bad';
+	}
 </script>
 
 <svelte:head><title>Рейтинг будівель · City Insight Map · Енергія</title></svelte:head>
 
 <div class="page-head">
 	<div>
-		<h1>Рейтинг будівель за електроенергією</h1>
+		<h1>Рейтинг будівель</h1>
 		<p class="lead">
-			Порівнюємо схожі будівлі (школи зі школами, садочки із садочками) за тим, скільки електроенергії
-			вони спожили за {BASE_YEAR} рік на кожен квадратний метр. <strong>Місце 1</strong> — будівля, що
-			споживає найбільше на 1 м²: з неї варто почати перевірку.
+			Порівнюємо схожі будівлі — школи зі школами, садочки із садочками — за
+			<Term key="питоме споживання">питомим споживанням</Term>: скільки електрики будівля витрачає на
+			кожен квадратний метр. Так можна чесно порівнювати великі й малі будівлі.
+			<strong>Місце 1</strong> — та, що витрачає найбільше: з неї варто почати перевірку.
 		</p>
 	</div>
 </div>
 
-<details class="card how no-print">
-	<summary>Як читати рейтинг</summary>
-	<ul>
-		<li>
-			<Term key="питоме споживання">Питоме споживання</Term> = електроенергія за рік ÷ площа будівлі.
-			Школа 2 000 м², що спожила 40 000 кВт·год, має 20 кВт·год/м².
-		</li>
-		<li>
-			<Term key="медіана категорії" /> — типове значення для будівель цієї категорії: половина
-			споживає більше, половина — менше.
-		</li>
-		<li>
-			<Term key="умовний клас">Умовний клас A–G</Term> показує, наскільки будівля відрізняється від
-			медіани: A — значно економніша, D — на рівні, G — більш ніж удвічі більше.
-		</li>
-		<li>
-			Будівлі з неповними чи сумнівними даними не ранжуємо, а показуємо нижче з причиною — щоб їх
-			виправили в <Term key="UMUNI" />.
-		</li>
-	</ul>
-</details>
+<Reveal>
+	<p class="formula" aria-label="Як рахуємо: електрика за рік поділити на площу будівлі дорівнює кіловат-годин на один квадратний метр">
+		<span class="f-part"><Icon name="bolt" size={18} /> електрика за рік</span>
+		<span class="f-op" aria-hidden="true">÷</span>
+		<span class="f-part"><Icon name="building" size={18} /> площа будівлі</span>
+		<span class="f-op" aria-hidden="true">=</span>
+		<span class="f-part f-res">кВт·год на 1 м²</span>
+		<span class="f-ex muted small">Напр.: школа 2 000 м² спожила 40 000 кВт·год → 20 кВт·год/м²</span>
+	</p>
+</Reveal>
 
 {#if loading}
-	<Skeleton variant="table" rows={10} />
+	<Skeleton variant="page" count={3} rows={10} />
 {/if}
 <Status loading={false} {error} retry={load} />
 
@@ -101,231 +130,532 @@
 			<a class="btn" href="/upload">Оновити дані</a>
 		</div>
 	{:else}
-		<nav class="tabs" aria-label="Категорії будівель">
+		<nav class="seg cats" aria-label="Тип будівель">
 			{#each categories as c (c.name)}
 				<a
 					href="?cat={encodeURIComponent(c.name)}"
 					aria-current={c.name === current ? 'page' : undefined}
 					data-sveltekit-reset="false"
 					data-sveltekit-replacestate
-					data-sveltekit-noscroll
+					onclick={() => {
+						expanded = null;
+						showAll = false;
+						query = '';
+					}}
 				>
 					{c.name} <span class="count">{c.rated}</span>
 				</a>
 			{/each}
 		</nav>
 
+		<section aria-label="Головне про категорію «{current}»" class="stats">
+			<Reveal>
+				<StatCard
+					label="Будівель у рейтингу"
+					value={totalRated}
+					icon="building"
+					hint="Категорія «{current}», дані за {BASE_YEAR} рік."
+				/>
+			</Reveal>
+			<Reveal delay={70}>
+				<StatCard
+					label="Типово для категорії"
+					value={median}
+					decimals={1}
+					unit="кВт·год/м²"
+					icon="gauge"
+					hint="Половина будівель цієї категорії витрачає більше, половина — менше."
+				/>
+			</Reveal>
+			<Reveal delay={140}>
+				<StatCard
+					label="Витрачають набагато більше"
+					value={muchMore}
+					icon="alert"
+					tone={muchMore ? 'bad' : 'good'}
+					toneLabel={muchMore ? 'потрібна перевірка' : 'таких немає'}
+					hint="У півтора раза й більше понад типове — перші кандидати на енергоаудит."
+				/>
+			</Reveal>
+			{#if excluded.length}
+				<Reveal delay={210}>
+					<StatCard
+						label="Не потрапили в рейтинг"
+						value={excluded.length}
+						icon="info"
+						tone="warn"
+						toneLabel="помилки в даних"
+						href="#excluded"
+						hint="Через неповні чи сумнівні дані. Список — унизу сторінки."
+					/>
+				</Reveal>
+			{/if}
+		</section>
+
 		<div class="toolbar">
-			<div class="field">
-				<label for="q">Пошук за назвою або адресою</label>
-				<input id="q" type="search" bind:value={query} placeholder="Наприклад: гімназія № 3" size="34" />
+			<div class="field search">
+				<label for="q">Знайти будівлю</label>
+				<input id="q" type="search" bind:value={query} placeholder="Назва або адреса, напр. «гімназія № 3»" />
 			</div>
-			<p class="meta">
-				<span class="med">
-					<Term key="медіана категорії">Медіана</Term> «{current}»:
-					<strong>{num(median, 1)} кВт·год/м²</strong>
-				</span>
-				<span class="muted">Показано {rated.length} з {totalRated} будівель у рейтингу.</span>
+			<div class="field">
+				<span class="lbl" id="sort-l">Порядок</span>
+				<div class="seg" role="group" aria-labelledby="sort-l">
+					{#each SORTS as s (s.key)}
+						<button type="button" aria-pressed={sort === s.key} onclick={() => (sort = s.key)}>
+							{s.label}
+						</button>
+					{/each}
+				</div>
+			</div>
+			<p class="muted shown" aria-live="polite">
+				Показано {visible.length} з {totalRated}
 			</p>
 		</div>
 
-		<div class="table-wrap tall">
-			<table>
-				<caption>
-					{current}, {BASE_YEAR} рік
-					<span class="muted">— від найбільшого споживання на 1 м² до найменшого</span>
-				</caption>
-				<thead>
-					<tr>
-						<th scope="col" class="num">Місце</th>
-						<th scope="col">Будівля</th>
-						<th scope="col" class="num">Електроенергія за рік, <span class="unit">кВт·год</span></th>
-						<th scope="col" class="num">
-							<Term key="питоме споживання">На 1 м²</Term>, <span class="unit">кВт·год/м²</span>
-						</th>
-						<th scope="col">Порівняно з медіаною</th>
-						<th scope="col"><Term key="умовний клас">Клас</Term></th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each rated as r (r.b.id)}
-						<tr>
-							<td class="num rank">{r.rank}<span class="muted small"> / {r.rankOf}</span></td>
-							<td class="name">
-								<a href="/object/{r.b.id}">{r.b.name}</a>
-								<span class="addr">{r.b.address}</span>
-							</td>
-							<td class="num">{num(r.kwh)}</td>
-							<td class="num">
-								<span class="bar-cell">
-									<strong>{num(r.kwhM2, 1)}</strong>
-									<span class="mini" aria-hidden="true">
-										<span class="fill cls-{r.cls}" style="width:{((r.kwhM2 ?? 0) / scaleMax) * 100}%"></span>
-										{#if median}<span class="tick" style="left:{(median / scaleMax) * 100}%"></span>{/if}
-									</span>
+		<div class="list-card">
+			<div class="list-head" aria-hidden="true">
+				<span>Місце</span>
+				<span>Будівля</span>
+				<span>Витрачає на 1 м² за рік</span>
+				<span>Порівняно з типовою</span>
+				<span></span>
+			</div>
+			{#key current}
+				<ol class="rows" {@attach grow} aria-label="{current}: рейтинг за споживанням на 1 м²">
+					{#each visible as r, i (r.b.id)}
+						{@const open = expanded === r.b.id}
+						{@const info = classInfo(r.cls)}
+						<li
+							class="row"
+							class:open
+							animate:flip={{ duration: flipMs }}
+							in:fadeUp|global={{ delay: stagger(i, 22, 450) }}
+						>
+							<span class="rank tnum" title="Місце {r.rank} з {r.rankOf}">
+								<span class="visually-hidden">Місце</span>{r.rank}
+							</span>
+							<span class="name">
+								<a href="/building/{r.b.id}">{r.b.name}</a>
+							</span>
+							<span class="val">
+								<span class="v tnum"><strong>{num(r.kwhM2, 1)}</strong> <span class="unit">кВт·год/м²</span></span>
+								<span class="mini" aria-hidden="true">
+									<span class="fill t-{tone(r.cls)}" style="width:{((r.kwhM2 ?? 0) / scaleMax) * 100}%; --i:{Math.min(i, 14)}"></span>
+									{#if median}<span class="tick" style="left:{(median / scaleMax) * 100}%"></span>{/if}
 								</span>
-							</td>
-							<td class="nowrap">{ratioWords(r.ratio)}</td>
-							<td><ClassBadge cls={r.cls} short /></td>
-						</tr>
+							</span>
+							<span class="cmp">
+								<ClassBadge cls={r.cls} short />
+								<span class="cmp-txt">{ratioWords(r.ratio)}</span>
+							</span>
+							<button
+								type="button"
+								class="more"
+								aria-expanded={open}
+								aria-controls="det-{r.b.id}"
+								onclick={() => toggle(r.b.id)}
+							>
+								<span class="visually-hidden">Детальніше про «{r.b.name}»</span>
+								<svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true"
+									><path d="M3 5.25 7 9.25l4-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg
+								>
+							</button>
+							{#if open}
+								<div class="details" id="det-{r.b.id}" in:fadeUp={{ y: -6 }}>
+									<dl>
+										<div><dt>Адреса</dt><dd>{r.b.address || '—'}</dd></div>
+										<div><dt>Електрика за {BASE_YEAR} рік</dt><dd>{kwhText(r.kwh)}</dd></div>
+										<div><dt>Площа</dt><dd>{num(r.b.heated_area, 0)} м²</dd></div>
+										<div>
+											<dt><Term key="умовний клас">Клас</Term></dt>
+											<dd>{info ? `${info.letter} — ${info.text}` : '—'}</dd>
+										</div>
+									</dl>
+									<p class="det-links">
+										<a href="/building/{r.b.id}">Паспорт даних →</a>
+										<a href="/object/{r.b.id}">Сонце й автономність →</a>
+									</p>
+								</div>
+							{/if}
+						</li>
 					{:else}
-						<tr><td colspan="6" class="empty-cell">Нічого не знайдено за «{query.trim()}».</td></tr>
+						<li class="none">Нічого не знайдено за «{query.trim()}». <button type="button" class="linkish" onclick={() => (query = '')}>Очистити пошук</button></li>
 					{/each}
-				</tbody>
-			</table>
+				</ol>
+			{/key}
+			{#if rated.length > FIRST && !query.trim()}
+				<div class="list-foot">
+					<button type="button" class="btn btn-secondary" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>
+						{showAll ? `Згорнути до перших ${FIRST}` : `Показати всі ${rated.length} ${plural(rated.length, ['будівлю', 'будівлі', 'будівель'])}`}
+					</button>
+				</div>
+			{/if}
 		</div>
 		<p class="muted small legend">
-			Смужка показує споживання на 1 м²; вертикальна риска — медіана категорії. Клас — аналітична
-			оцінка відносно схожих будівель, а не офіційний енергосертифікат.
+			<span class="lg-tick" aria-hidden="true"></span> Вертикальна риска — типове значення для категорії
+			({num(median, 1)} кВт·год/м²). Клас — аналітична оцінка відносно схожих будівель, а не офіційний
+			енергосертифікат.
 		</p>
 
-		<details class="card excluded">
-			<summary>
-				Виключено з рейтингу — будівель: {excluded.length}{query.trim() ? ` з ${totalExcluded}` : ''}
-				<span class="muted">(показуємо з причиною, а не приховуємо)</span>
-			</summary>
-			<p class="muted small">
-				Ці будівлі не порівнюються з іншими, доки дані в UMUNI не виправлено. Деталі — на сторінці
-				<a href="/defects">«Якість даних»</a>.
-			</p>
-			<div class="table-wrap">
-				<table>
-					<caption class="visually-hidden">Будівлі, виключені з рейтингу, і причини</caption>
-					<thead>
-						<tr>
-							<th scope="col">Будівля</th>
-							<th scope="col">Причина</th>
-							<th scope="col" class="num">Електроенергія, <span class="unit">кВт·год</span></th>
-							<th scope="col" class="num">Площа, <span class="unit">м²</span></th>
-						</tr>
-					</thead>
-					<tbody>
+		<Disclosure summary="Що означають класи A–G" class="card soft">
+			<ul class="classes">
+				{#each CLASSES as c (c.letter)}
+					<li><ClassBadge cls={c.letter} short /> <span>{c.text}</span> <span class="muted small">({c.range})</span></li>
+				{/each}
+			</ul>
+		</Disclosure>
+
+		{#if excluded.length}
+			<section id="excluded" class="card excl" aria-labelledby="excl-h">
+				<h2 id="excl-h">Не потрапили в рейтинг: {excluded.length} {plural(excluded.length, ['будівля', 'будівлі', 'будівель'])}</h2>
+				<p class="muted">
+					Ми їх не ховаємо: їх не можна чесно порівняти, доки дані в <Term key="UMUNI" plain /> не
+					виправлено. Як тільки виправите — будівля з’явиться в рейтингу сама.
+				</p>
+				<Disclosure summary="Показати будівлі й причини" hint={String(excluded.length)}>
+					<ul class="excl-list">
 						{#each excluded as r (r.b.id)}
-							<tr>
-								<td class="name">
-									<a href="/object/{r.b.id}">{r.b.name}</a>
-									<span class="addr">{r.b.address}</span>
-								</td>
-								<td>{r.excluded}</td>
-								<td class="num">{num(r.kwh)}</td>
-								<td class="num">{num(r.b.heated_area, 1)}</td>
-							</tr>
-						{:else}
-							<tr><td colspan="4" class="empty-cell">Немає виключених будівель.</td></tr>
+							<li>
+								<a href="/building/{r.b.id}">{r.b.name}</a>
+								<span class="muted small">{r.excluded}</span>
+							</li>
 						{/each}
-					</tbody>
-				</table>
-			</div>
-		</details>
+					</ul>
+					<p class="small"><a href="/defects">Усі проблеми з даними →</a></p>
+				</Disclosure>
+			</section>
+		{/if}
 	{/if}
 {/if}
 
 <style>
-	.how {
-		padding: 0.9rem 1.25rem;
-	}
-	.how ul {
-		margin: 0.6rem 0 0;
-		padding-left: 1.2rem;
-		display: grid;
-		gap: 0.35rem;
-	}
-	.tabs {
+	.formula {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.4rem;
-		margin-bottom: 1rem;
-		border-bottom: 2px solid var(--line);
-	}
-	.tabs a {
-		padding: 0.55rem 0.9rem;
-		border: 1px solid var(--line);
-		border-bottom: none;
-		border-radius: 8px 8px 0 0;
-		background: #eef2f6;
-		color: var(--text);
-		text-decoration: none;
-		font-weight: 500;
-		margin-bottom: -2px;
-	}
-	.tabs a:hover {
-		background: var(--accent-soft);
-	}
-	.tabs a[aria-current='page'] {
+		align-items: center;
+		gap: 0.5rem 0.6rem;
+		margin: 0 0 1.25rem;
+		padding: 0.75rem 1rem;
 		background: var(--surface);
-		border-color: var(--accent);
-		border-bottom: 2px solid var(--surface);
+		border: 1px solid #e3e8ef;
+		border-radius: var(--radius);
+		box-shadow: var(--shadow);
+	}
+	.f-part {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+		background: var(--neutral-soft);
+		font-weight: 600;
+		font-size: 0.95rem;
+	}
+	.f-res {
+		background: var(--sun-soft);
+		color: var(--sun-ink);
+	}
+	.f-op {
+		font-size: 1.25rem;
 		font-weight: 700;
-		color: var(--accent-dark);
+		color: var(--muted);
+	}
+	.f-ex {
+		flex-basis: 100%;
+	}
+	@media (min-width: 1100px) {
+		.f-ex {
+			flex-basis: auto;
+			margin-left: auto;
+		}
+	}
+	.cats {
+		display: flex;
+		flex-wrap: wrap;
+		margin-bottom: 1.25rem;
 	}
 	.count {
 		display: inline-block;
 		min-width: 1.6em;
+		margin-left: 0.25rem;
 		padding: 0 0.35em;
 		border-radius: 999px;
-		background: #fff;
-		border: 1px solid var(--line-strong);
+		background: rgba(255, 255, 255, 0.7);
+		border: 1px solid var(--line);
 		font-size: 0.8rem;
 		text-align: center;
 	}
-	.meta {
-		display: flex;
-		flex-direction: column;
-		margin: 0 0 0.2rem;
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+		gap: 1rem;
+		margin-bottom: 1.5rem;
 	}
-	.med {
-		font-size: 1.05rem;
+	.stats > :global(.reveal) {
+		display: grid;
+	}
+	.search {
+		flex: 1 1 18rem;
+		max-width: 26rem;
+	}
+	.search input {
+		width: 100%;
+	}
+	.lbl {
+		font-weight: 600;
+		font-size: 0.9rem;
+	}
+	.toolbar .seg {
+		display: flex;
+		flex-wrap: wrap;
+	}
+	.shown {
+		margin: 0 0 0.6rem auto;
+	}
+	.list-card {
+		background: var(--surface);
+		border: 1px solid #e3e8ef;
+		border-radius: var(--radius);
+		box-shadow: var(--shadow);
+		overflow: hidden;
+	}
+	.list-head,
+	.row {
+		display: grid;
+		grid-template-columns: 3.5rem minmax(0, 2.2fr) minmax(12rem, 1.3fr) minmax(11rem, 1fr) 2.75rem;
+		gap: 0.5rem 1rem;
+		align-items: center;
+		padding: 0.6rem 1rem;
+	}
+	.list-head {
+		background: var(--neutral-soft);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: #2b3645;
+		border-bottom: 1px solid var(--line);
+	}
+	.rows {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.row {
+		position: relative;
+		border-bottom: 1px solid #edf0f4;
+		background: var(--surface);
+		transition: background 0.15s;
+	}
+	.row:last-child {
+		border-bottom: 0;
+	}
+	.row:hover,
+	.row.open {
+		background: #f7fafd;
 	}
 	.rank {
+		display: grid;
+		place-items: center;
+		width: 2.2rem;
+		height: 2.2rem;
+		border-radius: 50%;
+		background: var(--neutral-soft);
 		font-weight: 700;
 	}
-	.addr {
-		display: block;
-		font-size: 0.875rem;
-		color: var(--muted);
+	.name a {
+		font-weight: 600;
 	}
-	.bar-cell {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.6rem;
+	.val {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
 	}
-	.bar-cell strong {
-		min-width: 3.2em;
+	.v {
+		white-space: nowrap;
 	}
 	.mini {
 		position: relative;
-		display: inline-block;
-		width: 7rem;
-		height: 0.6rem;
-		border-radius: 4px;
-		background: #eef2f6;
+		display: block;
+		height: 0.55rem;
+		border-radius: 999px;
+		background: var(--neutral-soft);
 	}
 	.fill {
 		position: absolute;
 		inset: 0 auto 0 0;
-		border-radius: 4px;
-		background: var(--c-fg, var(--accent));
-		opacity: 0.85;
+		border-radius: 999px;
+		transform-origin: left center;
+	}
+	.t-good {
+		background: var(--cls-A);
+	}
+	.t-mid {
+		background: var(--cls-D);
+	}
+	.t-bad {
+		background: var(--cls-G);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.fill {
+			transform: scaleX(0);
+			transition: transform 0.7s var(--ease) calc(var(--i, 0) * 30ms + 150ms);
+		}
+		:global(.grown) .fill {
+			transform: none;
+		}
 	}
 	.tick {
 		position: absolute;
-		top: -3px;
-		bottom: -3px;
+		top: -4px;
+		bottom: -4px;
 		width: 2px;
+		margin-left: -1px;
 		background: var(--text);
+		border-radius: 1px;
+	}
+	.cmp {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.5rem;
+	}
+	.cmp-txt {
+		font-size: 0.9375rem;
+	}
+	.more {
+		display: grid;
+		place-items: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		border: 1px solid var(--line);
+		background: var(--surface);
+		color: var(--accent);
+		cursor: pointer;
+		transition:
+			transform 0.24s var(--ease),
+			background 0.15s;
+	}
+	.more:hover {
+		background: var(--accent-soft);
+	}
+	.open .more {
+		transform: rotate(180deg);
+		background: var(--accent-soft);
+	}
+	.details {
+		grid-column: 2 / -1;
+		padding: 0.25rem 0 0.4rem;
+	}
+	.details dl {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		gap: 0.6rem 1.25rem;
+		margin: 0 0 0.6rem;
+	}
+	.details dt {
+		font-size: 0.85rem;
+		color: var(--muted);
+		font-weight: 600;
+	}
+	.details dd {
+		margin: 0;
+	}
+	.det-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.5rem;
+		margin: 0;
+		font-weight: 600;
+	}
+	.list-foot {
+		display: flex;
+		justify-content: center;
+		padding: 0.85rem 1rem;
+		border-top: 1px solid var(--line);
+		background: #fafbfd;
+	}
+	.none {
+		padding: 2rem 1rem;
+		text-align: center;
+		color: var(--muted);
+	}
+	.linkish {
+		border: 0;
+		background: none;
+		padding: 0;
+		font: inherit;
+		color: var(--accent);
+		text-decoration: underline;
+		cursor: pointer;
 	}
 	.legend {
-		margin-top: 0.5rem;
+		margin: 0.6rem 0 1.25rem;
 	}
-	.excluded {
-		margin-top: 1.25rem;
+	.lg-tick {
+		display: inline-block;
+		width: 2px;
+		height: 0.9em;
+		background: var(--text);
+		vertical-align: -0.1em;
+		margin-right: 0.25rem;
 	}
-	.excluded summary {
-		margin-bottom: 0.5rem;
+	:global(.disc.card.soft) {
+		padding: 0.25rem 1.25rem;
+		margin: 0 0 1.25rem;
 	}
-	@media (max-width: 760px) {
-		.mini {
+	.classes {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.45rem;
+	}
+	.excl {
+		scroll-margin-top: 5rem;
+	}
+	.excl-list {
+		list-style: none;
+		margin: 0 0 0.75rem;
+		padding: 0;
+		display: grid;
+		gap: 0.65rem;
+	}
+	.excl-list li {
+		display: flex;
+		flex-direction: column;
+	}
+	@media (max-width: 900px) {
+		.list-head {
 			display: none;
+		}
+		.row {
+			grid-template-columns: 2.6rem minmax(0, 1fr) 2.75rem;
+			gap: 0.4rem 0.75rem;
+			padding: 0.75rem 0.85rem;
+			align-items: start;
+		}
+		.rank {
+			grid-row: 1 / span 3;
+		}
+		.name {
+			grid-column: 2;
+		}
+		.more {
+			grid-column: 3;
+			grid-row: 1;
+		}
+		.val,
+		.cmp {
+			grid-column: 2 / -1;
+		}
+		.details {
+			grid-column: 1 / -1;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.more,
+		.row {
+			transition: none;
 		}
 	}
 </style>

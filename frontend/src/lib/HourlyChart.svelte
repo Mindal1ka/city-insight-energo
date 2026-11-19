@@ -3,6 +3,7 @@
 	// Минулі години — суцільні, майбутні — світліші й пунктиром (прогноз). Вертикальна мітка «зараз».
 	import type { SiteHour } from './api.ts';
 	import { num, hh } from './format.ts';
+	import { isReduced } from './motion.ts';
 
 	let {
 		hours,
@@ -79,6 +80,26 @@
 	);
 	const peak = $derived(peakHour === null ? null : (data.find((d) => d.hour === peakHour) ?? null));
 
+	// Графік «малюється», коли з'являється на екрані: стовпчики ростуть, лінії прокреслюються
+	let seen = $state(false);
+	function onView(node: HTMLElement) {
+		if (isReduced() || typeof IntersectionObserver === 'undefined') {
+			seen = true;
+			return;
+		}
+		const io = new IntersectionObserver(
+			(es) => {
+				if (es.some((e) => e.isIntersecting)) {
+					seen = true;
+					io.disconnect();
+				}
+			},
+			{ threshold: 0.25 }
+		);
+		io.observe(node);
+		return () => io.disconnect();
+	}
+
 	// Інтерактивна підказка: миша або стрілки клавіатури
 	let active = $state<number | null>(null);
 	const act = $derived(active === null ? null : (data[active] ?? null));
@@ -125,7 +146,7 @@
 		<span class="fc-key"><i class="sw dash" aria-hidden="true"></i>світліше й пунктиром — прогноз</span>
 	</div>
 
-	<div class="plot" bind:clientWidth={cw}>
+	<div class="plot" class:seen bind:clientWidth={cw} {@attach onView}>
 		<svg
 			viewBox="0 0 {W} {H}"
 			role="slider"
@@ -183,7 +204,7 @@
 			{/each}
 
 			<!-- Площа під споживанням -->
-			<path d={consArea} fill="url(#hc-cons)" />
+			<path d={consArea} fill="url(#hc-cons)" class="fade" />
 
 			<!-- Стовпчики генерації -->
 			{#if hasGen}
@@ -194,6 +215,7 @@
 						<rect
 							class="bar"
 							class:fc={d.forecast}
+							style="--i: {d.hour}"
 							x={cx(d.hour) - bw / 2}
 							y={top}
 							width={bw}
@@ -208,21 +230,23 @@
 			{/if}
 
 			<!-- Лінія споживання -->
-			<path d={consPast} class="cons-line" />
-			{#if consFc}<path d={consFc} class="cons-line fc-line" />{/if}
+			<path d={consPast} class="cons-line draw" pathLength="1" />
+			{#if consFc}<path d={consFc} class="cons-line fc-line fade late" />{/if}
 
 			<!-- Лінія заряду -->
 			{#if hasSoc}
-				<path d={socPast} class="soc-line" />
-				{#if socFc}<path d={socFc} class="soc-line fc-line" />{/if}
+				<path d={socPast} class="soc-line draw" pathLength="1" />
+				{#if socFc}<path d={socFc} class="soc-line fc-line fade late" />{/if}
 			{/if}
 
 			<!-- Пік споживання -->
 			{#if peak && peak.cons_kwh > 0}
+				<g class="fade late">
 				<circle cx={cx(peak.hour)} cy={y(peak.cons_kwh)} r="5.5" fill="#fff" stroke="#1f4f84" stroke-width="2.5" />
 				<text x={cx(peak.hour)} y={y(peak.cons_kwh) - 12} text-anchor="middle" class="peak">
 					пік {num(peak.cons_kwh, 1)} кВт
 				</text>
+				</g>
 			{/if}
 
 			<!-- Мітка «зараз» -->
@@ -371,6 +395,35 @@
 	}
 	.bar {
 		transition: opacity 0.2s;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.bar {
+			transform-box: fill-box;
+			transform-origin: 50% 100%;
+			transition:
+				transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 30ms),
+				opacity 0.2s;
+		}
+		.plot:not(.seen) .bar {
+			transform: scaleY(0);
+		}
+		.draw {
+			stroke-dasharray: 1;
+			stroke-dashoffset: 0;
+			transition: stroke-dashoffset 1.3s cubic-bezier(0.45, 0, 0.2, 1) 0.15s;
+		}
+		.plot:not(.seen) .draw {
+			stroke-dashoffset: 1;
+		}
+		.fade {
+			transition: opacity 0.6s ease 0.3s;
+		}
+		.fade.late {
+			transition-delay: 1.1s;
+		}
+		.plot:not(.seen) .fade {
+			opacity: 0;
+		}
 	}
 	.peak {
 		font-size: 13px;

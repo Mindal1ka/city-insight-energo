@@ -8,6 +8,7 @@
 	/** Сторінки, на які можна перейти з пошуку */
 	export const PALETTE_PAGES: PaletteLink[] = [
 		{ href: '/', label: 'Об’єкти', hint: 'Усі будівлі, сонце й акумулятори сьогодні' },
+		{ href: '/map', label: 'Мапа', hint: 'Будівлі громади на карті міста' },
 		{ href: '/independence', label: 'Енергонезалежність', hint: 'Покриття сонцем і години автономності' },
 		{ href: '/solar', label: 'Де ставити СЕС', hint: 'Де нова сонячна станція дасть найбільше' },
 		{ href: '/overview', label: 'Споживання електроенергії', hint: 'Скільки споживає громада й хто найбільше' },
@@ -302,17 +303,39 @@
 		margin: 9vh auto auto;
 		padding: 0;
 		border: 0;
-		border-radius: 16px;
+		border-radius: 20px;
 		background: var(--surface);
 		color: var(--text);
-		box-shadow: 0 24px 64px -12px rgba(8, 20, 38, 0.5);
+		box-shadow:
+			0 32px 80px -16px rgba(8, 20, 38, 0.55),
+			0 0 0 1px rgba(8, 20, 38, 0.06);
 		overflow: hidden;
 	}
 	.cp[open] {
 		display: flex;
 	}
 	.cp::backdrop {
-		background: rgba(10, 24, 42, 0.55);
+		background: rgba(10, 24, 42, 0.5);
+		backdrop-filter: blur(3px);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.cp[open] {
+			animation: cp-in 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+		}
+		.cp[open]::backdrop {
+			animation: cp-fade 0.2s ease-out;
+		}
+		@keyframes cp-in {
+			from {
+				opacity: 0;
+				transform: translateY(-10px) scale(0.98);
+			}
+		}
+		@keyframes cp-fade {
+			from {
+				opacity: 0;
+			}
+		}
 	}
 	.cp-box {
 		display: flex;

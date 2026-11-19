@@ -103,13 +103,16 @@ export function isElecRelevant(d: Defect): boolean {
 	return !NON_ELEC_FIELDS.includes(String(d.поле).trim().toLocaleLowerCase('uk'));
 }
 
-/** «у 2,3 раза більше» / «на 40 % менше» / «на рівні» */
+/** Текст для «приблизно як типова будівля категорії» */
+export const LEVEL_WORDS = 'на рівні типової';
+
+/** «у 2,3 раза більше» / «на 40 % менше» / «на рівні типової» */
 export function ratioWords(r: number | null): string {
 	if (r === null) return '—';
 	const nf = (v: number, d: number) =>
 		new Intl.NumberFormat('uk-UA', { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
 	if (r >= 1.5) return `у ${nf(r, 1)} раза більше`;
 	if (r > 1.1) return `на ${nf((r - 1) * 100, 0)} % більше`;
-	if (r >= 0.9) return 'на рівні медіани';
+	if (r >= 0.9) return LEVEL_WORDS;
 	return `на ${nf((1 - r) * 100, 0)} % менше`;
 }

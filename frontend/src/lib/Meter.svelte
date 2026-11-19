@@ -1,7 +1,9 @@
 <script lang="ts">
 	// Використання ліміту: «використано / ліміт», смуга прогресу, попередження при перевищенні
 	import { num } from './format.ts';
+	import { isReduced } from './motion.ts';
 	import Icon from './Icon.svelte';
+	import CountUp from './CountUp.svelte';
 
 	let {
 		label,
@@ -27,15 +29,35 @@
 	const level = $derived(
 		p === null ? 'none' : over || p > 100 ? 'over' : p >= 85 ? 'near' : 'ok'
 	);
+
+	// Смуга заповнюється, коли шкала з'являється на екрані
+	let seen = $state(false);
+	function onView(node: HTMLElement) {
+		if (isReduced() || typeof IntersectionObserver === 'undefined') {
+			seen = true;
+			return;
+		}
+		const io = new IntersectionObserver(
+			(es) => {
+				if (es.some((e) => e.isIntersecting)) {
+					seen = true;
+					io.disconnect();
+				}
+			},
+			{ threshold: 0.3 }
+		);
+		io.observe(node);
+		return () => io.disconnect();
+	}
 </script>
 
-<div class="meter {level}">
+<div class="meter {level}" {@attach onView}>
 	<div class="top">
 		<span class="label">{label}</span>
 		<span class="pct tnum">{p === null ? '—' : `${num(p, 0)} %`}</span>
 	</div>
 	<p class="vals">
-		<span class="big-num used">{num(used, digits)}</span>
+		<span class="big-num used">{#if seen}<CountUp value={used} decimals={digits} />{:else}{num(0, digits)}{/if}</span>
 		<span class="of">з {num(limit, digits)} {unit}</span>
 	</p>
 	<div
@@ -47,7 +69,7 @@
 		aria-valuenow={Math.min(used, limit || used)}
 		aria-valuetext="{num(used, digits)} з {num(limit, digits)} {unit}"
 	>
-		<span class="fill" style="width: {Math.min(100, p ?? 0)}%"></span>
+		<span class="fill" style="width: {seen ? Math.min(100, p ?? 0) : 0}%"></span>
 		<span class="mark" style="left: 85%" aria-hidden="true"></span>
 	</div>
 	{#if level === 'over'}
@@ -103,7 +125,12 @@
 		inset: 0 auto 0 0;
 		border-radius: 999px;
 		background: linear-gradient(90deg, #2f6db0, #1f4f84);
-		transition: width 0.8s var(--ease);
+		transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.fill {
+			transition: none;
+		}
 	}
 	.mark {
 		position: absolute;

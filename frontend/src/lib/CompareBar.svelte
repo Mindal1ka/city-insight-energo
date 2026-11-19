@@ -12,23 +12,23 @@
 	const max = $derived(Math.max(value ?? 0, median ?? 0, 1) * 1.05);
 	const rows = $derived([
 		{ label: 'Ця будівля', v: value, fill: 'var(--accent)', strong: true },
-		{ label: `Медіана категорії «${category}»`, v: median, fill: '#7d8896', strong: false }
+		{ label: `Типова будівля категорії «${category}»`, v: median, fill: '#7d8896', strong: false }
 	]);
 </script>
 
 <figure>
 	<figcaption class="visually-hidden">
-		Питоме споживання за {year} рік: ця будівля {num(value, 1)} кВт·год/м², медіана категорії
+		Питоме споживання за {year} рік: ця будівля {num(value, 1)} кВт·год/м², типова будівля категорії
 		«{category}» {num(median, 1)} кВт·год/м²
 	</figcaption>
 	<ul class="bars" aria-hidden="true">
-		{#each rows as r (r.label)}
+		{#each rows as r, i (r.label)}
 			<li>
 				<span class="lbl" class:strong={r.strong}>{r.label}</span>
 				<span class="row">
 					<svg viewBox="0 0 100 10" preserveAspectRatio="none">
 						<rect x="0" y="0" width="100" height="10" fill="#eef2f6" />
-						<rect x="0" y="0" width={r.v ? (r.v / max) * 100 : 0} height="10" fill={r.fill} />
+						<rect class="grow" style="--i:{i}" x="0" y="0" width={r.v ? (r.v / max) * 100 : 0} height="10" fill={r.fill} />
 					</svg>
 					<span class="val">{num(r.v, 1)} кВт·год/м²</span>
 				</span>
@@ -67,6 +67,20 @@
 		height: 1.5rem;
 		display: block;
 		border-radius: 3px;
+	}
+	/* Смужки «виростають» зліва направо при появі */
+	@media (prefers-reduced-motion: no-preference) {
+		.grow {
+			transform-box: fill-box;
+			transform-origin: left center;
+			animation: grow-x 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+			animation-delay: calc(var(--i, 0) * 140ms + 200ms);
+		}
+		@keyframes grow-x {
+			from {
+				transform: scaleX(0);
+			}
+		}
 	}
 	.val {
 		font-variant-numeric: tabular-nums;
