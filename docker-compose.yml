@@ -1,0 +1,12 @@
+services:
+  energo:
+    build: .
+    image: city-insight-energo
+    ports:
+      - "8000:8000"
+    volumes:
+      # вивантаження UMUNI: файли, завантажені кнопкою «Оновити дані», зберігаються між перезапусками
+      - ./backend/data:/app/backend/data
+    # Налаштування з .env (за зразком .env.example), коли з'являться ролі доступу:
+    # env_file: .env
+    restart: unless-stopped

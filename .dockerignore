@@ -1,0 +1,9 @@
+.git
+**/node_modules
+frontend/build
+frontend/.svelte-kit
+**/__pycache__
+**/.venv
+.env
+**/Інформація щодо впровадження СЕМ*.xlsx
+**/Лічильники*.xlsx
