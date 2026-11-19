@@ -118,7 +118,7 @@
 			acc += v;
 			stops.push(`${keyColor(k)} ${from}deg ${(acc / n) * 360}deg`);
 		}
-		const size = n < 10 ? 38 : n < 50 ? 44 : 50;
+		const size = n < 10 ? 34 : n < 50 ? 40 : 46;
 		return L!.divIcon({
 			className: 'sm-icon',
 			html: `<span class="sm-cl" style="background:conic-gradient(${stops.join(',')});width:${size}px;height:${size}px"><b>${n}</b></span>`,
@@ -245,7 +245,7 @@
 	const GIS_TILES = 'https://mbk.rada-poltava.gov.ua/api/gis-rtile';
 	type BoundKey = 'districts' | 'starosta' | 'otg';
 	const BOUNDS: { key: BoundKey; id: string; label: string; opacity: number }[] = [
-		{ key: 'districts', id: '2272630265727681598', label: 'Райони міста', opacity: 0.45 },
+		{ key: 'districts', id: '2272630265727681598', label: 'Райони міста', opacity: 0.22 },
 		{ key: 'starosta', id: '2464582733746145100', label: 'Старостинські округи', opacity: 0.8 },
 		{ key: 'otg', id: '2450807838365189461', label: 'Межа громади', opacity: 0.9 }
 	];
@@ -293,6 +293,7 @@
 			map = L.map(el, { zoomControl: false, zoomSnap: 0.25, preferCanvas: false }).setView(POLTAVA, 12);
 			map.attributionControl.setPrefix(false);
 			L.control.zoom({ position: 'bottomright', zoomInTitle: 'Наблизити', zoomOutTitle: 'Віддалити' }).addTo(map);
+			// Підкладка OSM, приглушена CSS-фільтром (.sm-tiles): кольорові точки на ній добре видно
 			L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 				maxZoom: 19,
 				className: 'sm-tiles',
@@ -396,6 +397,9 @@
 		background: #e8edf2;
 		z-index: 0;
 	}
+	.sm-root :global(.sm-tiles) {
+		filter: grayscale(1) brightness(1.12) contrast(0.72);
+	}
 	.sm-root :global(.sm-icon) {
 		background: none;
 		border: 0;
@@ -412,50 +416,60 @@
 		width: 22px;
 		height: 22px;
 		border-radius: 50%;
-		background: #fff;
-		box-shadow: 0 1px 3px rgba(15, 35, 65, 0.35);
+		background: var(--c);
+		border: 2.5px solid #fff;
+		box-sizing: border-box;
+		box-shadow:
+			0 0 0 1px rgba(15, 35, 65, 0.25),
+			0 2px 5px rgba(15, 35, 65, 0.35);
 		transition: transform 0.2s var(--ease-spring, ease);
 	}
 	.sm-root :global(.sm-mk svg) {
-		width: 16px;
-		height: 16px;
-		fill: var(--c);
-		stroke: rgba(0, 0, 0, 0.18);
-		stroke-width: 0.5;
+		width: 9px;
+		height: 9px;
+		fill: #fff;
 	}
+	/* без СЕС / без даних — дрібна сіра точка, щоб не заважала */
 	.sm-root :global(.sm-mk.mute) {
-		width: 15px;
-		height: 15px;
-		margin: 3.5px;
-		opacity: 0.85;
+		width: 13px;
+		height: 13px;
+		margin: 4.5px;
+		border-width: 2px;
+		box-shadow: 0 0 0 1px rgba(15, 35, 65, 0.2);
 	}
 	.sm-root :global(.sm-mk.mute svg) {
-		width: 11px;
-		height: 11px;
+		display: none;
 	}
+	/* кластер: темне коло з числом, кольорове кільце — частки класів */
 	.sm-root :global(.sm-cl) {
 		display: grid;
 		place-items: center;
 		border-radius: 50%;
-		box-shadow: 0 1px 4px rgba(15, 35, 65, 0.4);
+		box-shadow: 0 2px 6px rgba(15, 35, 65, 0.35);
 	}
 	.sm-root :global(.sm-cl b) {
 		display: grid;
 		place-items: center;
-		width: calc(100% - 10px);
-		height: calc(100% - 10px);
+		width: calc(100% - 8px);
+		height: calc(100% - 8px);
 		border-radius: 50%;
-		background: #fff;
-		color: #0f1b2d;
+		background: var(--navy, #0f2f52);
+		border: 2px solid #fff;
+		box-sizing: border-box;
+		color: #fff;
 		font-size: 0.8rem;
+		font-weight: 700;
 		font-variant-numeric: tabular-nums;
 	}
 	.sm-root :global(.sm-icon:hover .sm-mk) {
 		transform: scale(1.25);
 	}
 	.sm-root :global(.sm-mk.sel) {
-		transform: scale(1.55);
-		box-shadow: 0 0 0 3px var(--c), 0 4px 12px rgba(15, 35, 65, 0.4);
+		transform: scale(1.5);
+		box-shadow:
+			0 0 0 3px var(--c),
+			0 0 0 9px color-mix(in srgb, var(--c) 25%, transparent),
+			0 4px 12px rgba(15, 35, 65, 0.4);
 	}
 	.sm-root :global(.sm-mk.wave) {
 		animation: sm-in 0.45s var(--ease-spring, ease) backwards;
