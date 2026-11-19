@@ -21,6 +21,13 @@
 	import ObjMonthChart from '#lib/obj/ObjMonthChart.svelte';
 	import ObjFinance from '#lib/obj/ObjFinance.svelte';
 	import ObjEditDrawer from '#lib/obj/ObjEditDrawer.svelte';
+	import V2Monthly from '#lib/obj/V2Monthly.svelte';
+	import V2Budget from '#lib/obj/V2Budget.svelte';
+	import V2Live from '#lib/obj/V2Live.svelte';
+	import V2Dist from '#lib/obj/V2Dist.svelte';
+	import V2Sizing from '#lib/obj/V2Sizing.svelte';
+	import { fetchInsight, updateLimit, type Insight } from '#lib/api-v2.ts';
+	import { onDestroy } from 'svelte';
 	import { loadObj, saveObj, normSes, normCosts, emptySes, emptyCosts, type ObjDetail, type ObjPatch } from '#lib/obj/ObjApi.ts';
 
 	const id = $derived(page.params.id ?? '');
@@ -51,8 +58,40 @@
 		load(id);
 	});
 
+	// --- v2: insight (ліміти, live, розподіл, сайзинг); live оновлюється кожні 60 с ---
+	let ins = $state<Insight | null>(null);
+	async function loadIns(oid: string, silent = false) {
+		const n = Number(oid);
+		if (!Number.isFinite(n)) return;
+		try {
+			const r = await fetchInsight(n);
+			if (oid === id) ins = r;
+		} catch {
+			if (!silent && oid === id) ins = null;
+		}
+	}
+	$effect(() => {
+		ins = null;
+		loadIns(id);
+	});
+	const insTimer = setInterval(() => {
+		if (id && typeof document !== 'undefined' && !document.hidden) loadIns(id, true);
+	}, 60_000);
+	onDestroy(() => clearInterval(insTimer));
+	async function saveLimit(v: number | null) {
+		try {
+			await updateLimit(Number(id), v);
+			await loadIns(id);
+			say('Збережено');
+		} catch (err) {
+			say(errMessage(err), false);
+			throw err;
+		}
+	}
+
 	// --- Ролі ---
 	const user = $derived(auth.user);
+	const canLimit = $derived(user?.role === 'energy_manager' || user?.role === 'finance');
 	const cat = $derived(d?.building.category_short ?? null);
 	// Бекенд сам вирішує рівень доступу (access); клієнтські правила — лише запасний варіант
 	const access = $derived(d?.access ?? null);
@@ -152,6 +191,7 @@
 		<header class="panel hero">
 			<div class="h-main">
 				<p class="eyebrow">{catLabel(b.category_short ?? '')}</p>
+				{#if ins?.department}<p class="dept"><Icon name="users" size={14} /> {ins.department}</p>{/if}
 				<h1 title={b.name}>{b.name}</h1>
 				<p class="place"><Icon name="pin" size={16} /> {place}</p>
 				<p class="facts tnum">
@@ -199,10 +239,29 @@
 					<div class="empty">
 						<span class="e-ic" aria-hidden="true">○</span>
 						<p><b>СЕС немає</b></p>
-						<a class="btn btn-sun btn-sm" href="/solar/{b.id}"><Icon name="sun" size={16} /> Потенціал даху</a>
 						{#if editable}<button type="button" class="btn btn-secondary btn-sm" onclick={() => (editOpen = true)}>Додати СЕС</button>{/if}
 					</div>
 				{/if}
+			</section>
+		{/if}
+
+		<!-- ============ 2a. Стан СЕС зараз (v2) ============ -->
+		{#if ins?.live}
+			<section class="sec" aria-labelledby="lv-h">
+				<h2 id="lv-h"><span class="si sun" aria-hidden="true"><Icon name="sun" size={18} /></span>Стан СЕС зараз</h2>
+				<V2Live l={ins.live} />
+			</section>
+		{/if}
+		{#if ins?.distribution}
+			<section class="sec" aria-labelledby="ds-h">
+				<h2 id="ds-h"><span class="si en" aria-hidden="true"><Icon name="chart" size={18} /></span>Розподіл енергії сьогодні</h2>
+				<V2Dist d={ins.distribution} />
+			</section>
+		{/if}
+		{#if ins?.sizing && (ins.sizing.need || ses || kc === 'Надлишок')}
+			<section class="sec" aria-labelledby="sz-h">
+				<h2 id="sz-h"><span class="si sun" aria-hidden="true"><Icon name="panel" size={18} /></span>Скільки доставити</h2>
+				<V2Sizing s={ins.sizing} id={b.id} hasStation={!!ses} surplus={kc === 'Надлишок'} />
 			</section>
 		{/if}
 
@@ -232,6 +291,8 @@
 				<div class="panel chart">
 					<ObjMonthChart data={d.monthly} hasSes={!!ses} />
 				</div>
+			{:else if ins?.monthly_kwh?.some((x) => x > 0)}
+				<V2Monthly data={ins.monthly_kwh} />
 			{/if}
 		</section>
 
@@ -240,6 +301,9 @@
 			<section class="sec" aria-labelledby="fi-h">
 				<h2 id="fi-h"><span class="si fi" aria-hidden="true"><Icon name="wallet" size={18} /></span>Фінанси</h2>
 				<ObjFinance {d} showSes={!!ses} />
+				{#if ins?.budget}
+					<V2Budget b={ins.budget} canEdit={canLimit} onsave={saveLimit} />
+				{/if}
 				{#if noCost}
 					<div class="empty slim">
 						<span class="e-ic" aria-hidden="true">₴</span>
@@ -263,9 +327,9 @@
 
 		<!-- ============ 6. Оперативне ============ -->
 		<section class="sec more" aria-label="Детальніше">
-			{#if bat && site && hasCons}
+			{#if bat && site && hasCons && !ins?.distribution}
 				<Disclosure summary="Що зараз" hint={m ? `${m.time}` : ''}>
-					<Distribution d={site.distribution} hasSes={!!ses} solarHref="/solar/{b.id}" />
+					<Distribution d={site.distribution} hasSes={!!ses} />
 					<div class="panel chart">
 						<HourlyChart hours={site.hourly} nowHour={m?.hour ?? null} nowMinute={m?.minute ?? 0} peakHour={site.today.peak_kw > 0 ? site.today.peak_hour : null} />
 					</div>
@@ -284,7 +348,6 @@
 					<Icon name="lock" size={14} /> Дані СЕС — після входу
 					{#if !isInternal(user)}<a href="/login?next=/object/{b.id}">Увійти</a>{/if}
 				</p>
-				<a class="btn btn-sun btn-sm" href="/solar/{b.id}"><Icon name="sun" size={16} /> Потенціал СЕС на даху</a>
 			{/if}
 		</section>
 	</div>
@@ -340,6 +403,18 @@
 		line-height: 1.2;
 		color: var(--ink);
 		overflow-wrap: anywhere;
+	}
+	.dept {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin: 0 0 0.35rem;
+		padding: 0.15rem 0.6rem;
+		border-radius: 999px;
+		background: var(--accent-soft);
+		color: var(--cons);
+		font-size: var(--fs-xs);
+		font-weight: 600;
 	}
 	.place {
 		display: flex;

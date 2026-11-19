@@ -302,7 +302,6 @@
 							</li>
 						{/each}
 					</ul>
-					<p class="small"><a href="/defects">Усі проблеми з даними →</a></p>
 				</Disclosure>
 			</section>
 		{/if}

@@ -242,7 +242,6 @@
 								value={result.summary.defects}
 								icon="alert"
 								tone={result.summary.defects ? 'warn' : 'good'}
-								href="/defects"
 								hint="На {num(result.summary.defect_buildings)} {plural(result.summary.defect_buildings, ['будівлі', 'будівлях', 'будівлях'])}."
 							/>
 						</div>

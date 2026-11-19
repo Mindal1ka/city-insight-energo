@@ -22,3 +22,8 @@ venv/
 ~$*.xlsx
 .DS_Store
 Thumbs.db
+
+# сирі документи пакета (ПІБ, телефони)
+docs/drive-download-*/
+backend/data/appeals.json
+backend/data/limits.csv

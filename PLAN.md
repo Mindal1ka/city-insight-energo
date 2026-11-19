@@ -44,6 +44,7 @@
 
 ## Стан
 - [x] Узгодити відкриті питання
-- [ ] Бекенд: департаменти, ліміти, live-мок, звернення, звіт
-- [ ] Фронтенд: екрани 1–7
-- [ ] Перебудова Docker, перевірка
+- [x] Бекенд `backend/app/insight.py`: /api/insight/{id}, /api/limits/{id}, /api/live, /api/departments, /api/network, /api/report(.csv), /api/appeals; у /api/ses — department, cons_kwh_month_avg, eff_index
+- [x] Фронт: контракт `frontend/src/lib/api-v2.ts`, навігація
+- [x] Фронтенд: картка об'єкта (2), /energy (3), /network (4), /finance (5), /appeals (6), /report (7), мапа-фільтри-кластери (1)
+- [x] Перебудова Docker, перевірка API (браузерна перевірка — вручну)

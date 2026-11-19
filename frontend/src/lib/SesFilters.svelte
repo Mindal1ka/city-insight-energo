@@ -12,6 +12,8 @@
 		type SesItem
 	} from './api-ses.ts';
 	import { CATEGORIES } from './api-map.ts';
+	import { DEPARTMENTS } from './api-v2.ts';
+	import { SEASONS, EFF_CLASSES, type Season, type EffClass } from './ses-extra.ts';
 
 	let {
 		items,
@@ -19,6 +21,10 @@
 		classes = $bindable([]),
 		types = $bindable([]),
 		q = $bindable(''),
+		department = $bindable(''),
+		need = $bindable(false),
+		season = $bindable(null),
+		eff = $bindable(null),
 		restricted = false,
 		onenter
 	}: {
@@ -27,6 +33,10 @@
 		classes?: KClass[];
 		types?: string[];
 		q?: string;
+		department?: string;
+		need?: boolean;
+		season?: Season | null;
+		eff?: EffClass | null;
 		restricted?: boolean;
 		/** Enter у пошуку */
 		onenter?: () => void;
@@ -53,7 +63,18 @@
 	function toggle<T>(arr: T[], v: T): T[] {
 		return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 	}
-	const active = $derived(classes.length + types.length + (q.trim() ? 1 : 0));
+	const active = $derived(
+		classes.length + types.length + (q.trim() ? 1 : 0) + (department ? 1 : 0) + (need ? 1 : 0) + (season ? 1 : 0) + (eff ? 1 : 0)
+	);
+	function resetAll() {
+		classes = [];
+		types = [];
+		q = '';
+		department = '';
+		need = false;
+		season = null;
+		eff = null;
+	}
 </script>
 
 <div class="sf">
@@ -65,7 +86,7 @@
 					role="radio"
 					aria-checked={period === p.id}
 					class:on={period === p.id}
-					onclick={() => (period = p.id)}>{p.label}</button
+					onclick={() => ((period = p.id), (season = null))}>{p.label}</button
 				>
 			{/each}
 		</div>
@@ -88,12 +109,49 @@
 			/>
 		</label>
 		{#if active}
-			<button type="button" class="reset" onclick={() => ((classes = []), (types = []), (q = ''))} title="Скинути фільтри"
+			<button type="button" class="reset" onclick={resetAll} title="Скинути фільтри"
 				>✕ <span class="sr">Скинути фільтри</span></button
 			>
 		{/if}
 	</div>
 	{#if !restricted}
+		<div class="row chips" role="group" aria-label="Сезон">
+			{#each SEASONS as s (s.id)}
+				<button
+					type="button"
+					class="chip plain"
+					class:on={season === s.id}
+					aria-pressed={season === s.id}
+					style="--c: #0b5cad; --soft: #e3eefb"
+					onclick={() => (season = season === s.id ? null : s.id)}>{s.label}</button
+				>
+			{/each}
+			<button
+				type="button"
+				class="chip plain"
+				class:on={need}
+				aria-pressed={need}
+				style="--c: #d9680f; --soft: #fdeedf"
+				title="Потреба в розширенні"
+				onclick={() => (need = !need)}><span class="dot" aria-hidden="true">↓</span>Потреба в розширенні</button
+			>
+		</div>
+		<div class="row chips" role="group" aria-label="Відділ та індекс ефективності">
+			<select bind:value={department} aria-label="Розпорядник" class:on={!!department}>
+				<option value="">Усі розпорядники</option>
+				{#each DEPARTMENTS as d (d)}<option value={d}>{d}</option>{/each}
+			</select>
+			{#each EFF_CLASSES as e (e.id)}
+				<button
+					type="button"
+					class="chip plain"
+					class:on={eff === e.id}
+					aria-pressed={eff === e.id}
+					style="--c: {e.color}; --soft: #eef2f7"
+					onclick={() => (eff = eff === e.id ? null : e.id)}>{e.label}</button
+				>
+			{/each}
+		</div>
 		<div class="row chips" role="group" aria-label="Клас ефективності">
 			{#each K_CLASSES as c (c.id)}
 				{@const n = classCounts.get(c.id) ?? 0}
@@ -256,6 +314,28 @@
 		color: var(--ink);
 		font-size: 0.72rem;
 		font-weight: 800;
+	}
+	.chip.plain {
+		padding: 5px 12px;
+	}
+	.chip.plain .dot {
+		margin-left: -6px;
+	}
+	select {
+		flex: none;
+		max-width: 220px;
+		border: 1px solid #dfe5ec;
+		background: #fff;
+		border-radius: 999px;
+		padding: 5px 10px;
+		font: inherit;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: #1a2433;
+	}
+	select.on {
+		border-color: #0b5cad;
+		background: #e3eefb;
 	}
 	.chip.type {
 		padding-left: 8px;

@@ -3,9 +3,10 @@
 	// (у публічному режимі — тип закладу). Маркери «хвилею» з'являються від центру,
 	// вибраний об'єкт — плавний flyTo. prefers-reduced-motion вимикає анімації.
 	import 'leaflet/dist/leaflet.css';
+	import 'leaflet.markercluster/dist/MarkerCluster.css';
 	import { onMount, untrack } from 'svelte';
 	import type * as Leaflet from 'leaflet';
-	import { kClassMeta, kText, type SesItem } from './api-ses.ts';
+	import { kClassMeta, kText, type KClass, type SesItem } from './api-ses.ts';
 	import { categoryMeta, POLTAVA } from './api-map.ts';
 
 	interface Props {
@@ -25,9 +26,11 @@
 	let el: HTMLDivElement;
 	let L: typeof Leaflet | null = null;
 	let map: Leaflet.Map | null = null;
-	let layer: Leaflet.LayerGroup | null = null;
+	let layer: Leaflet.MarkerClusterGroup | null = null;
 	let ready = $state(false);
 	const markers = new Map<number, Leaflet.Marker>();
+	const byId = new Map<number, SesItem>();
+	let prevSel: number | null = null;
 	let lastWave: string | null = null;
 	let fitted = false;
 	/** Поки користувач сам не рухав мапу — підганяємо вид під усі точки при зміні розміру */
@@ -69,32 +72,74 @@
 		return `${it.name} — ${l.word}${k}`;
 	}
 
+	function clsKey(it: SesItem): string {
+		return colorBy === 'class' && it.k_class ? it.k_class : 'cat:' + it.category_short;
+	}
+
+	function isMute(it: SesItem): boolean {
+		return colorBy === 'class' && (it.k_class === 'Без СЕС' || it.k_class === 'Немає даних');
+	}
+
+	function mkHtml(it: SesItem, sel: boolean, wave = false, delay = 0): string {
+		const l = look(it);
+		return `<span class="sm-mk${isMute(it) ? ' mute' : ''}${wave ? ' wave' : ''}${sel ? ' sel' : ''}" style="--c:${l.color};--d:${delay}ms"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="${l.glyph}"/></svg></span>`;
+	}
+
+	/** Колір сегмента кластера за ключем класу */
+	function keyColor(k: string): string {
+		if (k.startsWith('cat:')) return categoryMeta(k.slice(4)).color;
+		return kClassMeta(k as KClass).color;
+	}
+
+	function clusterIcon(c: Leaflet.MarkerCluster): Leaflet.DivIcon {
+		const counts = new Map<string, number>();
+		const kids = c.getAllChildMarkers();
+		for (const m of kids) {
+			const k = (m.options as { kcls?: string }).kcls ?? '';
+			counts.set(k, (counts.get(k) ?? 0) + 1);
+		}
+		const n = kids.length;
+		let acc = 0;
+		const stops: string[] = [];
+		for (const [k, v] of [...counts].sort((a, b) => b[1] - a[1])) {
+			const from = (acc / n) * 360;
+			acc += v;
+			stops.push(`${keyColor(k)} ${from}deg ${(acc / n) * 360}deg`);
+		}
+		const size = n < 10 ? 38 : n < 50 ? 44 : 50;
+		return L!.divIcon({
+			className: 'sm-icon',
+			html: `<span class="sm-cl" style="background:conic-gradient(${stops.join(',')});width:${size}px;height:${size}px"><b>${n}</b></span>`,
+			iconSize: [size, size]
+		});
+	}
+
 	function render() {
 		if (!L || !map || !layer) return;
 		const wave = !reduced && waveKey !== lastWave;
 		lastWave = waveKey;
 		layer.clearLayers();
 		markers.clear();
+		byId.clear();
 		const pts = items.filter((i) => i.lat != null && i.lon != null) as (SesItem & { lat: number; lon: number })[];
 		const c = map.getCenter();
 		for (const it of pts) {
-			const l = look(it);
 			const dist = Math.hypot(it.lat - c.lat, (it.lon - c.lng) * 0.65);
 			const delay = wave ? Math.min(700, Math.round(dist * 9000)) : 0;
 			const mute = colorBy === 'class' && (it.k_class === 'Без СЕС' || it.k_class === 'Немає даних');
-			const html = `<span class="sm-mk${mute ? ' mute' : ''}${wave ? ' wave' : ''}${it.id === selectedId ? ' sel' : ''}" style="--c:${l.color};--d:${delay}ms"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="${l.glyph}"/></svg></span>`;
 			const m = L.marker([it.lat, it.lon], {
-				icon: L.divIcon({ className: 'sm-icon', html, iconSize: [22, 22], iconAnchor: [11, 11] }),
+				icon: L.divIcon({ className: 'sm-icon', html: mkHtml(it, it.id === selectedId, wave, delay), iconSize: [22, 22], iconAnchor: [11, 11] }),
 				title: esc(title(it)),
 				alt: title(it),
 				keyboard: true,
 				riseOnHover: true,
-				zIndexOffset: it.id === selectedId ? 1000 : mute ? -500 : 0
-			});
+				zIndexOffset: it.id === selectedId ? 1000 : mute ? -500 : 0,
+				kcls: clsKey(it)
+			} as Leaflet.MarkerOptions);
 			m.on('click', () => onselect?.(it.id));
-			m.addTo(layer);
-			const icon = m.getElement();
-			if (icon) {
+			m.on('add', () => {
+				const icon = m.getElement();
+				if (!icon) return;
 				icon.setAttribute('role', 'button');
 				icon.setAttribute('aria-label', title(it));
 				icon.addEventListener('keydown', (e) => {
@@ -104,9 +149,12 @@
 						onselect?.(it.id);
 					}
 				});
-			}
+			});
+			byId.set(it.id, it);
+			layer.addLayer(m);
 			markers.set(it.id, m);
 		}
+		prevSel = selectedId;
 		if (!fitted && pts.length) {
 			fitted = true;
 			fitAll(false);
@@ -115,11 +163,16 @@
 
 	function focusSelected(id: number | null) {
 		if (!map || !L) return;
-		for (const [mid, m] of markers) {
-			const n = m.getElement()?.querySelector('.sm-mk');
-			n?.classList.toggle('sel', mid === id);
-			m.setZIndexOffset(mid === id ? 1000 : n?.classList.contains('mute') ? -500 : 0);
+		for (const mid of new Set([prevSel, id])) {
+			if (mid == null) continue;
+			const it = byId.get(mid);
+			const m = markers.get(mid);
+			if (!it || !m) continue;
+			const sel = mid === id;
+			m.setIcon(L.divIcon({ className: 'sm-icon', html: mkHtml(it, sel), iconSize: [22, 22], iconAnchor: [11, 11] }));
+			m.setZIndexOffset(sel ? 1000 : isMute(it) ? -500 : 0);
 		}
+		prevSel = id;
 		if (id == null) return;
 		autoFit = false;
 		const m = markers.get(id);
@@ -138,9 +191,13 @@
 
 	onMount(() => {
 		let alive = true;
-		import('leaflet').then((mod) => {
+		import('leaflet').then(async (mod) => {
 			if (!alive) return;
 			L = (mod as unknown as { default?: typeof Leaflet }).default ?? (mod as unknown as typeof Leaflet);
+			// markercluster чекає глобальний L
+			(window as unknown as { L: typeof Leaflet }).L = L;
+			await import('leaflet.markercluster');
+			if (!alive) return;
 			map = L.map(el, { zoomControl: false, zoomSnap: 0.25, preferCanvas: false }).setView(POLTAVA, 12);
 			map.attributionControl.setPrefix(false);
 			L.control.zoom({ position: 'bottomright', zoomInTitle: 'Наблизити', zoomOutTitle: 'Віддалити' }).addTo(map);
@@ -152,7 +209,14 @@
 			}).addTo(map);
 			map.on('dragstart', () => (autoFit = false));
 			el.addEventListener('wheel', () => (autoFit = false), { passive: true });
-			layer = L.layerGroup().addTo(map);
+			layer = L.markerClusterGroup({
+				showCoverageOnHover: false,
+				maxClusterRadius: 48,
+				disableClusteringAtZoom: 15,
+				spiderfyOnMaxZoom: false,
+				animate: !reduced,
+				iconCreateFunction: clusterIcon
+			}).addTo(map);
 			map.on('click', () => onselect?.(null));
 			ready = true;
 		});
@@ -228,6 +292,23 @@
 	.sm-root :global(.sm-mk.mute svg) {
 		width: 11px;
 		height: 11px;
+	}
+	.sm-root :global(.sm-cl) {
+		display: grid;
+		place-items: center;
+		border-radius: 50%;
+		box-shadow: 0 1px 4px rgba(15, 35, 65, 0.4);
+	}
+	.sm-root :global(.sm-cl b) {
+		display: grid;
+		place-items: center;
+		width: calc(100% - 10px);
+		height: calc(100% - 10px);
+		border-radius: 50%;
+		background: #fff;
+		color: #0f1b2d;
+		font-size: 0.8rem;
+		font-variant-numeric: tabular-nums;
 	}
 	.sm-root :global(.sm-icon:hover .sm-mk) {
 		transform: scale(1.25);

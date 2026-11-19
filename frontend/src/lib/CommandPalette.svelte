@@ -10,11 +10,12 @@
 		{ href: '/', label: 'Мапа', hint: 'Об’єкти на карті, клас СЕС' },
 		{ href: '/dashboard', label: 'Дашборд', hint: 'K, класи, фінанси громади' },
 		{ href: '/objects', label: 'Об’єкти', hint: 'Список, фільтри' },
-		{ href: '/solar', label: 'Нові СЕС', hint: 'Де ставити, окупність' },
-		{ href: '/independence', label: 'Енергонезалежність', hint: 'Акумулятори, автономність', only: 'internal' },
+		{ href: '/energy', label: 'Розподіл енергії', hint: 'Генерація, споживання, надлишок' },
+		{ href: '/network', label: 'Баланс мережі', hint: 'Навантаження та покриття СЕС' },
+		{ href: '/finance', label: 'Фінанси департаментів', hint: 'Витрати за розпорядниками' },
+		{ href: '/report', label: 'Звіт за місяць', hint: 'Підсумок по електроенергії' },
 		{ href: '/overview', label: 'Споживання', hint: 'Електроенергія громади' },
 		{ href: '/rating', label: 'Рейтинг', hint: 'кВт·год/м²' },
-		{ href: '/defects', label: 'Якість даних', hint: 'Помилки UMUNI' },
 		{ href: '/upload', label: 'Оновити дані', hint: 'Завантажити UMUNI', only: 'upload' }
 	];
 </script>

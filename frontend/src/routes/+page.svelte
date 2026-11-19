@@ -15,6 +15,7 @@
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
 	import { isReduced } from '#lib/motion.ts';
+	import { matchExtra, seasonDay, SEASONS, kwhMonth, effText, type Season, type EffClass } from '#lib/ses-extra.ts';
 	import {
 		fetchSes,
 		filterItems,
@@ -31,6 +32,10 @@
 	let classes = $state<KClass[]>([]);
 	let types = $state<string[]>([]);
 	let q = $state('');
+	let department = $state(page.url.searchParams.get('department') ?? '');
+	let need = $state(false);
+	let season = $state<Season | null>(null);
+	let eff = $state<EffClass | null>(null);
 	let data = $state<SesList | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
@@ -38,17 +43,20 @@
 
 	const restricted = $derived(!!data?.restricted);
 	const items = $derived(data?.items ?? []);
-	const shown = $derived(filterItems(items, { classes: restricted ? [] : classes, types, q }));
+	const shown = $derived(
+		filterItems(items, { classes: restricted ? [] : classes, types, q }).filter((i) => matchExtra(i, { department, need, eff }))
+	);
 	const selected = $derived(items.find((i) => i.id === selectedId) ?? null);
 	const t = $derived(data?.totals);
 
 	let reqId = 0;
-	async function load(p: Period) {
+	async function load(p: Period, s: Season | null) {
 		const my = ++reqId;
 		loading = true;
 		error = null;
 		try {
-			const d = await fetchSes(p);
+			const day = seasonDay(s);
+			const d = day ? await fetchSes('month', day) : await fetchSes(p);
 			if (my === reqId) data = d;
 		} catch (e) {
 			if (my === reqId) error = errMessage(e);
@@ -59,7 +67,7 @@
 
 	$effect(() => {
 		void auth.user?.token; // перезавантажити після входу / виходу
-		load(period);
+		load(period, season);
 	});
 
 	// Стан у URL (щоб «Назад» з картки об'єкта повертав до того самого місця)
@@ -131,7 +139,9 @@
 			? CATEGORIES.map((c) => ({ key: c.key, color: c.color, glyph: c.glyph, label: c.label }))
 			: K_CLASSES.map((c) => ({ key: c.id, color: c.color, glyph: c.glyph, label: c.short }))
 	);
-	const periodWord = $derived(period === 'day' ? 'за день' : period === 'month' ? 'за місяць' : 'за рік');
+	const periodWord = $derived(
+		season ? (SEASONS.find((x) => x.id === season)?.label ?? '') : period === 'day' ? 'за день' : period === 'month' ? 'за місяць' : 'за рік'
+	);
 	const dur = isReduced() ? 0 : 320;
 	const nums = $derived(
 		selected
@@ -157,7 +167,7 @@
 			colorBy={restricted ? 'category' : 'class'}
 			{selectedId}
 			onselect={select}
-			waveKey={period + (restricted ? 'r' : '')}
+			waveKey={period + (season ?? '') + (restricted ? 'r' : '')}
 			padBottom={phone && selected ? cardH - topH : 0}
 		/>
 	{/if}
@@ -186,7 +196,7 @@
 		{/if}
 
 		<div class="bar">
-			<SesFilters {items} bind:period bind:classes bind:types bind:q {restricted} onenter={firstHit} />
+			<SesFilters {items} bind:period bind:classes bind:types bind:q bind:department bind:need bind:season bind:eff {restricted} onenter={firstHit} />
 			<div class="meta">
 				{#if restricted}
 					<a class="lock" href="/login?next=/"
@@ -201,7 +211,7 @@
 					>
 				{/if}
 				{#if data?.demo || data?.mock}<span class="demo" title={data?.mock ? 'Тимчасовий макет: K випадкові' : 'Реєстр СЕС — демо-дані'}>ДЕМО</span>{/if}
-				<span class="cnt">{shown.length - unmapped} на мапі{#if unmapped}&nbsp;· {unmapped} без адреси{/if}</span>
+				<span class="cnt"><b>{shown.length}</b> з {items.length} · {shown.length - unmapped} на мапі{#if unmapped}&nbsp;· {unmapped} без адреси{/if}</span>
 				<a class="lst" href="/objects">Список →</a>
 			</div>
 		</div>
@@ -222,7 +232,7 @@
 		<div class="state" out:fade={{ duration: 200 }}><span class="spin" aria-hidden="true"></span>Завантаження…</div>
 	{:else if error && !data}
 		<div class="state err" role="alert">
-			{error}<button type="button" onclick={() => load(period)}>Повторити</button>
+			{error}<button type="button" onclick={() => load(period, season)}>Повторити</button>
 		</div>
 	{/if}
 
@@ -253,8 +263,13 @@
 						{/each}
 					</dl>
 				{/if}
+				<dl class="more">
+					{#if selected.department}<div><dt>Розпорядник</dt><dd>{selected.department}</dd></div>{/if}
+					{#if selected.cons_kwh_month_avg != null}<div><dt>Споживання</dt><dd>≈ {kwhMonth(selected.cons_kwh_month_avg)} кВт·год/міс</dd></div>{/if}
+					{#if selected.eff_index != null}<div><dt>Індекс ефективності</dt><dd>{effText(selected.eff_index)}</dd></div>{/if}
+				</dl>
 				<p class="per">{periodWord}</p>
-				<a class="open" href="/object/{selected.id}">Відкрити <span aria-hidden="true">→</span></a>
+				<a class="open" href="/object/{selected.id}">Детальніше <span aria-hidden="true">→</span></a>
 			</section>
 		{/key}
 	{/if}
@@ -547,6 +562,27 @@
 	.nums small {
 		font-weight: 600;
 		color: #4f5b6b;
+	}
+	.more {
+		margin: 8px 0 0;
+		display: grid;
+		gap: 3px;
+		font-size: 0.78rem;
+	}
+	.more div {
+		display: flex;
+		justify-content: space-between;
+		gap: 10px;
+	}
+	.more dt {
+		color: #4f5b6b;
+		font-weight: 600;
+	}
+	.more dd {
+		margin: 0;
+		font-weight: 700;
+		color: #0f1b2d;
+		text-align: right;
 	}
 	.per {
 		margin: 6px 0 10px;

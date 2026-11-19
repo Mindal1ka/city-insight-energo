@@ -157,7 +157,6 @@
 					label="Будівель у базі"
 					value={data.buildings}
 					icon="building"
-					href={noData ? '/defects' : undefined}
 					tone={noData ? 'warn' : 'neutral'}
 					toneLabel="є будівлі без даних"
 					hint={noData
@@ -241,7 +240,7 @@
 							{showMoreTop ? 'Показати лише п’ять' : `Показати всі ${top.length} (разом ${pct(topShare)})`}
 						</button>
 					{/if}
-					<a href="/solar" class="go">Нові СЕС →</a>
+					<a href="/energy" class="go">Розподіл енергії →</a>
 				</div>
 			</section>
 		</Reveal>

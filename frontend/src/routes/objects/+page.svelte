@@ -9,6 +9,7 @@
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
 	import { isReduced } from '#lib/motion.ts';
+	import { matchExtra, seasonDay, kwhMonth, type Season, type EffClass } from '#lib/ses-extra.ts';
 	import {
 		fetchSes,
 		filterItems,
@@ -25,21 +26,26 @@
 	let classes = $state<KClass[]>([]);
 	let types = $state<string[]>([]);
 	let q = $state('');
+	let department = $state(page.url.searchParams.get('department') ?? '');
+	let need = $state(false);
+	let season = $state<Season | null>(null);
+	let eff = $state<EffClass | null>(null);
 	let data = $state<SesList | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 
-	type Key = 'name' | 'type' | 'k' | 'gen' | 'cons' | 'saved' | 'payback';
+	type Key = 'name' | 'type' | 'dept' | 'month' | 'k' | 'gen' | 'cons' | 'saved' | 'payback';
 	let sortKey = $state<Key>('k');
 	let asc = $state(false);
 
 	let reqId = 0;
-	async function load(p: Period) {
+	async function load(p: Period, s: Season | null) {
 		const my = ++reqId;
 		loading = true;
 		error = null;
 		try {
-			const d = await fetchSes(p);
+			const day = seasonDay(s);
+			const d = day ? await fetchSes('month', day) : await fetchSes(p);
 			if (my === reqId) data = d;
 		} catch (e) {
 			if (my === reqId) error = errMessage(e);
@@ -49,7 +55,7 @@
 	}
 	$effect(() => {
 		void auth.user?.token; // перезавантажити після входу / виходу
-		load(period);
+		load(period, season);
 	});
 
 	const restricted = $derived(!!data?.restricted);
@@ -62,6 +68,10 @@
 				return i.name;
 			case 'type':
 				return catLabel(i.category_short);
+			case 'dept':
+				return i.department ?? null;
+			case 'month':
+				return i.cons_kwh_month_avg ?? null;
 			case 'k':
 				return i.k ?? (i.k_class ? -1 - (classOrder.get(i.k_class) ?? 0) : null);
 			case 'gen':
@@ -76,7 +86,7 @@
 	}
 
 	const rows = $derived.by(() => {
-		const list = filterItems(items, { classes: restricted ? [] : classes, types, q });
+		const list = filterItems(items, { classes: restricted ? [] : classes, types, q }).filter((i) => matchExtra(i, { department, need, eff }));
 		const dir = asc ? 1 : -1;
 		return [...list].sort((a, b) => {
 			const x = val(a, sortKey);
@@ -93,12 +103,14 @@
 		if (sortKey === k) asc = !asc;
 		else {
 			sortKey = k;
-			asc = k === 'name' || k === 'type' || k === 'payback';
+			asc = k === 'name' || k === 'type' || k === 'dept' || k === 'payback';
 		}
 	}
 
 	const cols = $derived<{ k: Key; label: string; num?: boolean }[]>([
 		{ k: 'name', label: 'Об’єкт' },
+		{ k: 'dept', label: 'Розпорядник' },
+		{ k: 'month', label: 'кВт·год/міс', num: true },
 		...(restricted ? [] : [{ k: 'k' as Key, label: 'K' }]),
 		{ k: 'gen', label: 'Згенеровано', num: true },
 		{ k: 'cons', label: 'Спожито', num: true },
@@ -128,11 +140,11 @@
 	</header>
 
 	<div class="filters">
-		<SesFilters {items} bind:period bind:classes bind:types bind:q {restricted} />
+		<SesFilters {items} bind:period bind:classes bind:types bind:q bind:department bind:need bind:season bind:eff {restricted} />
 	</div>
 
 	{#if error && !data}
-		<div class="state err" role="alert">{error} <button type="button" onclick={() => load(period)}>Повторити</button></div>
+		<div class="state err" role="alert">{error} <button type="button" onclick={() => load(period, season)}>Повторити</button></div>
 	{:else if !data}
 		<div class="skel" aria-busy="true" aria-label="Завантаження">
 			{#each Array(8) as _, i (i)}<div style="animation-delay: {i * 80}ms"></div>{/each}
@@ -164,6 +176,8 @@
 								<a href="/object/{r.id}" onclick={(e) => e.stopPropagation()}>{r.name}</a>
 								<span class="type"><CategoryIcon category={r.category_short} size={13} />{catLabel(r.category_short)}</span>
 							</td>
+							<td class="dept">{r.department ?? '—'}</td>
+							<td class="num">{kwhMonth(r.cons_kwh_month_avg)}</td>
 							{#if !restricted}<td class="kc"><KBadge k={r.k} cls={r.k_class} size="sm" /></td>{/if}
 							<td class="num">{kw(r.gen_kwh)}</td>
 							<td class="num">{kw(r.cons_kwh)}</td>
@@ -188,7 +202,7 @@
 						</span>
 						<span class="t2">
 							<span class="type"><CategoryIcon category={r.category_short} size={12} />{catLabel(r.category_short)}</span>
-							<span class="nn"><i aria-hidden="true">☀</i>{kw(r.gen_kwh)} <i aria-hidden="true">⚡</i>{kw(r.cons_kwh)}</span>
+							<span class="nn"><i aria-hidden="true">≈</i>{kwhMonth(r.cons_kwh_month_avg)}/міс <i aria-hidden="true">☀</i>{kw(r.gen_kwh)} <i aria-hidden="true">⚡</i>{kw(r.cons_kwh)}</span>
 						</span>
 					</a>
 				</li>
@@ -380,6 +394,11 @@
 		font-size: 0.72rem;
 		color: #4f5b6b;
 		margin-top: 2px;
+	}
+	.dept {
+		font-size: 0.78rem;
+		color: #36425a;
+		max-width: 180px;
 	}
 	.kc {
 		white-space: nowrap;
