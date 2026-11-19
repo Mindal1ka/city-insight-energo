@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Дані Insight Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+	@page { size: 1600px 900px; margin: 0; }
+	:root {
+		--navy: #0f2f52; --navy-deep: #0a1f38; --navy-ink: #c9d6e6;
+		--sun: #f5a524; --sun-ink: #8a4f00; --sun-soft: #fff4dc;
+		--ok: #1a6b35; --ok-soft: #e3f4ea;
+		--demo: #b25e00; --demo-soft: #fdeedf;
+		--miss: #b3261e; --miss-soft: #fbe6e4;
+		--info: #1f5fa8; --info-soft: #e3eefb;
+		--ink: #142236; --muted: #5a6880; --line: #e2e7ef; --bg: #f3f6fa;
+	}
+	* { box-sizing: border-box; }
+	html, body { margin: 0; padding: 0; background: #fff; }
+	body { font-family: Inter, 'Segoe UI', Arial, sans-serif; color: var(--ink); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+	.slide { width: 1600px; height: 900px; position: relative; overflow: hidden; page-break-after: always; break-after: page; background: var(--bg); padding: 64px 80px 56px; display: flex; flex-direction: column; }
+	.slide:last-child { page-break-after: auto; break-after: auto; }
+	.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+	.brand { display: flex; align-items: center; gap: 12px; color: var(--muted); font-weight: 600; font-size: 18px; }
+	.logo { width: 34px; height: 34px; border-radius: 9px; background: var(--sun); display: grid; place-items: center; color: var(--navy-deep); font-weight: 800; font-size: 18px; }
+	.pg { color: var(--muted); font-size: 18px; font-weight: 600; }
+	h1 { font-size: 52px; line-height: 1.1; margin: 0 0 10px; letter-spacing: -0.02em; }
+	h2 { font-size: 44px; line-height: 1.1; margin: 0 0 8px; letter-spacing: -0.02em; }
+	.lead { font-size: 22px; color: var(--muted); margin: 0 0 30px; max-width: 1200px; line-height: 1.4; }
+	.tag { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 17px; white-space: nowrap; }
+	.t-real { background: var(--ok-soft); color: var(--ok); }
+	.t-par { background: var(--info-soft); color: var(--info); }
+	.t-demo { background: var(--demo-soft); color: var(--demo); }
+	.t-miss { background: var(--miss-soft); color: var(--miss); }
+	.dot { width: 11px; height: 11px; border-radius: 50%; background: currentColor; }
+
+	/* титул */
+	.cover { background: linear-gradient(135deg, var(--navy-deep), var(--navy) 60%, #1f4f84); color: #fff; justify-content: center; }
+	.cover .brand { color: var(--navy-ink); font-size: 22px; position: absolute; top: 64px; left: 80px; }
+	.cover h1 { font-size: 76px; max-width: 1200px; margin-bottom: 22px; }
+	.cover .lead { color: var(--navy-ink); font-size: 28px; max-width: 1100px; }
+	.cover .legend { display: flex; gap: 14px; margin-top: 30px; flex-wrap: wrap; }
+	.cover .legend .tag { font-size: 20px; padding: 9px 18px; }
+	.cover .foot { position: absolute; bottom: 56px; left: 80px; color: var(--navy-ink); font-size: 20px; }
+	.sunbar { position: absolute; right: -120px; top: -120px; width: 480px; height: 480px; border-radius: 50%; background: radial-gradient(circle, rgba(245,165,36,.55), rgba(245,165,36,0) 70%); }
+
+	/* огляд */
+	.four { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; flex: 1; }
+	.box { background: #fff; border-radius: 20px; padding: 28px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+	.box .n { font-size: 72px; font-weight: 800; line-height: 1; }
+	.box h3 { margin: 0; font-size: 26px; }
+	.box p { margin: 0; color: var(--muted); font-size: 19px; line-height: 1.45; }
+	.box ul { margin: 4px 0 0; padding-left: 20px; font-size: 18px; line-height: 1.55; color: var(--ink); }
+	.b-real { border-top: 8px solid var(--ok); } .b-real .n { color: var(--ok); }
+	.b-par { border-top: 8px solid var(--info); } .b-par .n { color: var(--info); }
+	.b-demo { border-top: 8px solid var(--demo); } .b-demo .n { color: var(--demo); }
+	.b-miss { border-top: 8px solid var(--miss); } .b-miss .n { color: var(--miss); }
+
+	/* таблиці */
+	table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); font-size: 20px; }
+	th { text-align: left; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 14px 22px; background: #f8fafc; border-bottom: 1px solid var(--line); }
+	td { padding: 13px 22px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.38; }
+	tr:last-child td { border-bottom: 0; }
+	td b { font-weight: 700; }
+	td .src { color: var(--muted); font-size: 17px; }
+	.num { font-weight: 800; white-space: nowrap; }
+	.w30 { width: 30%; } .w35 { width: 35%; } .w40 { width: 40%; } .w25 { width: 25%; }
+
+	/* ключові числа */
+	.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 24px; }
+	.kpi { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
+	.kpi .v { font-size: 40px; font-weight: 800; color: var(--navy); line-height: 1.05; }
+	.kpi .v small { font-size: 20px; font-weight: 700; color: var(--muted); }
+	.kpi .l { font-size: 17px; color: var(--muted); margin-top: 6px; line-height: 1.35; }
+	.kpi .s { margin-top: 10px; font-size: 14px; font-weight: 700; color: var(--ok); }
+
+	/* бракує */
+	.miss { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 22px; }
+	.mi { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px; display: grid; grid-template-columns: 46px 1fr; gap: 4px 16px; align-items: start; }
+	.mi .i { grid-row: span 2; width: 46px; height: 46px; border-radius: 12px; background: var(--miss-soft); color: var(--miss); font-weight: 800; font-size: 22px; display: grid; place-items: center; }
+	.mi.top1 .i { background: var(--miss); color: #fff; }
+	.mi b { font-size: 21px; }
+	.mi span { font-size: 17px; color: var(--muted); line-height: 1.4; }
+	.mi em { font-style: normal; color: var(--ok); font-weight: 700; }
+
+	.note { margin-top: auto; padding-top: 18px; font-size: 17px; color: var(--muted); }
+	.flow { display: flex; align-items: stretch; gap: 0; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- 1. Титул -->
+<section class="slide cover">
+	<div class="sunbar"></div>
+	<div class="brand"><span class="logo">⚡</span> Insight Tool · Полтавська громада</div>
+	<h1>На яких даних працює Insight Tool</h1>
+	<p class="lead">Що взято з реальних державних і міських джерел, що змодельовано до підключення інверторів і реєстру станцій, і яких даних бракує для повної картини.</p>
+	<div class="legend">
+		<span class="tag t-real"><i class="dot"></i>Реальні дані</span>
+		<span class="tag t-par"><i class="dot"></i>Параметри з відкритих джерел</span>
+		<span class="tag t-demo"><i class="dot"></i>ДЕМО (змодельовано)</span>
+		<span class="tag t-miss"><i class="dot"></i>Бракує</span>
+	</div>
+	<div class="foot">Стан на 19.11.2026</div>
+</section>
+
+<!-- 2. Огляд -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo">⚡</span> Insight Tool</div><div class="pg">2</div></div>
+	<h2>Коротко</h2>
+	<p class="lead">Споживання, бюджет, платежі й відключення — реальні. Сонячні станції та інвертори — поки модель: у міста немає відкритого реєстру СЕС.</p>
+	<div class="four">
+		<div class="box b-real"><div class="n">10</div><h3>Реальні джерела</h3>
+			<ul><li>UMUNI — будівлі, споживання</li><li>openbudget — бюджет</li><li>spending.gov.ua — платежі</li><li>Полтаваобленерго — відключення</li><li>PVGIS, Open-Meteo — сонце</li><li>ГІС міськради, OSM — мапа</li></ul></div>
+		<div class="box b-par"><div class="n">7</div><h3>Параметри</h3>
+			<ul><li>тариф 12 грн/кВт·год</li><li>ціни панелей, інверторів, акумуляторів</li><li>вартість станції під ключ</li><li>дизель і витрата генератора</li></ul></div>
+		<div class="box b-demo"><div class="n">6</div><h3>Змодельовано</h3>
+			<ul><li>сонячні станції (крім ліцею №13)</li><li>інвертори наживо</li><li>генератори</li><li>частина лімітів</li><li>помісячне споживання</li><li>розпорядник будівлі</li></ul></div>
+		<div class="box b-miss"><div class="n">8</div><h3>Бракує</h3>
+			<ul><li>реєстр СЕС</li><li>доступ до інверторів</li><li>помісячні дані UMUNI</li><li>черга відключень закладу</li><li>…ще 4 пункти</li></ul></div>
+	</div>
+</section>
+
+<!-- 3. Реальні: будівлі та споживання -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo">⚡</span> Insight Tool</div><div class="pg">3</div></div>
+	<span class="tag t-real" style="align-self:flex-start;margin-bottom:14px"><i class="dot"></i>Реальні дані · 1/3</span>
+	<h2>Будівлі та споживання</h2>
+	<p class="lead">Основа всіх розрахунків — дані енергомоніторингу міста UMUNI.</p>
+	<div class="kpis">
+		<div class="kpi"><div class="v">311</div><div class="l">комунальних будівель на мапі</div></div>
+		<div class="kpi"><div class="v">≈ 4,1 <small>млн кВт·год</small></div><div class="l">оцінка споживання за 2026 рік</div></div>
+		<div class="kpi"><div class="v">−3 %</div><div class="l">тренд 2026 до 2025</div></div>
+		<div class="kpi"><div class="v">кВт·год</div><div class="l">усі розрахунки — в енергії, без прив’язки до м²</div></div>
+	</div>
+	<table>
+		<tr><th class="w35">Що</th><th>Джерело</th><th class="w30">Де в застосунку</th></tr>
+		<tr><td><b>311 будівель</b>: назва, адреса, категорія</td><td>UMUNI, звіт «Buildings Info» <span class="src">· 25.08.2026</span></td><td>мапа, картка об’єкта</td></tr>
+		<tr><td><b>Споживання 2025</b> (повний рік)</td><td>UMUNI, «Річне використання ресурсів 2025»</td><td>база всіх розрахунків</td></tr>
+		<tr><td><b>Споживання 2026</b> (01.01–11.11)</td><td>UMUNI, «Річне використання ресурсів 2026»</td><td>оцінка на рік, тренд</td></tr>
+		<tr><td><b>Лічильники</b> електроенергії</td><td>UMUNI, «Лічильники» <span class="src">· 11.11.2026, без серійних номерів</span></td><td>картка об’єкта</td></tr>
+		<tr><td><b>Енергоменеджмент</b> закладів</td><td>«Інформація щодо впровадження СЕМ» <span class="src">· 13.07.2026, без ПІБ і телефонів</span></td><td>картка об’єкта</td></tr>
+	</table>
+</section>
+
+<!-- 4. Реальні: гроші -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo">⚡</span> Insight Tool</div><div class="pg">4</div></div>
+	<span class="tag t-real" style="align-self:flex-start;margin-bottom:14px"><i class="dot"></i>Реальні дані · 2/3</span>
+	<h2>Гроші: бюджет і фактичні платежі</h2>
+	<p class="lead">Ліміти будівель рахуємо з реального плану бюджету, а не вигадуємо.</p>
+	<div class="kpis">
+		<div class="kpi"><div class="v">92,5 <small>млн грн</small></div><div class="l">план 2026 на електроенергію (КЕКВ 2273)</div><div class="s">openbudget.gov.ua</div></div>
+		<div class="kpi"><div class="v">41,9 <small>млн грн</small></div><div class="l">сплачено 2026 (до вересня)</div><div class="s">openbudget.gov.ua</div></div>
+		<div class="kpi"><div class="v">11,57 <small>грн</small></div><div class="l">фактична ціна кВт·год у 2025: бюджет ÷ споживання</div><div class="s">openbudget + UMUNI</div></div>
+		<div class="kpi"><div class="v">23 %</div><div class="l">оплати освіти йде Полтаваобленерго за розподіл</div><div class="s">spending.gov.ua</div></div>
+	</div>
+	<table>
+		<tr><th class="w35">Що</th><th>Джерело</th><th class="w30">Де в застосунку</th></tr>
+		<tr><td><b>Бюджет на електроенергію</b> за програмами, план і факт 2025–2026 помісячно</td><td>openbudget.gov.ua <span class="src">· бюджет Полтавської ТГ 1657010000</span></td><td>«Фінанси», ліміти</td></tr>
+		<tr><td><b>Ліміти</b> шкіл, садків, мистецьких шкіл, культури, виконкому</td><td>план програми 2026, поділений між будівлями за їхніми кВт·год</td><td>картка об’єкта, «Фінанси»</td></tr>
+		<tr><td><b>Платежі Департаменту освіти</b>: 2025 — 18,6 млн постачальнику + 5,6 млн за розподіл</td><td>spending.gov.ua (Казначейство) <span class="src">· 01.2025–10.2026</span></td><td>«Фінанси»</td></tr>
+	</table>
+</section>
+
+<!-- 5. Реальні: енергія, відключення, мапа -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo">⚡</span> Insight Tool</div><div class="pg">5</div></div>
+	<span class="tag t-real" style="align-self:flex-start;margin-bottom:14px"><i class="dot"></i>Реальні дані · 3/3</span>
+	<h2>Сонце, відключення, мапа</h2>
+	<p class="lead">Генерацію рахуємо за даними Єврокомісії для Полтави, відключення — за сьогоднішнім графіком обленерго.</p>
+	<table>
+		<tr><th class="w35">Що</th><th>Джерело</th><th class="w30">Де в застосунку</th></tr>
+		<tr><td><b>Графік відключень</b> на сьогодні за чергами <span class="src">· сьогодні до 13 год без світла, найдовше підряд 4,5 год</span></td><td>Полтаваобленерго (poe.pl.ua) <span class="src">· оновлення кожні 15 хв</span></td><td>«Блекаут»</td></tr>
+		<tr><td><b>Скільки дає 1 кВт панелей</b> у Полтаві: 1 151 кВт·год на рік</td><td>PVGIS (Єврокомісія)</td><td>генерація, «скільки доставити»</td></tr>
+		<tr><td><b>Прогноз сонця</b> на 7 днів</td><td>Open-Meteo</td><td>прогноз генерації</td></tr>
+		<tr><td><b>Координати будівель</b></td><td>OpenStreetMap</td><td>мапа</td></tr>
+		<tr><td><b>Межі</b> громади, районів, старостинських округів</td><td>ГІС-карта Полтавської міськради <span class="src">· mbk.rada-poltava.gov.ua</span></td><td>мапа, шар «Межі»</td></tr>
+		<tr><td><b>Ліцей №13</b>: інвертор 50 кВт, акумулятор 60 кВт·год, 730 тис. грн</td><td>Суспільне Полтава <span class="src">· 14.04.2026</span></td><td>реальна станція в реєстрі</td></tr>
+	</table>
+</section>
+
+<!-- 6. Параметри -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo">⚡</span> Insight Tool</div><div class="pg">6</div></div>
+	<span class="tag t-par" style="align-self:flex-start;margin-bottom:14px"><i class="dot"></i>Параметри з відкритих джерел</span>
+	<h2>Ціни та коефіцієнти, листопад 2026</h2>
+	<p class="lead">Кожен параметр звірено щонайменше з одним публічним джерелом.</p>
+	<table>
+		<tr><th class="w30">Параметр</th><th class="w25">Значення</th><th>Звідки</th></tr>
+		<tr><td><b>Тариф</b> для бюджетних установ</td><td class="num">12 грн/кВт·год</td><td>Полтаваенергозбут — 12,09; договір ліцею №3 на Prozorro — 12,29; факт 2025 — 11,57</td></tr>
+		<tr><td><b>Панелі</b></td><td class="num">8,5 грн/Вт</td><td>роздрібні ціни</td></tr>
+		<tr><td><b>Гібридний інвертор</b></td><td class="num">7 000 грн/кВт</td><td>роздрібні ціни Deye, LuxPower</td></tr>
+		<tr><td><b>Акумулятор</b> LiFePO4</td><td class="num">9 500 грн/кВт·год</td><td>роздрібні ціни Deye, Pylontech</td></tr>
+		<tr><td><b>Станція під ключ</b></td><td class="num">31–37 тис. грн/кВт</td><td>тендери шкіл: Дніпро 2025, Миколаївщина 2026</td></tr>
+		<tr><td><b>Дизель</b> / витрата генератора</td><td class="num">101 грн/л · 0,3 л/кВт·год</td><td>ціни АЗС 17.11.2026; паспорти генераторів 100 кВА → ≈ 30 грн/кВт·год</td></tr>
+		<tr><td><b>Покриття сонцем</b></td><td class="num">згенеровано ÷ спожито</td><td>менше 80 % — «Не вистачає», 80 % і більше — «Ефективно»</td></tr>
+	</table>
+</section>
+
+<!-- 7. ДЕМО -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo">⚡</span> Insight Tool</div><div class="pg">7</div></div>
+	<span class="tag t-demo" style="align-self:flex-start;margin-bottom:14px"><i class="dot"></i>ДЕМО · змодельовано</span>
+	<h2>Що поки змодельовано і як</h2>
+	<p class="lead">У застосунку такі дані позначені «ДЕМО». Модель — на реальному споживанні й цінах; реальні дані її замінять.</p>
+	<table>
+		<tr><th class="w25">Що</th><th class="w30">Чому змодельовано</th><th>Як змодельовано</th></tr>
+		<tr><td><b>Сонячні станції</b> (крім ліцею №13)</td><td>у міста немає відкритого реєстру СЕС</td><td>≈ 40 % будівель від 8 000 кВт·год/рік; під власне споживання; 85 % з акумулятором; ціни 2026</td></tr>
+		<tr><td><b>Інвертори наживо</b></td><td>інвертори ще не підключені</td><td>погодинна модель: сонце (PVGIS) × погода × добовий профіль</td></tr>
+		<tr><td><b>Генератори</b></td><td>даних немає, інформація закрита</td><td>≈ 35 % лікарень, 20 % шкіл і садків; бачать лише службові ролі</td></tr>
+		<tr><td><b>Ліміти</b> лікарень, спорту, старостатів</td><td>лікарні (КНП) платять зі своїх рахунків</td><td>споживання 2025 × тариф × 0,9–1,1</td></tr>
+		<tr><td><b>Споживання помісячно</b></td><td>UMUNI дає лише річні суми</td><td>рік × сезонний профіль (у школах влітку в 3–6 разів менше)</td></tr>
+		<tr><td><b>Розпорядник будівлі</b></td><td>немає прив’язки «будівля → управління»</td><td>за категорією й назвою закладу</td></tr>
+	</table>
+</section>
+
+<!-- 8. Бракує -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo">⚡</span> Insight Tool</div><div class="pg">8</div></div>
+	<span class="tag t-miss" style="align-self:flex-start;margin-bottom:14px"><i class="dot"></i>Бракує для повної картини</span>
+	<h2>Що потрібно від міста та обленерго</h2>
+	<p class="lead">Цих даних немає у відкритому доступі. Кожен пункт прибирає одну з ДЕМО-моделей.</p>
+	<div class="miss">
+		<div class="mi top1"><div class="i">1</div><b>Реєстр наявних СЕС</b><span>адреса, кВт панелей, інвертор, акумулятор, дата, вартість → <em>реальні економія й окупність</em></span></div>
+		<div class="mi"><div class="i">2</div><b>Доступ до хмар інверторів</b><span>Deye Cloud, Growatt, LuxPower → <em>генерація й заряд наживо</em></span></div>
+		<div class="mi"><div class="i">3</div><b>Помісячне споживання UMUNI</b><span>або щомісячні показники лічильників → <em>без сезонної моделі</em></span></div>
+		<div class="mi"><div class="i">4</div><b>Черга відключень кожного закладу</b><span>Полтаваобленерго → <em>точно, хто витримає блекаут</em></span></div>
+		<div class="mi"><div class="i">5</div><b>Реєстр генераторів</b><span>лише для служб → <em>реальний резерв живлення</em></span></div>
+		<div class="mi"><div class="i">6</div><b>Платежі лікарень (КНП)</b><span>рахунки або договори Prozorro → <em>реальні ліміти медзакладів</em></span></div>
+		<div class="mi"><div class="i">7</div><b>Рахунки за точками обліку (EIC)</b><span>зараз освіта платить за всіх разом → <em>оплата по кожній школі</em></span></div>
+		<div class="mi"><div class="i">8</div><b>Межі районів у GeoJSON</b><span>зараз на мапі «умовні межі» → <em>аналітика по районах</em></span></div>
+	</div>
+</section>
+
+</body>
+</html>
