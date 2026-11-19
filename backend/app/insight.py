@@ -24,6 +24,7 @@ from typing import Literal
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 
+from . import calib
 from . import efficiency as eff
 from . import solar
 from .auth import User, can_see_finance, can_see_sensitive, current_user
@@ -306,6 +307,8 @@ def insight_item(bid: int, day: str | None = None, tariff: float = Query(eff.TAR
                        "grid_kwh": round(m["grid_kwh"]) if lvl != PUBLIC else None,
                        "saved_uah": round(m["self_kwh"] * tariff) if fin else None} for m in ev["monthly"]],
            "battery_capacity_kwh": ((ses or {}).get("battery_kwh") or 0) if sens and ev["has_ses"] else None,
+           # реальні дані UMUNI: 2025 повний рік, 2026 до дати вивантаження → оцінка 2026 і тренд
+           "y2026": calib.estimate_out(calib.estimate(b, store)),
            "budget": budget_out(budget(b, ev, d, tariff, _read_limits())) if fin else None,
            "sizing": sizing_out(sizing(b, ses, ev, tariff)) if lvl != PUBLIC else None,
            "live": live_out(live_state(b, ses)) if lvl != PUBLIC else None,
@@ -745,3 +748,10 @@ def zones(period: Literal["day", "month", "year"] = "month", day: str | None = N
                        "shareable_kwh": None if public else sum(z["shareable_kwh"] for z in out),
                        "with_share": None if public else sum(1 for z in out if z["shareable_kwh"] > 0)},
             "items": out}
+
+
+@router.get("/api/trend")
+def trend(user: User = Depends(current_user)):
+    """2025 (факт) проти оцінки 2026 (з реальних даних до дати вивантаження) по громаді."""
+    store, _ = _ctx()
+    return calib.city(store)
