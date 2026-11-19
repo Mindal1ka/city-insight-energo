@@ -39,6 +39,7 @@
 	let season = $state<Season | null>(null);
 	let data = $state<SesList | null>(null);
 	let showZones = $state(true);
+	let legendOpen = $state(true);
 	let zonesData = $state<Zones | null>(null);
 	let zoneId = $state<number | null>(null);
 	let error = $state<string | null>(null);
@@ -122,7 +123,9 @@
 		const tab = document.querySelector<HTMLElement>('.tabbar');
 		const tabH = tab && getComputedStyle(tab).display !== 'none' ? tab.offsetHeight : 0;
 		h = Math.max(380, window.innerHeight - top - tabH);
-		phone = window.innerWidth < 700;
+		const ph = window.innerWidth < 700;
+		if (ph && !phone) legendOpen = false;
+		phone = ph;
 	}
 	onMount(() => {
 		document.body.classList.add('map-home');
@@ -172,8 +175,8 @@
 	const nums = $derived(
 		selected
 			? [
-					{ l: 'Згенеровано', v: selected.gen_kwh != null ? kwh(selected.gen_kwh) : null, u: '' },
-					{ l: 'Спожито', v: selected.cons_kwh != null ? kwh(selected.cons_kwh) : null, u: '' },
+					{ l: 'Споживання', v: selected.cons_kwh_month_avg != null ? `≈ ${kwhMonth(selected.cons_kwh_month_avg)}` : null, u: ' кВт·год/міс' },
+					{ l: 'СЕС', v: selected.ses_kw != null && selected.ses_kw > 0 ? String(Math.round(selected.ses_kw * 10) / 10) : null, u: ' кВт' },
 					{ l: 'Заощаджено', v: selected.saved_uah_year != null ? uah(selected.saved_uah_year) : null, u: '/рік' }
 				].filter((n) => n.v != null)
 			: []
@@ -199,35 +202,42 @@
 			{showZones}
 			selectedZoneId={zoneId}
 			onzone={pickZone}
+			zoneSummary={zt && zones.length ? `Зон ${zt.zones} · можна поділитися ${zt.with_share ?? 0} · ${kwh(zt.shareable_kwh)}` : ''}
+			ontogglezones={() => ((showZones = !showZones), !showZones && (zoneId = null))}
 		/>
 	{/if}
 
-	<!-- Верх: KPI + фільтри -->
+	<!-- Верх: KPI (ліворуч) + пошук/період/фільтри (праворуч) -->
 	<div class="top" bind:offsetHeight={topH}>
 		{#if t}
 			<dl class="kpi" in:fade={{ duration: dur }}>
 				<div><dt>Об’єктів</dt><dd>{t.objects}</dd></div>
+				<div><dt>З СЕС</dt><dd>{t.with_ses ?? '—'}</dd></div>
 				{#if restricted}
-					<div><dt>З СЕС</dt><dd>{t.with_ses ?? '—'}</dd></div>
 					<div><dt>Згенеровано</dt><dd>{kwh(t.gen_kwh).replace(' кВт·год', '')}<small> кВт·год</small></dd></div>
 					<div><dt>Заощаджено</dt><dd>{uah(t.saved_uah_year)}</dd></div>
 				{:else}
-					<div><dt>З СЕС</dt><dd>{t.with_ses ?? '—'}</dd></div>
 					<div class="ok"><dt>Ефективно</dt><dd><i aria-hidden="true">✓</i>{t.effective ?? '—'}</dd></div>
-					<div>
-						<dt>Надлишок / брак</dt>
-						<dd>
-							<span class="up" title="Надлишок"><i aria-hidden="true">↑</i>{t.surplus ?? '—'}</span>
-							<span class="dn" title="Не вистачає"><i aria-hidden="true">↓</i>{t.deficit ?? '—'}</span>
-						</dd>
-					</div>
+					<div class="dn"><dt>Не вистачає</dt><dd><i aria-hidden="true">↓</i>{t.deficit ?? '—'}</dd></div>
 				{/if}
 			</dl>
 		{/if}
 
-		<div class="bar">
-			<SesFilters {items} bind:period bind:classes bind:types bind:q bind:department bind:need bind:season {restricted} onenter={firstHit} />
-			<div class="meta">
+		<div class="fwrap">
+			<SesFilters
+				variant="map"
+				{items}
+				bind:period
+				bind:classes
+				bind:types
+				bind:q
+				bind:department
+				bind:need
+				bind:season
+				{restricted}
+				shown={shown.length}
+				onenter={firstHit}
+			>
 				{#if restricted}
 					<a class="lock" href="/login?next=/"
 						><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
@@ -240,32 +250,37 @@
 						>Ефективність СЕС — після входу</a
 					>
 				{/if}
-				{#if data?.demo || data?.mock}<span class="demo" title={data?.mock ? 'Тимчасовий макет: K випадкові' : 'Реєстр СЕС — демо-дані'}>ДЕМО</span>{/if}
-				<span class="cnt"><b>{shown.length}</b> з {items.length} · {shown.length - unmapped} на мапі{#if unmapped}&nbsp;· {unmapped} без адреси{/if}</span>
-				<a class="lst" href="/objects">Список →</a>
-			</div>
-			<div class="zrow">
-				<button type="button" class="ztog" class:on={showZones} aria-pressed={showZones} onclick={() => ((showZones = !showZones), !showZones && (zoneId = null))}
-					><span class="zdot" aria-hidden="true"></span>Зони</button
-				>
-				{#if zt && showZones}
-					<span class="zsum" title="Зон · з надлишком для сусідів · кВт·год"
-						>Зон: <b>{zt.zones}</b> · з надлишком для сусідів: <b>{zt.with_share ?? 0}</b> · <b>{kwh(zt.shareable_kwh)}</b></span
-					>
-				{/if}
-			</div>
+			</SesFilters>
 		</div>
 	</div>
 
-	<!-- Легенда -->
-	{#if data && !phone}
-		<ul class="legend" aria-label="Легенда" in:fade={{ duration: dur }}>
-			{#each legend as l (l.key)}
-				<li>
-					<svg viewBox="0 0 10 10" aria-hidden="true"><path d={l.glyph} fill={l.color} /></svg>{l.label}
-				</li>
-			{/each}
-		</ul>
+	<!-- Єдина легенда: класи K (+ зони, коли шар увімкнено) -->
+	{#if data}
+		<div class="legend" class:expanded={legendOpen} aria-label="Легенда" in:fade={{ duration: dur }}>
+			<button type="button" class="lg-tog" aria-expanded={legendOpen} onclick={() => (legendOpen = !legendOpen)}>
+				Легенда <span aria-hidden="true">{legendOpen ? '▾' : '▴'}</span>
+			</button>
+			<div class="lg-body">
+				<ul>
+					{#each legend as l (l.key)}
+						<li>
+							<svg viewBox="0 0 10 10" aria-hidden="true"><path d={l.glyph} fill={l.color} /></svg>{l.label}
+						</li>
+					{/each}
+				</ul>
+				{#if showZones && zones.length}
+					<div class="lg-z">
+						<span class="zi"><i class="zc" aria-hidden="true"></i>зона</span>
+						<span class="zi"><i class="zl" aria-hidden="true"></i>можна поділитися</span>
+					</div>
+					{#if zt}
+						<div class="lg-zs">
+							Зон <b>{zt.zones}</b> · можна поділитися <b>{zt.with_share ?? 0}</b> · <b>{kwh(zt.shareable_kwh)}</b>
+						</div>
+					{/if}
+				{/if}
+			</div>
+		</div>
 	{/if}
 
 	{#if loading && !data}
@@ -307,11 +322,6 @@
 						{/each}
 					</dl>
 				{/if}
-				<dl class="more">
-					{#if selected.department}<div><dt>Розпорядник</dt><dd>{selected.department}</dd></div>{/if}
-					{#if selected.cons_kwh_month_avg != null}<div><dt>Споживання</dt><dd>≈ {kwhMonth(selected.cons_kwh_month_avg)} кВт·год/міс</dd></div>{/if}
-				</dl>
-				<p class="per">{periodWord}</p>
 				<a class="open" href="/object/{selected.id}">Детальніше <span aria-hidden="true">→</span></a>
 			</section>
 		{/key}
@@ -359,7 +369,6 @@
 		pointer-events: auto;
 	}
 	.kpi,
-	.bar,
 	.legend,
 	.card,
 	.state {
@@ -412,80 +421,13 @@
 	.kpi .ok i {
 		color: #1f8a4c;
 	}
-	.kpi .up i {
-		color: #1f6fd1;
-	}
 	.kpi .dn i {
 		color: #d9680f;
 	}
-	.bar {
+	.fwrap {
 		margin-left: auto;
-		width: min(640px, 100%);
+		width: min(520px, 100%);
 		min-width: 0;
-		padding: 8px;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-	.meta {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-size: 0.78rem;
-		color: #4f5b6b;
-		padding: 0 4px;
-		flex-wrap: wrap;
-	}
-	.zrow {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 0 4px;
-		font-size: 0.78rem;
-		color: #4f5b6b;
-		flex-wrap: wrap;
-	}
-	.ztog {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid #dfe5ec;
-		background: #fff;
-		border-radius: 999px;
-		padding: 4px 12px;
-		font: inherit;
-		font-weight: 600;
-		color: #1a2433;
-		cursor: pointer;
-	}
-	.ztog.on {
-		background: #e3eefb;
-		border-color: #1f6fd1;
-	}
-	.zdot {
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		border: 2px solid #1f6fd1;
-		background: rgba(31, 111, 209, 0.18);
-	}
-	.zsum {
-		font-variant-numeric: tabular-nums;
-	}
-	.zsum b {
-		color: #0f1b2d;
-	}
-	.cnt {
-		margin-left: auto;
-		font-variant-numeric: tabular-nums;
-	}
-	.lst {
-		font-weight: 700;
-		color: var(--accent, #0b5cad);
-		text-decoration: none;
-	}
-	.lst:hover {
-		text-decoration: underline;
 	}
 	.lock {
 		display: inline-flex;
@@ -501,29 +443,24 @@
 	.lock:hover {
 		background: #1f4f84;
 	}
-	.demo {
-		padding: 2px 8px;
-		border-radius: 999px;
-		background: #fdf1df;
-		color: #8a4b00;
-		font-weight: 700;
-		font-size: 0.7rem;
-		letter-spacing: 0.04em;
-	}
 	.legend {
 		position: absolute;
 		z-index: 500;
 		left: 12px;
 		bottom: 22px;
-		margin: 0;
 		padding: 8px 12px;
+		font-size: 0.78rem;
+		color: #1a2433;
+		font-weight: 600;
+		max-width: calc(100% - 80px);
+	}
+	.legend ul {
+		margin: 0;
+		padding: 0;
 		list-style: none;
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
-		font-size: 0.78rem;
-		color: #1a2433;
-		font-weight: 600;
 	}
 	.legend li {
 		display: flex;
@@ -533,6 +470,48 @@
 	.legend svg {
 		width: 13px;
 		height: 13px;
+	}
+	.lg-tog {
+		display: none;
+		border: 0;
+		background: none;
+		padding: 0;
+		font: inherit;
+		font-weight: 700;
+		color: #1a2433;
+		cursor: pointer;
+	}
+	.lg-z {
+		display: flex;
+		gap: 12px;
+		margin-top: 7px;
+		padding-top: 7px;
+		border-top: 1px solid #e6ebf1;
+	}
+	.zi {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.zc {
+		width: 13px;
+		height: 13px;
+		border-radius: 50%;
+		border: 2px solid #1f6fd1;
+		background: rgba(31, 111, 209, 0.18);
+	}
+	.zl {
+		width: 18px;
+		border-top: 2px dashed #1f6fd1;
+	}
+	.lg-zs {
+		margin-top: 4px;
+		font-weight: 600;
+		color: #4f5b6b;
+		font-variant-numeric: tabular-nums;
+	}
+	.lg-zs b {
+		color: #0f1b2d;
 	}
 	.state {
 		position: absolute;
@@ -645,32 +624,6 @@
 		font-weight: 600;
 		color: #4f5b6b;
 	}
-	.more {
-		margin: 8px 0 0;
-		display: grid;
-		gap: 3px;
-		font-size: 0.78rem;
-	}
-	.more div {
-		display: flex;
-		justify-content: space-between;
-		gap: 10px;
-	}
-	.more dt {
-		color: #4f5b6b;
-		font-weight: 600;
-	}
-	.more dd {
-		margin: 0;
-		font-weight: 700;
-		color: #0f1b2d;
-		text-align: right;
-	}
-	.per {
-		margin: 6px 0 10px;
-		font-size: 0.7rem;
-		color: #4f5b6b;
-	}
 	.open {
 		display: flex;
 		justify-content: center;
@@ -698,53 +651,51 @@
 		outline-offset: 2px;
 	}
 
-	@media (max-width: 1100px) {
-		.top {
-			flex-direction: column;
-			align-items: stretch;
+	@media (max-width: 760px) {
+		.fwrap {
+			width: min(440px, 100%);
 		}
-		.kpi {
-			align-self: flex-start;
-		}
-		.bar {
-			margin-left: 0;
+		.kpi > div {
+			padding: 0 9px;
 		}
 	}
-	@media (max-width: 700px) {
+	@media (max-width: 640px) {
 		.top {
 			top: 8px;
 			left: 8px;
 			right: 8px;
 			gap: 6px;
+			flex-direction: column;
+			align-items: stretch;
 		}
 		.kpi {
-			align-self: stretch;
+			align-self: flex-start;
 			padding: 6px 0;
 		}
-		.kpi > div {
-			flex: 1;
-			padding: 0 8px;
-			min-width: 0;
-		}
-		.kpi dt {
-			font-size: 0.6rem;
-			overflow: hidden;
-			text-overflow: ellipsis;
+		.kpi > div:nth-child(n + 3) {
+			display: none;
 		}
 		.kpi dd {
 			font-size: 1rem;
-			gap: 5px;
 		}
-		.bar {
+		.fwrap {
 			width: auto;
-			padding: 6px;
+			margin-left: 0;
+			order: -1;
 		}
-		.kpi dd small,
-		.cnt {
+		.legend {
+			left: 8px;
+			bottom: 8px;
+			padding: 6px 10px;
+		}
+		.lg-tog {
+			display: block;
+		}
+		.legend:not(.expanded) .lg-body {
 			display: none;
 		}
-		.lst {
-			margin-left: auto;
+		.legend.expanded .lg-body {
+			margin-top: 6px;
 		}
 		.card {
 			left: 8px;

@@ -129,9 +129,12 @@
 
 <div class="pg">
 	<header class="hd">
-		<h1><Icon name="users" size={26} /> Звернення</h1>
+		<div class="ph-text">
+			<h1>Звернення</h1>
+			<p class="ph-sub">Запити між розпорядниками щодо СЕС, лімітів і ремонту</p>
+		</div>
 		{#if !needLogin}
-			<button type="button" class="prim" onclick={() => (open = !open)}>{open ? '×' : '+ Нове'}</button>
+			<button type="button" class="prim" onclick={() => (open = !open)}>{open ? 'Закрити' : 'Нове звернення'}</button>
 		{/if}
 	</header>
 
@@ -193,7 +196,7 @@
 				{#each APPEAL_STATUSES as s (s)}<option value={s}>{s}</option>{/each}
 			</select>
 			<select bind:value={fTo} aria-label="Кому">
-				<option value="">Усі департаменти</option>
+				<option value="">Усі розпорядники</option>
 				{#each DEPARTMENTS as d (d)}<option value={d}>{d}</option>{/each}
 			</select>
 			<span class="cnt">{rows.length}</span>
@@ -209,22 +212,27 @@
 					<li class="ap">
 						<div class="l1">
 							<span class="badge {TYPE_TONE[a.type]}" title={a.type_name}><Icon name={TYPE_ICON[a.type]} size={14} /> {a.type_name}</span>
-							<a href="/object/{a.building_id}">{a.building_name}</a>
-							<span class="to">→ {a.to}</span>
-							{#if a.kw != null}<b class="kw">{a.kw} кВт</b>{/if}
+							<a class="obj" href="/object/{a.building_id}">{a.building_name}</a>
+							<span class="to">→ {a.to}{a.kw != null ? ` · ${a.kw} кВт` : ''}</span>
+							<span class="stw">
+								{#if canChange}
+									<select value={a.status} onchange={(e) => setStatus(a, e.currentTarget.value as AppealStatus)} aria-label="Статус" class="st {ST_TONE[a.status]}">
+										{#each APPEAL_STATUSES as s (s)}<option value={s}>{s}</option>{/each}
+									</select>
+								{:else}
+									<span class="badge {ST_TONE[a.status]}">{a.status}</span>
+								{/if}
+							</span>
 						</div>
-						{#if a.text}<p>{a.text}</p>{/if}
-						{#if a.answer}<p class="ans">{a.answer}</p>{/if}
-						<div class="l3">
-							{#if canChange}
-								<select value={a.status} onchange={(e) => setStatus(a, e.currentTarget.value as AppealStatus)} aria-label="Статус" class="st {ST_TONE[a.status]}">
-									{#each APPEAL_STATUSES as s (s)}<option value={s}>{s}</option>{/each}
-								</select>
-							{:else}
-								<span class="badge {ST_TONE[a.status]}">{a.status}</span>
-							{/if}
+						{#if a.text || a.answer}
+							<details class="txt">
+								<summary>Текст · <span class="meta">{a.author} · {dateTime(a.created_at)}</span></summary>
+								{#if a.text}<p>{a.text}</p>{/if}
+								{#if a.answer}<p class="ans">{a.answer}</p>{/if}
+							</details>
+						{:else}
 							<span class="meta">{a.author} · {dateTime(a.created_at)}</span>
-						</div>
+						{/if}
 					</li>
 				{:else}
 					<li class="empty">—</li>
@@ -235,9 +243,14 @@
 </div>
 
 <style>
-	.pg { max-width: 1000px; margin: 0 auto; padding: 1rem; }
-	.hd { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
-	h1 { margin: 0; font-size: var(--fs-xl); display: flex; align-items: center; gap: 0.5rem; }
+	.pg { max-width: 1000px; margin: 0 auto; }
+	.hd { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem; }
+	h1 { margin: 0; }
+	.ph-sub { margin: 0.15rem 0 0; font-size: 0.8125rem; color: var(--muted); }
+	.stw { margin-left: auto; }
+	.obj { min-width: 0; }
+	.txt summary { cursor: pointer; font-size: var(--fs-sm); color: var(--text-2); }
+	.txt p { margin: 0.4rem 0 0; }
 	input, select, textarea, button { font: inherit; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); max-width: 100%; }
 	button { cursor: pointer; }
 	.prim { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }

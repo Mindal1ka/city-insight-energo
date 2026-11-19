@@ -26,9 +26,13 @@
 		showZones?: boolean;
 		selectedZoneId?: number | null;
 		onzone?: (id: number | null) => void;
+		/** Підказка кнопки «Зони»: зведення по зонах */
+		zoneSummary?: string;
+		/** Клік по кнопці «Зони» на мапі */
+		ontogglezones?: () => void;
 	}
 
-	let { items, colorBy = 'class', selectedId = null, onselect, waveKey = '', padBottom = 0, zones = [], showZones = true, selectedZoneId = null, onzone }: Props = $props();
+	let { items, colorBy = 'class', selectedId = null, onselect, waveKey = '', padBottom = 0, zones = [], showZones = true, selectedZoneId = null, onzone, zoneSummary = '', ontogglezones }: Props = $props();
 
 	let el: HTMLDivElement;
 	let L: typeof Leaflet | null = null;
@@ -308,6 +312,16 @@
 </script>
 
 <div class="sm-root" bind:this={el} role="region" aria-label="Мапа комунальних об’єктів"></div>
+{#if ontogglezones && zones.length}
+	<button
+		type="button"
+		class="zt"
+		class:on={showZones}
+		aria-pressed={showZones}
+		title={showZones && zoneSummary ? zoneSummary : 'Показати зони обміну надлишком'}
+		onclick={ontogglezones}><span class="zd" aria-hidden="true"></span>Зони</button
+	>
+{/if}
 
 <style>
 	.sm-root {
@@ -390,6 +404,40 @@
 			opacity: 1;
 			transform: scale(1);
 		}
+	}
+	.zt {
+		position: absolute;
+		z-index: 500;
+		right: 10px;
+		bottom: 92px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 0;
+		border-radius: 12px;
+		padding: 8px 12px;
+		background: #fff;
+		box-shadow: 0 2px 10px rgba(15, 35, 65, 0.18);
+		font: inherit;
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: #1a2433;
+		cursor: pointer;
+	}
+	.zt.on {
+		background: #e3eefb;
+		box-shadow: 0 2px 10px rgba(15, 35, 65, 0.18), inset 0 0 0 2px #1f6fd1;
+	}
+	.zd {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		border: 2px solid #1f6fd1;
+		background: rgba(31, 111, 209, 0.18);
+	}
+	.zt:focus-visible {
+		outline: 3px solid var(--focus, #ffbf47);
+		outline-offset: 2px;
 	}
 	.sm-root :global(.leaflet-control-zoom) {
 		border: 0;

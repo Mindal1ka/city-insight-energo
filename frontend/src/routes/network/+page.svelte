@@ -1,5 +1,5 @@
 <script lang="ts">
-	// «Баланс мережі закладів» (вікно 4): K мережі, надлишок і перерозподіл панелей між закладами.
+	// «Баланс мережі»: K мережі, різниця генерації/споживання і перерозподіл панелей між закладами.
 	import { page } from '$app/state';
 	import { errMessage } from '#lib/api.ts';
 	import { fetchNetwork, type Network } from '#lib/api-v2.ts';
@@ -9,6 +9,7 @@
 	import Skeleton from '#lib/Skeleton.svelte';
 	import Status from '#lib/Status.svelte';
 	import Icon from '#lib/Icon.svelte';
+	import Disclosure from '#lib/Disclosure.svelte';
 
 	let period = $state<Period>('year');
 	let data = $state<Network | null>(null);
@@ -40,12 +41,17 @@
 	const SCALE = 2;
 	const pos = (v: number) => `${Math.max(0, Math.min(1, v / SCALE)) * 100}%`;
 	const unit = $derived(period === 'year' ? 'рік' : period === 'month' ? 'місяць' : 'доба');
+	let showAll = $state(false);
+	const shown = $derived(showAll ? (data?.pairs ?? []) : (data?.pairs ?? []).slice(0, 10));
 </script>
 
-<svelte:head><title>Баланс мережі закладів · Insight Tool</title></svelte:head>
+<svelte:head><title>Баланс мережі · Insight Tool</title></svelte:head>
 
 <header class="page-head">
-	<h1>Баланс мережі закладів</h1>
+	<div class="ph-text">
+		<h1>Баланс мережі</h1>
+		<p class="ph-sub">Скільки згенерували, скільки спожили і куди передати надлишок</p>
+	</div>
 	<div class="seg" role="radiogroup" aria-label="Період">
 		{#each PERIODS as p (p.id)}
 			<button type="button" role="radio" aria-checked={period === p.id} class:on={period === p.id} onclick={() => (period = p.id)}>
@@ -56,58 +62,38 @@
 </header>
 
 {#if loading && !data}
-	<Skeleton variant="kpis" count={6} />
+	<Skeleton variant="kpis" count={4} />
 {:else if error && !data}
 	<Status {error} retry={() => load(period)} />
 {:else if data && t}
 	<div class="net" class:stale={loading}>
 		<div class="kpis">
-			<StatCard label="Панелі згенерували" value={t.gen_kwh} unit="кВт·год" icon="sun" format={(n) => kwh(n).replace(' кВт·год', '')} tone="good" />
-			<StatCard label="Спожито" value={t.cons_kwh} unit="кВт·год" icon="bolt" format={(n) => kwh(n).replace(' кВт·год', '')} />
+			<StatCard label="Згенерували" value={t.gen_kwh} unit="кВт·год" icon="sun" format={(n) => kwh(n).replace(' кВт·год', '')} tone="good" />
+			<StatCard label="Спожили" value={t.cons_kwh} unit="кВт·год" icon="bolt" format={(n) => kwh(n).replace(' кВт·год', '')} />
 			<StatCard
-				label={diffDef ? 'Дефіцит' : 'Надлишок'}
-				value={Math.abs(t.diff_kwh)}
+				label={diffDef ? 'Різниця (дефіцит)' : 'Різниця (надлишок)'}
+				value={t.diff_kwh}
 				unit="кВт·год"
 				icon={diffDef ? 'alert' : 'chart'}
-				format={(n) => kwh(n).replace(' кВт·год', '')}
+				format={(n) => signed(n, 0)}
 				tone={diffDef ? 'bad' : 'neutral'}
 				toneLabel={diffDef ? 'дефіцит' : 'надлишок'}
 			/>
-			<StatCard label="Не використано" value={t.surplus_kwh} unit="кВт·год" icon="battery" format={(n) => kwh(n).replace(' кВт·год', '')}>
-				<span class="sub">{uah(t.surplus_uah)}</span>
+			<StatCard label="K мережі · за {unit}" value={t.k} decimals={2} icon="gauge">
+				<div class="kmini" style="--kc:{cls.color}">
+					<div class="scale" aria-hidden="true">
+						<span class="seg-b" style="left:0;width:{pos(THRESHOLDS.low)};background:{K_CLASSES[1].color}"></span>
+						<span class="seg-b" style="left:{pos(THRESHOLDS.low)};width:calc({pos(THRESHOLDS.high)} - {pos(THRESHOLDS.low)});background:{K_CLASSES[0].color}"></span>
+						<span class="seg-b" style="left:{pos(THRESHOLDS.high)};right:0;background:{K_CLASSES[2].color}"></span>
+						{#if t.k != null}<span class="mark" style="left:{pos(t.k)}"></span>{/if}
+					</div>
+					<span class="kcls"><span aria-hidden="true">{cls.icon}</span> {cls.short} · {kText(t.k)}</span>
+				</div>
 			</StatCard>
-			<StatCard label="З мережі" value={t.grid_kwh} unit="кВт·год" icon="plug" format={(n) => kwh(n).replace(' кВт·год', '')} />
 		</div>
 
-		<section class="card kcard" style="--kc:{cls.color};--ks:{cls.soft}">
-			<div class="k-top">
-				<span class="k-big">K <b>{kText(t.k)}</b></span>
-				<span class="k-badge"><span aria-hidden="true">{cls.icon}</span> {cls.short}</span>
-				<span class="k-per">за {unit}</span>
-			</div>
-			<div class="scale" aria-hidden="true">
-				<span class="seg-b" style="left:0;width:{pos(THRESHOLDS.low)};background:{K_CLASSES[1].color}"></span>
-				<span class="seg-b" style="left:{pos(THRESHOLDS.low)};width:calc({pos(THRESHOLDS.high)} - {pos(THRESHOLDS.low)});background:{K_CLASSES[0].color}"></span>
-				<span class="seg-b" style="left:{pos(THRESHOLDS.high)};right:0;background:{K_CLASSES[2].color}"></span>
-				{#if t.k != null}<span class="mark" style="left:{pos(t.k)}"></span>{/if}
-			</div>
-			<div class="ticks" aria-hidden="true">
-				<span style="left:0">0</span>
-				<span style="left:{pos(THRESHOLDS.low)}">0,8</span>
-				<span style="left:50%">1</span>
-				<span style="left:{pos(THRESHOLDS.high)}">1,2</span>
-				<span style="left:100%">2</span>
-			</div>
-		</section>
-
 		<section class="card pairs" aria-label="Перерозподіл надлишку">
-			<h2><Icon name="grid" size={18} /> Перерозподіл надлишку</h2>
-			<div class="counts">
-				<span><b>{t.donors}</b> донорів</span>
-				<span><b>{t.takers}</b> реципієнтів</span>
-				<span><b>{t.pairs}</b> пар</span>
-				<span><b>{num(t.move_kw, 0)}</b> кВт панелей</span>
-			</div>
+			<h2>Перерозподіл надлишку</h2>
 
 			{#if data.pairs === null}
 				<a class="lock" href="/login?next={encodeURIComponent(page.url.pathname)}">
@@ -117,28 +103,36 @@
 				<p class="empty">—</p>
 			{:else}
 				<ul class="plist">
-					{#each data.pairs as p (p.from_id + '-' + p.to_id)}
+					{#each shown as p (p.from_id + '-' + p.to_id)}
 						<li>
 							<div class="route">
 								<a href="/object/{p.from_id}">{p.from_name}</a>
 								<Icon name="arrow-right" size={16} />
 								<a href="/object/{p.to_id}">{p.to_name}</a>
-								{#if p.same_department}
-									<span class="same" title={p.department_from}>один департамент</span>
-								{/if}
 							</div>
 							<div class="nums">
-								<span class="mv"><b>{num(p.move_kw, 1)}</b> кВт панелей</span>
-								<span><Icon name="pin" size={13} /> {p.distance_km == null ? '—' : `${num(p.distance_km, 1)} км`}</span>
-								<span class="gain">{signed(p.gain_kwh_year, 0)} кВт·год/рік</span>
+								<span>{num(p.move_kw, 0)} кВт</span>
 								<span class="gain">{uah(p.saved_uah_year)}/рік</span>
 							</div>
 						</li>
 					{/each}
 				</ul>
+				{#if data.pairs.length > 10}
+					<button type="button" class="more" onclick={() => (showAll = !showAll)}>
+						{showAll ? 'Згорнути' : `Показати всі (${data.pairs.length})`}
+					</button>
+				{/if}
 			{/if}
-			{#if data.note}<p class="note">{data.note}</p>{/if}
 		</section>
+
+		<Disclosure summary="Детальніше">
+			<div class="det">
+				<span><b>{kwh(t.surplus_kwh)}</b> не використано ({uah(t.surplus_uah)})</span>
+				<span><b>{kwh(t.grid_kwh)}</b> з мережі</span>
+				<span><b>{t.donors}</b> донорів · <b>{t.takers}</b> реципієнтів · <b>{t.pairs}</b> пар · <b>{num(t.move_kw, 0)}</b> кВт панелей</span>
+			</div>
+			{#if data.note}<p class="note">{data.note}</p>{/if}
+		</Disclosure>
 	</div>
 {/if}
 
@@ -153,6 +147,11 @@
 	}
 	.page-head h1 {
 		margin: 0;
+	}
+	.ph-sub {
+		margin: 0.15rem 0 0;
+		font-size: 0.8125rem;
+		color: var(--muted);
 	}
 	.seg {
 		display: inline-flex;
@@ -190,52 +189,18 @@
 		gap: 0.75rem;
 		margin-bottom: 1.1rem;
 	}
-	.sub {
-		font-weight: 700;
-		color: var(--text-2);
-		font-size: 0.95rem;
-	}
 
-	/* K */
-	.kcard {
-		margin: 0 0 1.1rem;
-		padding: 1.1rem 1.4rem 1.6rem;
-		border-left: 6px solid var(--kc);
-	}
-	.k-top {
+	/* K: мала шкала */
+	.kmini {
 		display: flex;
-		align-items: baseline;
-		flex-wrap: wrap;
-		gap: 0.4rem 0.9rem;
-		margin-bottom: 1rem;
-	}
-	.k-big {
-		font-size: 1.1rem;
-		font-weight: 700;
-		color: var(--muted);
-	}
-	.k-big b {
-		font-size: 2.6rem;
-		color: var(--ink);
-		font-variant-numeric: tabular-nums;
-	}
-	.k-badge {
-		padding: 0.15rem 0.75rem;
-		border-radius: 999px;
-		font-weight: 700;
-		background: var(--ks);
-		color: var(--kc);
-		border: 1.5px solid var(--kc);
-	}
-	.k-per {
-		color: var(--muted);
-		font-size: 0.875rem;
+		flex-direction: column;
+		gap: 0.35rem;
+		margin-top: 0.3rem;
 	}
 	.scale {
 		position: relative;
-		height: 12px;
-		border-radius: 6px;
-		overflow: visible;
+		height: 8px;
+		border-radius: 4px;
 	}
 	.seg-b {
 		position: absolute;
@@ -243,63 +208,34 @@
 		bottom: 0;
 	}
 	.seg-b:first-child {
-		border-radius: 6px 0 0 6px;
+		border-radius: 4px 0 0 4px;
 	}
 	.seg-b:nth-child(3) {
-		border-radius: 0 6px 6px 0;
+		border-radius: 0 4px 4px 0;
 	}
 	.mark {
 		position: absolute;
-		top: -6px;
+		top: -4px;
 		width: 4px;
-		height: 24px;
+		height: 16px;
 		margin-left: -2px;
 		border-radius: 2px;
 		background: var(--ink);
 		box-shadow: 0 0 0 2px #fff;
 	}
-	.ticks {
-		position: relative;
-		height: 1.2rem;
-		margin-top: 0.7rem;
-		font-size: 0.75rem;
-		color: var(--muted);
-		font-variant-numeric: tabular-nums;
-	}
-	.ticks span {
-		position: absolute;
-		transform: translateX(-50%);
-	}
-	.ticks span:first-child {
-		transform: none;
-	}
-	.ticks span:last-child {
-		transform: translateX(-100%);
+	.kcls {
+		font-size: 0.8125rem;
+		font-weight: 700;
+		color: var(--kc);
 	}
 
 	/* Пари */
 	.pairs {
-		margin: 0;
+		margin: 0 0 0.9rem;
 	}
 	.pairs h2 {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin: 0 0 0.6rem;
+		margin: 0 0 0.4rem;
 		font-size: 1.08rem;
-	}
-	.counts {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem 1.2rem;
-		margin-bottom: 0.8rem;
-		color: var(--muted);
-		font-size: 0.9rem;
-	}
-	.counts b {
-		color: var(--ink);
-		font-size: 1.15rem;
-		font-variant-numeric: tabular-nums;
 	}
 	.plist {
 		list-style: none;
@@ -312,7 +248,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.3rem 1rem;
-		padding: 0.6rem 0;
+		padding: 0.55rem 0;
 		border-top: 1px solid var(--line-soft);
 	}
 	.route {
@@ -333,35 +269,34 @@
 		color: var(--muted);
 		flex: none;
 	}
-	.same {
-		padding: 0.05rem 0.55rem;
-		border-radius: 999px;
-		font-size: 0.75rem;
-		font-weight: 700;
-		background: #e3f4ea;
-		color: #14632b;
-	}
 	.nums {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.3rem 0.9rem;
-		font-size: 0.875rem;
-		color: var(--muted);
+		gap: 0.9rem;
+		font-size: 0.9rem;
+		color: var(--text-2);
 		font-variant-numeric: tabular-nums;
-	}
-	.nums span {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-	}
-	.mv b {
-		color: var(--ink);
-		font-size: 1rem;
+		white-space: nowrap;
 	}
 	.gain {
 		color: #1f8a4c;
 		font-weight: 700;
+	}
+	.more {
+		margin-top: 0.5rem;
+		padding: 0.35rem 0.9rem;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: var(--surface);
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--text-2);
+		cursor: pointer;
+	}
+	.more:hover {
+		border-color: var(--navy);
+		color: var(--navy);
 	}
 	.lock {
 		display: inline-flex;
@@ -383,8 +318,18 @@
 		color: var(--muted);
 		margin: 0;
 	}
+	.det {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		font-size: 0.9rem;
+		color: var(--text-2);
+	}
+	.det b {
+		color: var(--ink);
+	}
 	.note {
-		margin: 0.8rem 0 0;
+		margin: 0.6rem 0 0;
 		font-size: 0.8125rem;
 		color: var(--muted);
 	}
@@ -392,12 +337,6 @@
 		.kpis {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 			gap: 0.6rem;
-		}
-		.k-big b {
-			font-size: 2rem;
-		}
-		.kcard {
-			padding: 0.9rem 0.9rem 1.4rem;
 		}
 	}
 </style>

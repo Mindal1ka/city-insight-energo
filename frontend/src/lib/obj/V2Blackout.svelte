@@ -6,7 +6,7 @@
 	import { num } from '#lib/format.ts';
 	import Icon from '#lib/Icon.svelte';
 
-	let { id, canEdit = false }: { id: number; canEdit?: boolean } = $props();
+	let { id, canEdit = false, available = $bindable(false) }: { id: number; canEdit?: boolean; available?: boolean } = $props();
 
 	let b = $state<Blackout | null>(null);
 	let hidden = $state(false);
@@ -15,7 +15,10 @@
 	async function load(oid: number) {
 		try {
 			const r = await fetchBlackout(oid);
-			if (oid === id) b = r;
+			if (oid === id) {
+				b = r;
+				available = true;
+			}
 		} catch (e) {
 			if (oid !== id) return;
 			b = null;
@@ -26,6 +29,7 @@
 	}
 	$effect(() => {
 		b = null;
+		available = false;
 		hidden = false;
 		loaded = false;
 		load(id);
@@ -82,8 +86,6 @@
 </script>
 
 {#if !hidden && loaded && b}
-	<section class="sec" aria-labelledby="bo-h">
-	<h2 id="bo-h"><span class="si" aria-hidden="true"><Icon name="battery" size={18} /></span>Блекаут</h2>
 	<div class="panel bo">
 		<div class="bars" role="img" aria-label="Години автономії">
 			{#each bars as r (r.key)}
@@ -135,32 +137,9 @@
 			{/if}
 		</div>
 	</div>
-	</section>
 {/if}
 
 <style>
-	.sec {
-		display: grid;
-		gap: 0.75rem;
-		min-width: 0;
-	}
-	h2 {
-		display: flex;
-		align-items: center;
-		gap: 0.55rem;
-		margin: 0;
-		font-size: var(--fs-xl);
-		color: var(--ink);
-	}
-	.si {
-		display: grid;
-		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 9px;
-		background: var(--sun-soft);
-		color: var(--sun-ink);
-	}
 	.bo {
 		display: grid;
 		gap: 1rem;

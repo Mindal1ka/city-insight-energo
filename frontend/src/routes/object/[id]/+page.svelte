@@ -1,11 +1,12 @@
 <script lang="ts">
-	// Картка об'єкта: станція → енергія → фінанси → лічильники; оперативне — у «Детальніше».
-	// Дані: GET /api/ses/{id} (поки бекенд не готовий — ДЕМО-синтетика в ObjApi.ts).
+	// Картка об'єкта: шапка (цифри + рекомендація) і вкладки Огляд · Станція · Гроші · Блекаут.
+	// Дані: GET /api/ses/{id} (поки бекенд не готовий — ДЕМО-синтетика в ObjApi.ts), /api/insight/{id}.
 	import { page } from '$app/state';
-	import { api, errMessage, ApiError, type SiteDetail } from '#lib/api.ts';
-	import { num, date, moment } from '#lib/format.ts';
+	import { replaceState } from '$app/navigation';
+	import { api, errMessage, ApiError } from '#lib/api.ts';
+	import { num, date } from '#lib/format.ts';
 	import { catLabel } from '#lib/categories.ts';
-	import { PERIODS, type Period } from '#lib/api-ses.ts';
+	import { PERIODS, uah, type Period } from '#lib/api-ses.ts';
 	import { auth } from '#lib/auth.svelte.ts';
 	import { canSeeSensitive, canSeeBattery, canSeeFinance, canEdit, isInternal } from '#lib/roles.ts';
 	import Status from '#lib/Status.svelte';
@@ -13,11 +14,7 @@
 	import KBadge from '#lib/KBadge.svelte';
 	import DemoPill from '#lib/DemoPill.svelte';
 	import Disclosure from '#lib/Disclosure.svelte';
-	import Distribution from '#lib/Distribution.svelte';
-	import HourlyChart from '#lib/HourlyChart.svelte';
-	import OutageSimulator from '#lib/OutageSimulator.svelte';
 	import ForecastCard from '#lib/ForecastCard.svelte';
-	import ObjTile from '#lib/obj/ObjTile.svelte';
 	import V2Blackout from '#lib/obj/V2Blackout.svelte';
 	import ObjFinance from '#lib/obj/ObjFinance.svelte';
 	import ObjEditDrawer from '#lib/obj/ObjEditDrawer.svelte';
@@ -25,8 +22,8 @@
 	import V2Budget from '#lib/obj/V2Budget.svelte';
 	import V2Live from '#lib/obj/V2Live.svelte';
 	import V2Dist from '#lib/obj/V2Dist.svelte';
-	import V2Sizing from '#lib/obj/V2Sizing.svelte';
-	import { fetchInsight, updateLimit, type Insight } from '#lib/api-v2.ts';
+	import V2Reco from '#lib/obj/V2Reco.svelte';
+	import { fetchInsight, updateLimit, type Insight, type MonthRow } from '#lib/api-v2.ts';
 	import { onDestroy } from 'svelte';
 	import { loadObj, saveObj, normSes, normCosts, emptySes, emptyCosts, type ObjDetail, type ObjPatch } from '#lib/obj/ObjApi.ts';
 
@@ -108,20 +105,6 @@
 	const hasCons = $derived(!!e && (e.cons_kwh ?? 0) > 0);
 	const noCost = $derived(!!ses && !(d?.costs?.total_uah || d?.finance?.invested_uah));
 
-	// --- Оперативні дані (Що зараз) — лише для службових ролей ---
-	let site = $state<SiteDetail | null>(null);
-	$effect(() => {
-		site = null;
-		// /api/sites — оперативні дані з акумулятором; фінансовому органу бекенд їх не віддає (403)
-		if (!bat || !id) return;
-		const my = id;
-		api.site(my).then(
-			(r) => my === id && (site = r),
-			() => {}
-		);
-	});
-	const m = $derived(moment(site?.now));
-
 	// Лічильники: з /api/ses, інакше — з /api/buildings/{id}.meters (якщо бекенд їх віддає)
 	let bMeters = $state<{ electricity: number | null; total: number | null } | null>(null);
 	$effect(() => {
@@ -169,6 +152,65 @@
 		}
 	}
 
+
+	// --- Вкладки (?tab=) ---
+	type TabId = 'overview' | 'station' | 'money' | 'blackout';
+	let tab = $state<string>(page.url.searchParams.get('tab') ?? 'overview');
+	let blackoutOk = $state(false);
+	const tabs = $derived(
+		[
+			{ id: 'overview', label: 'Огляд', icon: 'chart', show: true },
+			{ id: 'station', label: 'Станція', icon: 'sun', show: sens },
+			{ id: 'money', label: 'Гроші', icon: 'wallet', show: fin && (hasCons || !!ses) },
+			{ id: 'blackout', label: 'Блекаут', icon: 'battery', show: isInternal(user) && blackoutOk }
+		].filter((t) => t.show) as { id: TabId; label: string; icon: 'chart'; show: boolean }[]
+	);
+	const cur = $derived<TabId>(tabs.some((t) => t.id === tab) ? (tab as TabId) : 'overview');
+	function pick(t: TabId) {
+		tab = t;
+		const u = new URL(page.url.href);
+		if (t === 'overview') u.searchParams.delete('tab');
+		else u.searchParams.set('tab', t);
+		replaceState(u, page.state);
+	}
+	function tabKey(ev: KeyboardEvent) {
+		const i = tabs.findIndex((t) => t.id === cur);
+		const n = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : -1;
+		if (n < 0 || n >= tabs.length) return;
+		ev.preventDefault();
+		pick(tabs[n].id);
+		(document.getElementById(`tab-${tabs[n].id}`) as HTMLElement | null)?.focus();
+	}
+
+	// --- Великі цифри шапки ---
+	const rows = $derived<MonthRow[]>(ins?.months ?? []);
+	function sumM(k: 'cons_kwh' | 'gen_kwh' | 'saved_uah'): number | null {
+		const v = rows.map((r) => r[k]);
+		return v.some((x) => x != null) ? v.reduce((a: number, x) => a + (x ?? 0), 0) : null;
+	}
+	const yr = $derived(d?.energy.year ?? null);
+	const consMonth = $derived.by(() => {
+		const avg = ins?.sizing?.cons_kwh_month_avg;
+		if (avg != null) return avg;
+		const c = sumM('cons_kwh');
+		if (c != null) return c / 12;
+		return yr?.cons_kwh ? yr.cons_kwh / 12 : null;
+	});
+	const genMonth = $derived.by(() => {
+		const g = sumM('gen_kwh') ?? yr?.gen_kwh ?? null;
+		return g != null ? g / 12 : null;
+	});
+	const batKwh = $derived(bat && ses ? (ins?.battery_capacity_kwh ?? ses.battery_kwh ?? null) : null);
+	const savedYear = $derived(fin && ses ? (sumM('saved_uah') ?? d?.finance?.saved_uah.year ?? null) : null);
+	const bigNums = $derived(
+		[
+			{ k: 'cons', icon: 'plug', pre: 'Споживає ≈', v: consMonth, unit: 'кВт·год/міс', d: 0 },
+			{ k: 'gen', icon: 'sun', pre: 'Панелі дають ≈', v: ses ? genMonth : null, unit: 'кВт·год/міс', d: 0 },
+			{ k: 'bat', icon: 'battery', pre: 'Акумулятор', v: batKwh, unit: 'кВт·год', d: 1 },
+			{ k: 'sav', icon: 'wallet', pre: 'Заощаджує', v: savedYear, unit: 'грн/рік', d: 0 }
+		].filter((x) => x.v != null) as { k: string; icon: 'plug'; pre: string; v: number; unit: string; d: number }[]
+	);
+
 	const place = $derived(d ? String(d.building.address ?? '') : '');
 	const pLabel = $derived(PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? '');
 </script>
@@ -189,52 +231,131 @@
 	<div class="obj" class:stale={loading} aria-busy={loading}>
 		<!-- ============ 1. Шапка ============ -->
 		<header class="panel hero">
-			<div class="h-main">
-				<p class="eyebrow">{catLabel(b.category_short ?? '')}</p>
-				{#if ins?.department}<p class="dept"><Icon name="users" size={14} /> {ins.department}</p>{/if}
-				<h1 title={b.name}>{b.name}</h1>
-				<p class="place"><Icon name="pin" size={16} /> {place}</p>
-				<p class="facts tnum">
-					{#if b.heated_area}<span><Icon name="building" size={15} /> {num(Number(b.heated_area))} м²</span>{/if}
-					{#if b.floors}<span>{b.floors} пов.</span>{/if}
-					{#if d.demo && sens}<DemoPill align="left" text="Дані СЕС змодельовані (у місті немає реєстру СЕС); споживання — реальні дані UMUNI" />{/if}
-				</p>
-			</div>
-			<div class="h-side">
-				{#if sens}
-					<div class="kbig">
-						<span class="k-l">K · {pLabel}</span>
-						<KBadge {k} cls={kc} size="lg" />
+			<div class="h-top">
+				<div class="h-main">
+					<p class="eyebrow">
+						{catLabel(b.category_short ?? '')}
+						{#if ins?.department}<span class="dept"><Icon name="users" size={13} /> {ins.department}</span>{/if}
+						{#if d.demo && sens}<DemoPill align="left" text="Дані СЕС змодельовані (у місті немає реєстру СЕС); споживання — реальні дані UMUNI" />{/if}
+					</p>
+					<h1 title={b.name}>{b.name}</h1>
+					<p class="place">
+						<Icon name="pin" size={15} /> {place}
+						
+						{#if b.floors}<span class="fact tnum">· {b.floors} пов.</span>{/if}
+					</p>
+				</div>
+				<div class="h-side">
+					{#if sens}
+						<div class="kbig">
+							<span class="k-l">K · {pLabel}</span>
+							<KBadge {k} cls={kc} size="lg" />
+						</div>
+					{/if}
+					<div class="seg" role="radiogroup" aria-label="Період">
+						{#each PERIODS as p (p.id)}
+							<button type="button" role="radio" aria-checked={period === p.id} class:on={period === p.id} onclick={() => (period = p.id)}>{p.label}</button>
+						{/each}
 					</div>
-				{/if}
-				<div class="seg" role="radiogroup" aria-label="Період">
-					{#each PERIODS as p (p.id)}
-						<button type="button" role="radio" aria-checked={period === p.id} class:on={period === p.id} onclick={() => (period = p.id)}>{p.label}</button>
+					{#if editable}
+						<button type="button" class="btn btn-secondary btn-sm edit" onclick={() => (editOpen = true)}><Icon name="panel" size={16} /> Редагувати</button>
+					{/if}
+				</div>
+			</div>
+
+			{#if bigNums.length}
+				<div class="nums">
+					{#each bigNums as n (n.k)}
+						<div class="num {n.k}">
+							<span class="n-l"><Icon name={n.icon} size={15} /> {n.pre}</span>
+							<span class="n-v tnum">{n.k === 'sav' ? uah(n.v) : num(n.v, n.d)} <small>{n.k === 'sav' ? '/рік' : n.unit}</small></span>
+						</div>
 					{/each}
 				</div>
-				{#if editable}
-					<button type="button" class="btn btn-secondary btn-sm edit" onclick={() => (editOpen = true)}><Icon name="panel" size={16} /> Редагувати</button>
-				{/if}
-			</div>
+			{/if}
+
+			{#if sens && ins?.sizing}
+				<V2Reco s={ins.sizing} id={b.id} hasStation={!!ses} surplus={kc === 'Надлишок'} />
+			{/if}
 		</header>
 
-		<!-- ============ 2. Станція ============ -->
+		<!-- ============ 2. Вкладки ============ -->
+		{#if tabs.length > 1}
+			<div class="tabs" role="tablist" aria-label="Розділи картки">
+				{#each tabs as t (t.id)}
+					<button
+						type="button"
+						role="tab"
+						id="tab-{t.id}"
+						aria-selected={cur === t.id}
+						aria-controls="tp-{t.id}"
+						tabindex={cur === t.id ? 0 : -1}
+						class:on={cur === t.id}
+						onclick={() => pick(t.id)}
+						onkeydown={tabKey}><Icon name={t.icon} size={16} /> {t.label}</button>
+				{/each}
+			</div>
+		{/if}
+
+		{#snippet metersLine()}
+			{#if meters && (meters.electricity !== null || meters.total !== null)}
+				<p class="meters tnum">
+					<Icon name="gauge" size={15} /> Лічильники:
+					<span>е/е <b>{num(meters.electricity)}</b></span>
+					<span>усього <b>{num(meters.total)}</b></span>
+				</p>
+			{/if}
+		{/snippet}
+
+		<!-- ---- Огляд ---- -->
+		<div class="tp" id="tp-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={cur !== 'overview'}>
+			{#if ins?.months?.length}
+				<div class="panel pad"><V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} /></div>
+			{:else if !hasCons && !(ses && e?.gen_kwh)}
+				<div class="empty"><span class="e-ic" aria-hidden="true">?</span><p><b>Немає даних про споживання</b></p></div>
+			{:else}
+				<div class="empty"><span class="e-ic" aria-hidden="true">…</span><p>Помісячні дані недоступні</p></div>
+			{/if}
+			{#if !sens}
+				{@render metersLine()}
+				<p class="lock-chip">
+					<Icon name="lock" size={14} /> Дані СЕС — після входу
+					{#if !isInternal(user)}<a href="/login?next=/object/{b.id}">Увійти</a>{/if}
+				</p>
+			{/if}
+		</div>
+
+		<!-- ---- Станція ---- -->
 		{#if sens}
-			<section class="sec" aria-labelledby="st-h">
-				<h2 id="st-h"><span class="si sun" aria-hidden="true"><Icon name="sun" size={18} /></span>Станція</h2>
+			<div class="tp" id="tp-station" role="tabpanel" aria-labelledby="tab-station" hidden={cur !== 'station'}>
 				{#if ses}
-					<div class="tiles">
-						<ObjTile i={0} icon="panel" tone="sun" label="Панелі" value={ses.total_kw} decimals={1} unit="кВт"
-							sub={ses.panels_count ? `${num(ses.panels_count)} шт × ${num(ses.panel_w)} Вт` : ''} />
-						<ObjTile i={1} icon="inverter" tone="cons" label="Інвертор" value={ses.inverter_kw} decimals={1} unit="кВт" sub={ses.inverter_model ?? ''} />
+					<div class="eq">
+						<div class="eq-i sun"><Icon name="panel" size={18} /><span><b class="tnum">{num(ses.total_kw, 1)} кВт</b><small>Панелі{ses.panels_count ? ` · ${num(ses.panels_count)} × ${num(ses.panel_w)} Вт` : ''}</small></span></div>
+						<div class="eq-i cons"><Icon name="inverter" size={18} /><span><b class="tnum">{num(ses.inverter_kw, 1)} кВт</b><small>Інвертор{ses.inverter_model ? ` · ${ses.inverter_model}` : ''}</small></span></div>
 						{#if bat}
-							<ObjTile i={2} icon="battery" tone="bat" label="Акумулятори" value={ses.battery_kwh} decimals={1} unit="кВт·год"
-								sub={ses.battery_count ? `${num(ses.battery_count)} × ${num(ses.battery_module_kwh, 2)} кВт·год` : ses.battery_kwh === 0 ? 'немає' : ''} />
+							<div class="eq-i bat"><Icon name="battery" size={18} /><span><b class="tnum">{ses.battery_kwh === 0 ? 'немає' : `${num(ses.battery_kwh, 1)} кВт·год`}</b><small>Акумулятори{ses.battery_count ? ` · ${num(ses.battery_count)} × ${num(ses.battery_module_kwh, 2)}` : ''}</small></span></div>
 						{/if}
-						<ObjTile i={3} icon="plug" label="Приєднана потужність" value={ses.connected_kw} decimals={0} unit="кВт" />
-						<ObjTile i={4} icon="clock" label="Запущено" text={ses.launched ? date(ses.launched) : null} />
-						<ObjTile i={5} icon="info" tone={ses.source === 'введено' ? 'good' : 'muted'} label="Джерело" text={ses.source === 'введено' ? 'Введено' : 'ДЕМО'} />
+						{#if ses.launched}
+							<div class="eq-i"><Icon name="clock" size={18} /><span><b class="tnum">{date(ses.launched)}</b><small>Запуск</small></span></div>
+						{/if}
 					</div>
+
+					{#if ins?.live}
+						<div class="blk">
+							<h3>Зараз</h3>
+							<V2Live l={ins.live} />
+						</div>
+					{/if}
+					{#if ins?.distribution}
+						<div class="blk">
+							<h3>Сьогодні</h3>
+							<V2Dist d={ins.distribution} />
+						</div>
+					{/if}
+
+					<Disclosure summary="Сонце завтра">
+						<ForecastCard kw={ses.total_kw ?? null} />
+					</Disclosure>
 				{:else}
 					<div class="empty">
 						<span class="e-ic" aria-hidden="true">○</span>
@@ -242,74 +363,17 @@
 						{#if editable}<button type="button" class="btn btn-secondary btn-sm" onclick={() => (editOpen = true)}>Додати СЕС</button>{/if}
 					</div>
 				{/if}
-			</section>
+				{@render metersLine()}
+			</div>
 		{/if}
 
-		<!-- ============ 2a. Стан СЕС зараз (v2) ============ -->
-		{#if ins?.live}
-			<section class="sec" aria-labelledby="lv-h">
-				<h2 id="lv-h"><span class="si sun" aria-hidden="true"><Icon name="sun" size={18} /></span>Стан СЕС зараз</h2>
-				<V2Live l={ins.live} />
-			</section>
-		{/if}
-		{#if ins?.distribution}
-			<section class="sec" aria-labelledby="ds-h">
-				<h2 id="ds-h"><span class="si en" aria-hidden="true"><Icon name="chart" size={18} /></span>Розподіл енергії сьогодні</h2>
-				<V2Dist d={ins.distribution} />
-			</section>
-		{/if}
-		{#if ins?.sizing && (ins.sizing.need || ses || kc === 'Надлишок')}
-			<section class="sec" aria-labelledby="sz-h">
-				<h2 id="sz-h"><span class="si sun" aria-hidden="true"><Icon name="panel" size={18} /></span>Скільки доставити</h2>
-				<V2Sizing s={ins.sizing} id={b.id} hasStation={!!ses} surplus={kc === 'Надлишок'} />
-			</section>
-		{/if}
-
-		<!-- ============ 3. Енергія ============ -->
-		<section class="sec" aria-labelledby="en-h">
-			<h2 id="en-h"><span class="si en" aria-hidden="true"><Icon name="bolt" size={18} /></span>Енергія <small>· {pLabel}, кВт·год</small></h2>
-			{#if !hasCons && !(ses && e?.gen_kwh)}
-				<div class="empty"><span class="e-ic" aria-hidden="true">?</span><p><b>Немає даних про споживання</b></p></div>
-			{:else if e}
-				{#key period}
-					<div class="tiles t5">
-						{#if ses}<ObjTile i={0} icon="sun" tone="sun" label="Згенеровано" value={e.gen_kwh} />{/if}
-						<ObjTile i={1} icon="plug" tone="cons" label="Спожито" value={e.cons_kwh} />
-						{#if ses}
-							<ObjTile i={2} icon="check" tone="good" label="Власне використано" value={e.self_kwh} />
-							<ObjTile i={3} icon="chart" tone="warn" label="Надлишок" value={e.surplus_kwh} />
-						{/if}
-						{#if ses}
-							<ObjTile i={4} icon="grid" tone="grid" label="З мережі" value={e.grid_kwh} />
-						{:else if b.heated_area}
-							<ObjTile i={2} icon="building" label="На 1 м²" value={(e.cons_kwh ?? 0) / Number(b.heated_area)} decimals={period === 'year' ? 1 : 2} unit="кВт·год" />
-						{/if}
-					</div>
-				{/key}
-			{/if}
-		</section>
-
-		<!-- ============ 3a. Місяць за місяцем (v2) ============ -->
-		{#if ins?.months?.length}
-			<section class="sec" aria-labelledby="mm-h">
-				<h2 id="mm-h"><span class="si en" aria-hidden="true"><Icon name="chart" size={18} /></span>Місяць за місяцем</h2>
-				<V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} />
-			</section>
-		{/if}
-
-		<!-- ============ 3b. Блекаут (v2; 403 — блок ховається) ============ -->
-		{#if isInternal(user)}
-			<V2Blackout id={b.id} canEdit={editable || user?.role === 'energy_manager'} />
-		{/if}
-
-		<!-- ============ 4. Фінанси ============ -->
-		{#if fin && (hasCons || ses)}
-			<section class="sec" aria-labelledby="fi-h">
-				<h2 id="fi-h"><span class="si fi" aria-hidden="true"><Icon name="wallet" size={18} /></span>Фінанси</h2>
-				<ObjFinance {d} showSes={!!ses} />
+		<!-- ---- Гроші ---- -->
+		{#if tabs.some((t) => t.id === 'money')}
+			<div class="tp" id="tp-money" role="tabpanel" aria-labelledby="tab-money" hidden={cur !== 'money'}>
 				{#if ins?.budget}
-					<V2Budget b={ins.budget} canEdit={canLimit} onsave={saveLimit} />
+					<div class="panel pad"><V2Budget b={ins.budget} canEdit={canLimit} onsave={saveLimit} /></div>
 				{/if}
+				<ObjFinance {d} showSes={!!ses} investOnly={!!ins?.budget} />
 				{#if noCost}
 					<div class="empty slim">
 						<span class="e-ic" aria-hidden="true">₴</span>
@@ -317,45 +381,15 @@
 						{#if editable}<button type="button" class="btn btn-sm" onclick={() => (editOpen = true)}>Внести вартість</button>{/if}
 					</div>
 				{/if}
-			</section>
+			</div>
 		{/if}
 
-		<!-- ============ 5. Лічильники ============ -->
-		{#if meters && (meters.electricity !== null || meters.total !== null)}
-			<section class="sec" aria-labelledby="me-h">
-				<h2 id="me-h"><span class="si me" aria-hidden="true"><Icon name="gauge" size={18} /></span>Лічильники</h2>
-				<div class="meters tnum">
-					<span><Icon name="bolt" size={16} /> Електроенергія <b>{num(meters.electricity)}</b></span>
-					<span><Icon name="gauge" size={16} /> Усього <b>{num(meters.total)}</b></span>
-				</div>
-			</section>
+		<!-- ---- Блекаут (завантажується завжди; 403 — вкладка ховається) ---- -->
+		{#if isInternal(user)}
+			<div class="tp" id="tp-blackout" role="tabpanel" aria-labelledby="tab-blackout" hidden={cur !== 'blackout'}>
+				<V2Blackout id={b.id} canEdit={editable || user?.role === 'energy_manager'} bind:available={blackoutOk} />
+			</div>
 		{/if}
-
-		<!-- ============ 6. Оперативне ============ -->
-		<section class="sec more" aria-label="Детальніше">
-			{#if bat && site && hasCons && !ins?.distribution}
-				<Disclosure summary="Що зараз" hint={m ? `${m.time}` : ''}>
-					<Distribution d={site.distribution} hasSes={!!ses} />
-					<div class="panel chart">
-						<HourlyChart hours={site.hourly} nowHour={m?.hour ?? null} nowMinute={m?.minute ?? 0} peakHour={site.today.peak_kw > 0 ? site.today.peak_hour : null} />
-					</div>
-				</Disclosure>
-			{/if}
-			{#if bat && hasCons}
-				<Disclosure summary="Якщо вимкнуть світло">
-					<OutageSimulator siteId={b.id} startDefault={m && m.hour < 23 ? m.hour + 1 : 18} />
-				</Disclosure>
-			{/if}
-			<Disclosure summary="Сонце завтра">
-				<ForecastCard kw={ses?.total_kw ?? null} />
-			</Disclosure>
-			{#if !sens}
-				<p class="lock-chip">
-					<Icon name="lock" size={14} /> Дані СЕС — після входу
-					{#if !isInternal(user)}<a href="/login?next=/object/{b.id}">Увійти</a>{/if}
-				</p>
-			{/if}
-		</section>
 	</div>
 
 	{#if editable}
@@ -383,76 +417,79 @@
 	}
 	.obj {
 		display: grid;
-		gap: 1.75rem;
+		gap: 1rem;
+		min-width: 0;
 		transition: opacity var(--dur-base);
 	}
 	.obj.stale {
 		opacity: 0.6;
 	}
 	.hero {
+		display: grid;
+		gap: 0.9rem;
+		animation: obj-in 0.45s var(--ease-out) both;
+	}
+	.h-top {
 		display: flex;
 		justify-content: space-between;
-		gap: 1.5rem;
+		gap: 1rem 1.5rem;
 		flex-wrap: wrap;
-		animation: obj-in 0.45s var(--ease-out) both;
 	}
 	.h-main {
 		min-width: 0;
-		flex: 1 1 360px;
+		flex: 1 1 340px;
 	}
 	.eyebrow {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.6rem;
 		margin: 0 0 0.25rem;
 	}
 	h1 {
 		margin: 0;
-		font-size: clamp(1.35rem, 2.6vw, 1.9rem);
-		line-height: 1.2;
+		font-size: clamp(1.15rem, 2vw, 1.45rem);
+		line-height: 1.25;
 		color: var(--ink);
 		overflow-wrap: anywhere;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 	}
 	.dept {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		margin: 0 0 0.35rem;
-		padding: 0.15rem 0.6rem;
+		padding: 0.1rem 0.55rem;
 		border-radius: 999px;
 		background: var(--accent-soft);
 		color: var(--cons);
 		font-size: var(--fs-xs);
 		font-weight: 600;
+		text-transform: none;
+		letter-spacing: 0;
 	}
 	.place {
 		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-		margin: 0.4rem 0 0;
-		color: var(--muted);
-	}
-	.facts {
-		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.4rem 1rem;
-		margin: 0.6rem 0 0;
-		font-size: var(--fs-sm);
-		color: var(--muted);
-	}
-	.facts span {
-		display: inline-flex;
-		align-items: center;
 		gap: 0.3rem;
+		margin: 0.35rem 0 0;
+		color: var(--muted);
+		font-size: var(--fs-sm);
 	}
 	.h-side {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 0.75rem;
+		gap: 0.6rem;
 	}
 	.kbig {
-		display: grid;
-		justify-items: end;
-		gap: 0.3rem;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
 	}
 	.k-l {
 		font-size: var(--fs-xs);
@@ -469,7 +506,7 @@
 	.seg button {
 		border: 0;
 		background: transparent;
-		padding: 0.45rem 0.95rem;
+		padding: 0.4rem 0.9rem;
 		border-radius: 999px;
 		font: inherit;
 		font-size: var(--fs-sm);
@@ -484,7 +521,8 @@
 		color: var(--ink);
 		box-shadow: var(--shadow);
 	}
-	.seg button:focus-visible {
+	.seg button:focus-visible,
+	.tabs button:focus-visible {
 		outline: 3px solid var(--focus);
 		outline-offset: 1px;
 	}
@@ -493,46 +531,129 @@
 		align-items: center;
 		gap: 0.35rem;
 	}
-	.sec {
+	/* Чотири великі цифри */
+	.nums {
 		display: grid;
-		gap: 0.75rem;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.6rem;
+	}
+	.num {
+		display: grid;
+		gap: 0.2rem;
+		padding: 0.6rem 0.8rem;
+		border-radius: 12px;
+		background: var(--neutral-soft);
 		min-width: 0;
 	}
-	h2 {
-		display: flex;
+	.n-l {
+		display: inline-flex;
 		align-items: center;
-		gap: 0.55rem;
-		margin: 0;
-		font-size: var(--fs-xl);
-		color: var(--ink);
+		gap: 0.3rem;
+		font-size: var(--fs-xs);
+		color: var(--muted);
 	}
-	h2 small {
-		font-size: var(--fs-sm);
+	.n-v {
+		font-size: 1.35rem;
+		font-weight: 800;
+		line-height: 1.15;
+		color: var(--ink);
+		overflow-wrap: anywhere;
+	}
+	.n-v small {
+		font-size: var(--fs-xs);
 		font-weight: 500;
 		color: var(--muted);
 	}
-	.si {
+	.num.gen .n-v { color: var(--sun-ink); }
+	.num.bat .n-v { color: var(--bat, #6d4fc2); }
+	.num.sav .n-v { color: var(--ok); }
+	/* Вкладки */
+	.tabs {
+		display: flex;
+		gap: 0.25rem;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		border-bottom: 1px solid var(--line);
+	}
+	.tabs::-webkit-scrollbar {
+		display: none;
+	}
+	.tabs button {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 2.75rem;
+		padding: 0 1rem;
+		border: 0;
+		border-bottom: 3px solid transparent;
+		margin-bottom: -1px;
+		background: transparent;
+		font: inherit;
+		font-weight: 600;
+		color: var(--muted);
+		cursor: pointer;
+	}
+	.tabs button:hover {
+		color: var(--ink);
+	}
+	.tabs button.on {
+		color: var(--ink);
+		border-bottom-color: var(--accent);
+	}
+	.tp {
 		display: grid;
-		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 9px;
+		gap: 1rem;
+		min-width: 0;
 	}
-	.si.sun { background: var(--sun-soft); color: var(--sun-ink); }
-	.si.en { background: var(--accent-soft); color: var(--cons); }
-	.si.fi { background: var(--surplus-soft); color: var(--surplus-ink); }
-	.si.me { background: var(--neutral-soft); color: var(--muted); }
-	.tiles {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-		gap: 0.75rem;
+	.tp[hidden] {
+		display: none;
 	}
-	.tiles.t5 {
-		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-	}
-	.chart {
+	.pad {
 		padding: 1rem;
+		min-width: 0;
 	}
+	.blk {
+		display: grid;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+	h3 {
+		margin: 0;
+		font-size: var(--fs-md);
+		color: var(--ink);
+	}
+	/* Обладнання */
+	.eq {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 0.6rem;
+	}
+	.eq-i {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.55rem 0.8rem;
+		border-radius: 12px;
+		background: var(--neutral-soft);
+		min-width: 0;
+	}
+	.eq-i span {
+		display: grid;
+		min-width: 0;
+	}
+	.eq-i b {
+		color: var(--ink);
+	}
+	.eq-i small {
+		color: var(--muted);
+		font-size: var(--fs-xs);
+		overflow-wrap: anywhere;
+	}
+	.eq-i.sun { background: var(--sun-soft); color: var(--sun-ink); }
+	.eq-i.cons { background: var(--accent-soft); color: var(--cons); }
+	.eq-i.bat { background: var(--surplus-soft); color: var(--surplus-ink); }
 	.empty {
 		display: flex;
 		align-items: center;
@@ -563,40 +684,26 @@
 	.meters {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.6rem;
-	}
-	.meters span {
-		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		padding: 0.5rem 0.85rem;
-		border-radius: 999px;
-		background: var(--surface);
-		border: 1px solid var(--card-line);
+		gap: 0.3rem 0.9rem;
+		margin: 0;
 		font-size: var(--fs-sm);
 		color: var(--muted);
 	}
 	.meters b {
 		color: var(--ink);
-		font-size: var(--fs-md);
-	}
-	.more {
-		gap: 0.5rem;
 	}
 	.lock-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
 		justify-self: start;
-		margin: 0.25rem 0;
+		margin: 0;
 		padding: 0.3rem 0.7rem;
 		border-radius: 999px;
 		background: var(--neutral-soft);
 		font-size: var(--fs-xs);
 		color: var(--muted);
-	}
-	.more > .btn {
-		justify-self: start;
 	}
 	.toast {
 		position: fixed;
@@ -637,17 +744,12 @@
 		}
 	}
 	@media (max-width: 640px) {
-		.obj {
-			gap: 1.25rem;
-		}
 		.h-side {
 			align-items: stretch;
 			width: 100%;
 		}
 		.kbig {
-			display: flex;
 			justify-content: space-between;
-			align-items: center;
 		}
 		.seg {
 			display: flex;
@@ -655,13 +757,15 @@
 		.seg button {
 			flex: 1;
 		}
-		.tiles,
-		.tiles.t5 {
+		.nums {
 			grid-template-columns: 1fr 1fr;
 			gap: 0.5rem;
 		}
-		.chart {
-			padding: 0.75rem 0.5rem;
+		.n-v {
+			font-size: 1.15rem;
+		}
+		.pad {
+			padding: 0.75rem 0.6rem;
 		}
 	}
 </style>

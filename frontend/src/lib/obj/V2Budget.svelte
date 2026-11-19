@@ -3,7 +3,6 @@
 	import type { Budget } from '#lib/api-v2.ts';
 	import { uah } from '#lib/api-ses.ts';
 	import { num } from '#lib/format.ts';
-	import DemoPill from '#lib/DemoPill.svelte';
 	import Icon from '#lib/Icon.svelte';
 
 	let {
@@ -40,33 +39,24 @@
 	}
 </script>
 
-<div class="panel bud">
-	{#if b.source === 'МОК'}<p class="tag-row"><DemoPill align="left" text="МОК: демонстраційні дані лімітів і оплат" /></p>{/if}
-
+<div class="bud">
 	<div class="row">
-		<div class="lbl"><span>Місяць</span><b class="tnum">{uah(b.paid_uah.month)} <small>/ {uah(b.limit_uah.month)}</small></b></div>
+		<div class="lbl"><span>Ліміт · місяць</span><b class="tnum">{uah(b.paid_uah.month)} <small>/ {uah(b.limit_uah.month)}</small></b></div>
 		<div class="track" class:over={(pctM ?? 0) > 100}><i style="width: {Math.min(100, pctM ?? 0)}%"></i></div>
 		<span class="pc tnum" class:over={(pctM ?? 0) > 100}>{pctM === null ? '—' : num(pctM) + ' %'}</span>
 	</div>
 	<div class="row">
-		<div class="lbl"><span>Рік</span><b class="tnum">{uah(b.paid_uah.year)} <small>/ {uah(b.limit_uah.year)}</small></b></div>
+		<div class="lbl"><span>Ліміт · рік</span><b class="tnum">{uah(b.paid_uah.year)} <small>/ {uah(b.limit_uah.year)}</small></b></div>
 		<div class="track" class:over={(pctY ?? 0) > 100}><i style="width: {Math.min(100, pctY ?? 0)}%"></i></div>
 		<span class="pc tnum" class:over={(pctY ?? 0) > 100}>{pctY === null ? '—' : num(pctY) + ' %'}</span>
 	</div>
 
 	<div class="grid tnum">
-		<div class="cell"><span class="l">Доба</span><b>{uah(b.limit_uah.day)}</b></div>
-		<div class="cell" class:good={b.balance_uah.month >= 0} class:bad={b.balance_uah.month < 0}>
-			<span class="l">Баланс міс.</span><b>{b.balance_uah.month >= 0 ? '+' : '−'}{uah(Math.abs(b.balance_uah.month))}</b>
-		</div>
-		<div class="cell" class:good={b.balance_uah.year >= 0} class:bad={b.balance_uah.year < 0}>
-			<span class="l">Баланс рік</span><b>{b.balance_uah.year >= 0 ? '+' : '−'}{uah(Math.abs(b.balance_uah.year))}</b>
+		<div class="cell">
+			<span class="l">Оплачено за рік</span><b>{uah(b.paid_uah.year)}</b>
 		</div>
 		<div class="cell">
 			<span class="l">Без СЕС</span><b>{uah(b.without_ses_uah_year)}</b>
-		</div>
-		<div class="cell">
-			<span class="l">Оплачено</span><b>{uah(b.paid_uah.year)}</b>
 		</div>
 		<div class="cell" class:good={saved > 0}>
 			<span class="l">Економія</span><b>{saved >= 0 ? '+' : '−'}{uah(Math.abs(saved))}</b>
@@ -92,10 +82,7 @@
 	.bud {
 		display: grid;
 		gap: 0.8rem;
-		padding: 1rem;
-	}
-	.tag-row {
-		margin: 0;
+		min-width: 0;
 	}
 	.row {
 		display: grid;
@@ -145,7 +132,7 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 0.5rem;
 	}
 	.cell {
@@ -159,18 +146,13 @@
 		background: var(--ok-soft);
 		color: var(--ok);
 	}
-	.cell.bad {
-		background: var(--bad-soft);
-		color: var(--bad);
-	}
 	.l {
 		font-size: var(--fs-xs);
 		color: var(--muted);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
-	.cell.good .l,
-	.cell.bad .l {
+	.cell.good .l {
 		color: inherit;
 	}
 	.cell b {
@@ -181,6 +163,11 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-wrap: wrap;
+	}
+	@media (max-width: 520px) {
+		.grid {
+			grid-template-columns: 1fr;
+		}
 	}
 	.edit input {
 		width: 9rem;

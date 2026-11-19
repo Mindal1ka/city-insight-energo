@@ -47,15 +47,17 @@
 <svelte:head><title>Блекаут · Insight Tool</title></svelte:head>
 
 <header class="page-head">
-	<h1>Готовність до блекауту</h1>
+	<div class="ph-text">
+		<h1>Готовність до блекауту</h1>
+		{#if data}<p class="ph-sub"><Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}</p>{/if}
+	</div>
 	<div class="head-side">
 		<span class="mok" title="Демонстраційні дані">МОК</span>
-		{#if data}<span class="upd"><Icon name="clock" size={14} /> {dateTime(data.updated_at)}</span>{/if}
 	</div>
 </header>
 
 {#if loading && !data}
-	<Skeleton variant="kpis" count={5} />
+	<Skeleton variant="kpis" count={4} />
 {:else if forbidden}
 	<p class="lock"><Icon name="lock" size={16} /> Немає доступу</p>
 {:else if error && !data}
@@ -64,16 +66,15 @@
 	<div class="kpis">
 		<StatCard label="Об'єктів" value={t.objects} icon="building" />
 		<StatCard label="З генератором" value={t.with_generator} icon="bolt" tone="good" />
-		<StatCard label="З акумулятором" value={t.with_battery} icon="battery" />
-		<StatCard label="Тримають ≥ 24 год" value={t.hold_24h} icon="check" tone="good" />
+		<StatCard label="Тримаються ≥ 24 год" value={t.hold_24h} icon="check" tone="good" />
 		<StatCard label="Менше 4 год" value={t.under_4h} icon="alert" tone={t.under_4h > 0 ? 'warn' : 'good'} />
 	</div>
 
 	<div class="fbar">
 		<label class="sel">
 			<Icon name="building" size={16} />
-			<select bind:value={dept} aria-label="Департамент">
-				<option value="">Усі департаменти</option>
+			<select bind:value={dept} aria-label="Розпорядник">
+				<option value="">Усі розпорядники</option>
 				{#each DEPARTMENTS as d (d)}<option value={d}>{d}</option>{/each}
 			</select>
 		</label>
@@ -89,9 +90,9 @@
 				<thead>
 					<tr>
 						<th>Об'єкт</th>
-						<th class="num">Акум., кВт·год</th>
+						<th class="num">Акумулятор, кВт·год</th>
 						<th class="num">Генератор, кВт</th>
-						<th class="hcol">Годин автономії</th>
+						<th class="hcol">Години</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -106,7 +107,6 @@
 							<td class="num">
 								{#if r.generator_kw}
 									{num(r.generator_kw, 1)}
-									{#if r.generator_source === 'МОК'}<span class="mok sm">МОК</span>{/if}
 								{:else}—{/if}
 							</td>
 							<td class="hcol">
@@ -153,15 +153,11 @@
 		border: 1px dashed #d08a1c;
 		cursor: help;
 	}
-	.mok.sm {
-		padding: 0 0.4rem;
-		font-size: 0.65rem;
-		margin-left: 0.3rem;
-	}
-	.upd {
-		display: inline-flex;
+	.ph-sub {
+		display: flex;
 		align-items: center;
 		gap: 0.3rem;
+		margin: 0.15rem 0 0;
 		font-size: 0.8125rem;
 		color: var(--muted);
 	}

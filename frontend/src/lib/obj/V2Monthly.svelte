@@ -2,21 +2,26 @@
 <script lang="ts">
 	import type { MonthRow } from '#lib/api-v2.ts';
 	import { MONTHS, num } from '#lib/format.ts';
-	import Icon from '#lib/Icon.svelte';
+	import Disclosure from '#lib/Disclosure.svelte';
 
 	let { months, capacity = null }: { months: MonthRow[]; capacity?: number | null } = $props();
 
 	const rows = $derived(months ?? []);
 	const hasGen = $derived(rows.some((r) => r.gen_kwh != null));
 	const max = $derived(Math.max(1, ...rows.map((r) => Math.max(r.cons_kwh ?? 0, r.gen_kwh ?? 0))));
-	const avg = $derived(rows.length ? rows.reduce((a, r) => a + (r.cons_kwh ?? 0), 0) / rows.length : 0);
-	const sum = (k: 'gen_kwh' | 'saved_uah') => {
-		const key = k === 'gen_kwh' ? 'gen_kwh' : 'saved_uah';
-		const v = rows.map((r) => r[key]);
+	type NumKey = 'cons_kwh' | 'gen_kwh' | 'surplus_kwh' | 'grid_kwh';
+	const sum = (k: NumKey) => {
+		const v = rows.map((r) => r[k]);
 		return v.some((x) => x != null) ? v.reduce((a: number, x) => a + (x ?? 0), 0) : null;
 	};
-	const genYear = $derived(sum('gen_kwh'));
-	const savedYear = $derived(sum('saved_uah'));
+	const totals = $derived(
+		[
+			{ l: 'Σ спожито', v: sum('cons_kwh'), cls: 'cons' },
+			{ l: 'Σ згенеровано', v: sum('gen_kwh'), cls: 'gen' },
+			{ l: 'Надлишок', v: sum('surplus_kwh'), cls: 'sur' },
+			{ l: 'З мережі', v: sum('grid_kwh'), cls: 'grid' }
+		].filter((t) => t.v != null)
+	);
 	const curMonth = new Date().getMonth();
 
 	type Def = { key: keyof MonthRow; label: string; cls: string };
@@ -32,12 +37,11 @@
 	const h = (v: number | null | undefined) => `${Math.max(v ? 2 : 0, ((v ?? 0) / max) * 100)}%`;
 </script>
 
-<div class="panel mo">
+<div class="mo">
 	<div class="head tnum">
-		<p><span class="l">сер. спожито/міс</span> <b>{num(avg)}</b> <small>кВт·год</small></p>
-		{#if genYear != null}<p class="gen"><span class="l"><Icon name="sun" size={14} /> Σ згенеровано/рік</span> <b>{num(genYear)}</b> <small>кВт·год</small></p>{/if}
-		{#if savedYear != null}<p class="sav"><span class="l"><Icon name="wallet" size={14} /> Σ заощаджено/рік</span> <b>{num(savedYear)}</b> <small>грн</small></p>{/if}
-		{#if capacity != null && capacity > 0}<p class="bat"><span class="l"><Icon name="battery" size={14} /> акумулятор</span> <b>{num(capacity, 1)}</b> <small>кВт·год</small></p>{/if}
+		{#each totals as t (t.l)}
+			<p class={t.cls}><span class="l">{t.l}, за рік</span> <b>{num(t.v)}</b> <small>кВт·год</small></p>
+		{/each}
 	</div>
 
 	<div class="bars" role="img" aria-label="Споживання та генерація по місяцях, кВт·год">
@@ -61,6 +65,7 @@
 		{#if hasGen}<span><i class="sw gen"></i>Згенеровано</span><span><i class="sw bt"></i>Через акумулятор</span>{/if}
 	</p>
 
+	<Disclosure summary="Детально по місяцях">
 	<div class="scroll-x">
 		<table class="tbl tnum">
 			<thead>
@@ -82,11 +87,11 @@
 			</tbody>
 		</table>
 	</div>
+	</Disclosure>
 </div>
 
 <style>
 	.mo {
-		padding: 1rem;
 		display: grid;
 		gap: 0.8rem;
 		min-width: 0;
@@ -110,11 +115,11 @@
 	.head .gen b {
 		color: var(--sun-ink);
 	}
-	.head .sav b {
-		color: var(--ok);
+	.head .sur b {
+		color: var(--surplus-ink);
 	}
-	.head .bat b {
-		color: var(--bat, #6d4fc2);
+	.head .grid b {
+		color: var(--cons);
 	}
 	.l {
 		display: inline-flex;
@@ -132,7 +137,7 @@
 		display: grid;
 		grid-template-columns: repeat(12, 1fr);
 		gap: 0.25rem;
-		height: 150px;
+		height: 160px;
 	}
 	.col {
 		display: grid;
@@ -243,8 +248,9 @@
 		font-weight: 600;
 	}
 	@media (max-width: 640px) {
-		.mo {
-			padding: 0.75rem 0.6rem;
+		.head {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
 		}
 		.bars {
 			height: 120px;

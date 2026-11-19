@@ -32,16 +32,14 @@
 
 	let dept = $state('');
 	let onlyShort = $state(false);
-	let onlyOff = $state(false);
 
 	const t = $derived(data?.totals);
 	const restricted = $derived(!!data && data.items.length === 0);
 	const items = $derived(
 		(data?.items ?? [])
-			.filter((i) => (!dept || i.department === dept) && (!onlyShort || !i.enough) && (!onlyOff || i.status === 'offline'))
+			.filter((i) => (!dept || i.department === dept) && (!onlyShort || !i.enough))
 			.sort((a, b) => a.balance_kwh - b.balance_kwh)
 	);
-	const reserve = $derived(t ? t.available_kwh - t.demand_left_kwh : 0);
 	const gridTone = $derived(!t ? 'neutral' : t.grid_kw > 0 ? 'warn' : 'good');
 	const nf = (v: number | null | undefined, d = 1) => num(v, d);
 </script>
@@ -49,15 +47,17 @@
 <svelte:head><title>Розподіл енергії · Insight Tool</title></svelte:head>
 
 <header class="page-head">
-	<h1>Розподіл енергії</h1>
+	<div class="ph-text">
+		<h1>Розподіл енергії зараз</h1>
+		{#if data}<p class="ph-sub"><Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}</p>{/if}
+	</div>
 	<div class="head-side">
 		<span class="mok" title="Дані інверторів підключаться через API">МОК</span>
-		{#if data}<span class="upd"><Icon name="clock" size={14} /> {dateTime(data.updated_at)}</span>{/if}
 	</div>
 </header>
 
 {#if loading && !data}
-	<Skeleton variant="kpis" count={5} />
+	<Skeleton variant="kpis" count={4} />
 {:else if error && !data}
 	<Status {error} retry={load} />
 {:else if data && t}
@@ -65,37 +65,23 @@
 		<StatCard label="Генерація зараз" value={t.gen_kw} decimals={1} unit="кВт" icon="sun" tone="good" />
 		<StatCard label="Навантаження" value={t.load_kw} decimals={1} unit="кВт" icon="bolt" />
 		<StatCard
-			label={t.grid_kw > 0 ? 'З мережі (купуємо)' : 'У мережу (віддаємо)'}
+			label={t.grid_kw > 0 ? 'Мережа (купуємо)' : 'Мережа (віддаємо)'}
 			value={Math.abs(t.grid_kw)}
 			decimals={1}
 			unit="кВт"
 			icon="plug"
 			tone={gridTone}
 		/>
-		<StatCard label="СЕС онлайн" value={t.online} icon="check" tone="good">
-			<span class="off" class:zero={t.offline === 0}><span class="dot off-dot"></span>{t.offline} офлайн</span>
-		</StatCard>
-		<StatCard label="В акумуляторах" value={t.battery_kwh_now} decimals={0} unit="кВт·год" icon="battery" />
+		<StatCard
+			label="Баланс до кінця дня"
+			value={t.balance_kwh}
+			decimals={0}
+			unit="кВт·год"
+			icon={t.enough ? 'check' : 'alert'}
+			tone={t.enough ? 'good' : 'bad'}
+			format={(n) => signed(n, 0)}
+		/>
 	</div>
-
-	<section class="card bal" class:short={!t.enough} aria-label="Баланс до кінця дня">
-		<div class="bal-sign" aria-hidden="true">{t.enough ? '+' : '−'}</div>
-		<div class="bal-main">
-			<div class="bal-title">Доступно до кінця дня</div>
-			<div class="bal-row">
-				<span class="bal-n">{num(t.available_kwh, 0)}</span>
-				<span class="vs">vs</span>
-				<span class="bal-n dem">{num(t.demand_left_kwh, 0)}</span>
-				<span class="u">кВт·год</span>
-			</div>
-			<div class="bal-sub">
-				<span class="pillb" class:ok={t.enough} class:bad={!t.enough}>
-					{t.enough ? 'Вистачає' : 'Не вистачає'} · {signed(t.balance_kwh, 0)} кВт·год
-				</span>
-				<span class="res">Запас {signed(reserve, 0)}</span>
-			</div>
-		</div>
-	</section>
 
 	{#if restricted}
 		<a class="lock" href="/login?next={encodeURIComponent(page.url.pathname)}">
@@ -105,16 +91,13 @@
 		<div class="fbar">
 			<label class="sel">
 				<Icon name="building" size={16} />
-				<select bind:value={dept} aria-label="Департамент">
-					<option value="">Усі департаменти</option>
+				<select bind:value={dept} aria-label="Розпорядник">
+					<option value="">Усі розпорядники</option>
 					{#each DEPARTMENTS as d (d)}<option value={d}>{d}</option>{/each}
 				</select>
 			</label>
 			<button type="button" class="chip" aria-pressed={onlyShort} onclick={() => (onlyShort = !onlyShort)}>
-				<Icon name="alert" size={15} /> Не вистачає
-			</button>
-			<button type="button" class="chip" aria-pressed={onlyOff} onclick={() => (onlyOff = !onlyOff)}>
-				<span class="dot off-dot"></span> Офлайн
+				<Icon name="alert" size={15} /> Лише проблемні
 			</button>
 			<span class="found"><b>{items.length}</b> / {data.items.length}</span>
 		</div>
@@ -125,11 +108,9 @@
 					<thead>
 						<tr>
 							<th>Об'єкт</th>
-							<th class="num">Ген., кВт</th>
-							<th class="num">Нав., кВт</th>
-							<th class="num">Мережа, кВт</th>
-							<th class="num">SOC</th>
-							<th class="num">Пік, кВт</th>
+							<th class="num">Генерація, кВт</th>
+							<th class="num">Навантаження, кВт</th>
+							<th class="num">Заряд</th>
 							<th class="num">Баланс, кВт·год</th>
 						</tr>
 					</thead>
@@ -137,7 +118,7 @@
 						{#each items as r (r.id)}
 							<tr>
 								<td><div class="tn">
-									<span class="dot" class:on={r.status === 'online'} class:off-dot={r.status !== 'online'} title={r.status}></span>
+									<span class="dot" class:off-dot={r.status !== 'online'} title={r.status}></span>
 									<span class="nm">
 										<a href="/object/{r.id}">{r.name}</a>
 										<small>{r.department}</small>
@@ -145,13 +126,11 @@
 								</div></td>
 								<td class="num">{nf(r.gen_kw)}</td>
 								<td class="num">{nf(r.load_kw)}</td>
-								<td class="num" class:buy={r.grid_kw > 0} class:give={r.grid_kw < 0}>{signed(r.grid_kw)}</td>
 								<td class="num">{r.soc_pct == null ? '—' : `${num(r.soc_pct, 0)} %`}</td>
-								<td class="num">{nf(r.peak_kw)}</td>
 								<td class="num bal-c" class:neg={r.balance_kwh < 0} class:pos={r.balance_kwh >= 0}>{signed(r.balance_kwh, 0)}</td>
 							</tr>
 						{:else}
-							<tr><td colspan="7" class="empty">—</td></tr>
+							<tr><td colspan="5" class="empty">—</td></tr>
 						{/each}
 					</tbody>
 				</table>
@@ -172,6 +151,14 @@
 	.page-head h1 {
 		margin: 0;
 	}
+	.ph-sub {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin: 0.15rem 0 0;
+		font-size: 0.8125rem;
+		color: var(--muted);
+	}
 	.head-side {
 		display: flex;
 		align-items: center;
@@ -188,30 +175,12 @@
 		border: 1px dashed #d08a1c;
 		cursor: help;
 	}
-	.upd {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
-		font-size: 0.8125rem;
-		color: var(--muted);
-	}
 	.kpis {
 		--fs-stat: 1.85rem;
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
 		gap: 0.75rem;
 		margin-bottom: 1.1rem;
-	}
-	.off {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		font-weight: 700;
-		color: var(--deficit-ink, #9a330a);
-		font-size: 0.9rem;
-	}
-	.off.zero {
-		color: var(--muted);
 	}
 	.dot {
 		display: inline-block;
@@ -227,85 +196,6 @@
 	}
 
 	/* Баланс */
-	.bal {
-		display: flex;
-		align-items: center;
-		gap: 1.25rem;
-		margin: 0 0 1.1rem;
-		padding: 1.1rem 1.4rem;
-		border-left: 6px solid #1f8a4c;
-	}
-	.bal.short {
-		border-left-color: #c2410c;
-	}
-	.bal-sign {
-		display: grid;
-		place-items: center;
-		width: 4.5rem;
-		height: 4.5rem;
-		flex: none;
-		border-radius: 50%;
-		font-size: 3.2rem;
-		font-weight: 800;
-		line-height: 1;
-		background: #e3f4ea;
-		color: #1f8a4c;
-	}
-	.short .bal-sign {
-		background: #fdebe2;
-		color: #c2410c;
-	}
-	.bal-title {
-		font-weight: 600;
-		color: var(--text-2);
-		font-size: 0.95rem;
-	}
-	.bal-row {
-		display: flex;
-		align-items: baseline;
-		flex-wrap: wrap;
-		gap: 0.2rem 0.6rem;
-	}
-	.bal-n {
-		font-size: 2.2rem;
-		font-weight: 700;
-		color: var(--ink);
-		font-variant-numeric: tabular-nums;
-	}
-	.bal-n.dem {
-		color: var(--muted);
-	}
-	.vs,
-	.u {
-		color: var(--muted);
-		font-weight: 600;
-	}
-	.bal-sub {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 0.6rem;
-		margin-top: 0.35rem;
-	}
-	.pillb {
-		padding: 0.15rem 0.7rem;
-		border-radius: 999px;
-		font-weight: 700;
-		font-size: 0.875rem;
-	}
-	.pillb.ok {
-		background: #e3f4ea;
-		color: #14632b;
-	}
-	.pillb.bad {
-		background: #fdebe2;
-		color: #9a330a;
-	}
-	.res {
-		color: var(--muted);
-		font-size: 0.875rem;
-		font-variant-numeric: tabular-nums;
-	}
 	.lock {
 		display: inline-flex;
 		align-items: center;
@@ -431,12 +321,6 @@
 		color: var(--muted);
 		font-size: 0.75rem;
 	}
-	.buy {
-		color: #9a330a;
-	}
-	.give {
-		color: #1f6fd1;
-	}
 	.bal-c {
 		font-weight: 700;
 	}
@@ -454,18 +338,6 @@
 		.kpis {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 			gap: 0.6rem;
-		}
-		.bal {
-			padding: 0.9rem;
-			gap: 0.8rem;
-		}
-		.bal-sign {
-			width: 3.2rem;
-			height: 3.2rem;
-			font-size: 2.3rem;
-		}
-		.bal-n {
-			font-size: 1.6rem;
 		}
 	}
 </style>

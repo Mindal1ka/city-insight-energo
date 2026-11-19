@@ -6,7 +6,7 @@
 	import ObjRing from './ObjRing.svelte';
 	import type { ObjDetail } from './ObjApi.ts';
 
-	let { d, showSes = true }: { d: ObjDetail; showSes?: boolean } = $props();
+	let { d, showSes = true, investOnly = false }: { d: ObjDetail; showSes?: boolean; investOnly?: boolean } = $props();
 
 	const f = $derived(d.finance);
 	const c = $derived(d.costs);
@@ -31,7 +31,8 @@
 </script>
 
 <div class="fin">
-	<!-- Мережа: завжди, якщо є споживання -->
+	<!-- Мережа: завжди, якщо є споживання (investOnly — лише вкладено й окупність) -->
+	{#if !investOnly}
 	<div class="card grid-cost">
 		<p class="h"><span class="ic grid" aria-hidden="true"><Icon name="plug" size={18} /></span>Витрачено на е/е з мережі</p>
 		<div class="pair">
@@ -41,7 +42,10 @@
 		{#if f?.tariff_uah_kwh}<p class="foot tnum">{num(f.tariff_uah_kwh, 2)} грн/кВт·год</p>{/if}
 	</div>
 
+	{/if}
+
 	{#if showSes && d.ses}
+		{#if !investOnly}
 		<div class="card saved">
 			<p class="h"><span class="ic good" aria-hidden="true"><Icon name="wallet" size={18} /></span>Заощаджено завдяки СЕС</p>
 			<div class="pair three">
@@ -50,6 +54,7 @@
 				<div><span class="v tnum strong"><CountUp value={f?.saved_uah.since_launch ?? null} /></span><small>з запуску</small></div>
 			</div>
 		</div>
+		{/if}
 
 		{#if hasCosts}
 			<div class="card invest">

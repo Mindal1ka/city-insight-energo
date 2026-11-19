@@ -180,7 +180,7 @@
 		padding: 0;
 		display: grid;
 		gap: 2px;
-		max-height: 220px;
+		max-height: 140px;
 		overflow-y: auto;
 	}
 	.mem li {

@@ -47,25 +47,25 @@
 		});
 	});
 
-	type NavItem = { href: string; label: string; short: string; icon: 'building' | 'gauge' | 'sun'; map?: boolean };
+	type NavItem = { href: string; label: string; short: string; icon: 'building' | 'gauge' | 'wallet' | 'chart'; map?: boolean };
 	// Основні розділи (PLAN_v3)
 	const primary: NavItem[] = [
+		{ href: '/dashboard', label: 'Огляд', short: 'Огляд', icon: 'gauge' },
 		{ href: '/', label: 'Мапа', short: 'Мапа', icon: 'building', map: true },
-		{ href: '/dashboard', label: 'Дашборд', short: 'Дашборд', icon: 'gauge' },
 		{ href: '/objects', label: 'Об’єкти', short: 'Об’єкти', icon: 'building' },
-		{ href: '/energy', label: 'Розподіл', short: 'Розподіл', icon: 'sun' },
-		{ href: '/finance', label: 'Фінанси', short: 'Фінанси', icon: 'gauge' }
+		{ href: '/finance', label: 'Фінанси', short: 'Фінанси', icon: 'wallet' },
+		{ href: '/report', label: 'Звіт', short: 'Звіт', icon: 'chart' }
 	];
 	const tabs = primary;
 
-	// Аналітика: частина пунктів — лише для службових ролей
+	// «Ще»: частина пунктів — лише для службових ролей
 	type Analytic = { href: string; label: string; only?: 'internal' | 'upload' | 'citywide' };
 	const ANALYTICS: Analytic[] = [
+		{ href: '/energy', label: 'Розподіл енергії' },
 		{ href: '/network', label: 'Баланс мережі' },
-		{ href: '/report', label: 'Звіт за місяць' },
+		{ href: '/blackout', label: 'Блекаут', only: 'citywide' },
 		{ href: '/appeals', label: 'Звернення', only: 'internal' },
 		{ href: '/overview', label: 'Споживання' },
-		{ href: '/blackout', label: 'Блекаут', only: 'citywide' },
 		{ href: '/upload', label: 'Оновити дані', only: 'upload' }
 	];
 	const analytics = $derived(
@@ -178,7 +178,7 @@
 	let dragY = $state(0);
 	let dragging = $state(false);
 	const tabIndex = $derived.by(() => {
-		if (sheetOpen || analyticsActive) return 4;
+		if (sheetOpen || analyticsActive) return tabs.length;
 		return tabs.findIndex((t) => isActive(t.href));
 	});
 
@@ -258,8 +258,8 @@
 			hl: ['/']
 		},
 		{
-			title: 'Дашборд і об’єкти',
-			text: 'Фільтри за класом, типом закладу й періодом. Пошук — Ctrl K.',
+			title: 'Огляд і об’єкти',
+			text: 'Огляд — головні цифри громади. Пошук — Ctrl K.',
 			hl: ['/dashboard', '/objects', 'search']
 		},
 		{
@@ -485,12 +485,12 @@
 					onkeydown={menuBtnKey}
 				>
 					<Icon name="chart" size={18} />
-					<span>Аналітика{#if analyticsActive}<span class="dd-cur">: {analyticsActive.label}</span>{/if}</span>
+					<span>Ще{#if analyticsActive}<span class="dd-cur">: {analyticsActive.label}</span>{/if}</span>
 					<svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
 						<path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
 					</svg>
 				</button>
-				<span class="dd-mobile-label" aria-hidden="true"><Icon name="chart" size={16} /> Аналітика</span>
+				<span class="dd-mobile-label" aria-hidden="true"><Icon name="chart" size={16} /> Ще</span>
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions (стрілки між посиланнями меню) -->
 				<ul
 					id="nav-analytics"
@@ -590,7 +590,7 @@
 			</div>
 
 			<div class="sheet-body">
-				<p class="sheet-label"><Icon name="chart" size={16} /> Аналітика</p>
+				<p class="sheet-label"><Icon name="chart" size={16} /> Ще</p>
 				<ul class="sheet-list">
 					{#each analytics as item (item.href)}
 						<li>
@@ -1546,7 +1546,7 @@
 			bottom: 0;
 			z-index: 40;
 			display: grid;
-			grid-template-columns: repeat(5, minmax(0, 1fr));
+			grid-template-columns: repeat(6, minmax(0, 1fr));
 			height: var(--tabbar-h, 64px);
 			padding: 0 var(--safe-r, 0px) var(--safe-b, 0px) var(--safe-l, 0px);
 			background: rgba(255, 255, 255, 0.92);
@@ -1615,7 +1615,7 @@
 			position: absolute;
 			top: 8px;
 			left: var(--safe-l, 0px);
-			width: calc((100% - var(--safe-l, 0px) - var(--safe-r, 0px)) / 5);
+			width: calc((100% - var(--safe-l, 0px) - var(--safe-r, 0px)) / 6);
 			height: 30px;
 			display: grid;
 			place-items: center;
