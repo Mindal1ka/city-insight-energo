@@ -1,5 +1,5 @@
 <script lang="ts">
-	// «Що зробити»: індекс енергонезалежності одним реченням, кроки (перший — головний),
+	// «Що зробити»: індекс енергостійкості одним реченням, кроки (перший — головний),
 	// а «чому такий індекс» і формула — у «Детальніше».
 	import {
 		duration,
@@ -32,6 +32,17 @@
 		return [parts[0] ?? t, parts.slice(1).join(' ')];
 	}
 
+	/** Мала добудова СЕС дорожча на 1 кВт: у вартість входять фіксовані витрати на підключення */
+	function perKwNote(s: Improvement): string | null {
+		if (!s.cost_uah || !/СЕС|сонячн/i.test(s.action)) return null;
+		const m = s.action.match(/(\d+(?:[.,]\d+)?)\s*кВт(?!·)/);
+		const kw = m ? Number.parseFloat(m[1].replace(',', '.')) : 0;
+		if (!(kw > 0)) return null;
+		const per = s.cost_uah / kw;
+		if (per < 40000) return null;
+		return `≈ ${money(per)} за 1 кВт — включно з фіксованими витратами на підключення ≈ 60 000 грн, тому малі доповнення дорожчі на кВт, ніж нова станція.`;
+	}
+
 	const indexText = $derived.by(() => {
 		if (it.data_ok === false) return 'Індекс не розраховано — бракує даних про споживання.';
 		if (it.index_class === 'відсутня') return 'Резерв не зафіксовано: у даних немає ні сонячної станції, ні акумулятора.';
@@ -41,12 +52,12 @@
 	});
 </script>
 
-<section class="panel ic" aria-label="Енергонезалежність і що зробити">
+<section class="panel ic" aria-label="Індекс енергостійкості і що зробити">
 	<div class="ic-head">
 		<IndexBadge index={it.index} cls={it.index_class} size="lg" />
 		<div class="ic-title">
 			<p class="ic-k">
-				<Term key="енергонезалежність">Енергонезалежність</Term> — {it.index} зі 100
+				<Term key="індекс енергостійкості">Індекс енергостійкості</Term> — {it.index} зі 100
 			</p>
 			<p class="ic-t">{indexText}</p>
 		</div>
@@ -73,6 +84,8 @@
 									<div><dt>Окупність</dt><dd class="soft">не про гроші — про безпеку</dd></div>
 								{/if}
 							</dl>
+							{@const note = perKwNote(s)}
+							{#if note}<p class="per-kw"><Icon name="info" size={14} /> <span>{note}</span></p>{/if}
 						{/if}
 					</div>
 				</li>
@@ -240,6 +253,20 @@
 		font-size: 0.875rem;
 		color: var(--muted);
 	}
+	.per-kw {
+		display: flex;
+		gap: 0.35rem;
+		align-items: flex-start;
+		margin: 0.4rem 0 0;
+		font-size: 0.8125rem;
+		line-height: 1.4;
+		color: var(--muted);
+		max-width: 60ch;
+	}
+	.per-kw :global(.icon) {
+		flex: none;
+		margin-top: 0.15rem;
+	}
 	.facts {
 		display: flex;
 		flex-wrap: wrap;
@@ -329,6 +356,39 @@
 		padding-left: 1.2rem;
 		display: grid;
 		gap: 0.2rem;
+	}
+	/* Телефон: щільніше, кроки на всю ширину */
+	@media (max-width: 640px) {
+		.ic {
+			gap: 1rem;
+		}
+		.ic-head {
+			gap: 0.6rem 0.75rem;
+		}
+		.ic-head :global(.ib.lg) {
+			font-size: 1.05rem;
+		}
+		.ic-t {
+			font-size: 1.05rem;
+		}
+		.step {
+			gap: 0.65rem;
+			padding: 0.85rem 0.8rem;
+		}
+		.no {
+			width: 1.75rem;
+			height: 1.75rem;
+			font-size: 0.9rem;
+		}
+		.act {
+			font-size: 1rem;
+		}
+		.more-row :global(.btn) {
+			width: 100%;
+			justify-content: center;
+			white-space: normal;
+			text-align: center;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.step,

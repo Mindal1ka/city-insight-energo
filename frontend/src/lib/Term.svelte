@@ -31,6 +31,8 @@
 	let btn = $state<HTMLButtonElement>();
 	let tip = $state<HTMLSpanElement>();
 	let pos = $state({ left: 0, top: 0, above: false, arrow: 16 });
+	// Сенсорний телефон: підказка стає нижнім аркушем на всю ширину
+	let sheet = $state(false);
 
 	let enterTimer: ReturnType<typeof setTimeout> | undefined;
 	let leaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -80,6 +82,8 @@
 
 	function place() {
 		if (!btn || !tip) return;
+		sheet = window.matchMedia('(hover: none) and (max-width: 768px)').matches;
+		if (sheet) return;
 		const r = btn.getBoundingClientRect();
 		const w = tip.offsetWidth;
 		const h = tip.offsetHeight;
@@ -136,10 +140,11 @@
 		class="term-tip"
 		class:open
 		class:above={pos.above}
-		style="left:{pos.left}px; top:{pos.top}px; --arrow:{pos.arrow}px"
+		class:sheet
+		style={sheet ? undefined : `left:${pos.left}px; top:${pos.top}px; --arrow:${pos.arrow}px`}
 		onpointerenter={pointerEnter}
 		onpointerleave={pointerLeave}
-		><span class="t">{entry.term}</span><span class="d">{entry.text}</span
+		>{#if sheet}<span class="grab" aria-hidden="true"></span>{/if}<span class="t">{entry.term}</span><span class="d">{entry.text}</span
 		>{#if entry.example}<span class="e"><b>Наприклад:</b> {entry.example}</span>{/if}</span
 	>{:else}{#if children}{@render children()}{:else}{key}{/if}{/if}
 
@@ -164,6 +169,17 @@
 	}
 	.term:hover {
 		text-decoration-color: currentColor;
+	}
+	/* Палець: більша зона дотику без зміни вигляду */
+	@media (pointer: coarse) {
+		.term {
+			position: relative;
+		}
+		.term::after {
+			content: '';
+			position: absolute;
+			inset: -10px -6px;
+		}
 	}
 	.q {
 		display: inline-grid;
@@ -234,7 +250,48 @@
 		color: #c9d6e6;
 		font-size: 0.875rem;
 	}
+	/* Телефон: нижній аркуш */
+	.term-tip.sheet {
+		left: 0;
+		right: 0;
+		bottom: 0;
+		top: auto;
+		width: auto;
+		max-width: none;
+		max-height: 60dvh;
+		overflow-y: auto;
+		gap: 0.4rem;
+		padding: 0.5rem calc(1.25rem + env(safe-area-inset-right, 0px)) calc(1.25rem + env(safe-area-inset-bottom, 0px)) calc(1.25rem + env(safe-area-inset-left, 0px));
+		border-radius: 22px 22px 0 0;
+		font-size: 1rem;
+		line-height: 1.5;
+		box-shadow:
+			0 -20px 50px -16px rgba(8, 20, 38, 0.6),
+			0 0 0 100vmax rgba(8, 20, 38, 0.28);
+	}
+	.term-tip.sheet::before {
+		display: none;
+	}
+	.grab {
+		align-self: center;
+		width: 40px;
+		height: 5px;
+		margin: 0.15rem 0 0.5rem;
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.28);
+	}
+	.term-tip.sheet .t {
+		font-size: 1.1rem;
+	}
 	@media (prefers-reduced-motion: no-preference) {
+		.term-tip.sheet.open {
+			animation: tip-sheet 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+		}
+		@keyframes tip-sheet {
+			from {
+				transform: translateY(100%);
+			}
+		}
 		.term-tip.open {
 			animation: tip-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 		}

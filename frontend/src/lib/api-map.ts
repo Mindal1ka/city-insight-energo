@@ -5,6 +5,7 @@
 // сонячний ПОТЕНЦІАЛ даху та якість даних. normalize() пропускає тільки дозволені поля —
 // навіть якщо бекенд колись віддасть щось зайве, на мапу воно не потрапить.
 
+import { catLabel } from './categories.ts';
 import { getJSON, ApiError, api, type Building } from '#lib/api.ts';
 import { num } from '#lib/format.ts';
 
@@ -68,12 +69,12 @@ const G = {
 };
 
 export const CATEGORIES: CategoryMeta[] = [
-	{ key: 'Заклади освіти', label: 'Школи', color: '#0072B2', ink: '#fff', glyph: G.triangle, shape: 'трикутник' },
-	{ key: 'Дошкільні заклади', label: 'Дитсадки', color: '#E69F00', ink: '#3b2600', glyph: G.circle, shape: 'коло' },
-	{ key: "Охорона здоров'я", label: 'Медицина', color: '#D55E00', ink: '#fff', glyph: G.plus, shape: 'хрестик' },
-	{ key: 'Громадські будівлі', label: 'Громадські будівлі', color: '#7E4BA0', ink: '#fff', glyph: G.square, shape: 'квадрат' },
-	{ key: 'Спортивні споруди', label: 'Спорт', color: '#009E73', ink: '#fff', glyph: G.diamond, shape: 'ромб' },
-	{ key: 'Житлові будинки', label: 'Житло', color: '#56B4E9', ink: '#0b2a40', glyph: G.house, shape: 'будиночок' }
+	{ key: 'Заклади освіти', label: catLabel('Заклади освіти'), color: '#0072B2', ink: '#fff', glyph: G.triangle, shape: 'трикутник' },
+	{ key: 'Дошкільні заклади', label: catLabel('Дошкільні заклади'), color: '#E69F00', ink: '#3b2600', glyph: G.circle, shape: 'коло' },
+	{ key: "Охорона здоров'я", label: catLabel("Охорона здоров'я"), color: '#D55E00', ink: '#fff', glyph: G.plus, shape: 'хрестик' },
+	{ key: 'Громадські будівлі', label: catLabel('Громадські будівлі'), color: '#7E4BA0', ink: '#fff', glyph: G.square, shape: 'квадрат' },
+	{ key: 'Спортивні споруди', label: catLabel('Спортивні споруди'), color: '#009E73', ink: '#fff', glyph: G.diamond, shape: 'ромб' },
+	{ key: 'Житлові будинки', label: catLabel('Житлові будинки'), color: '#56B4E9', ink: '#0b2a40', glyph: G.house, shape: 'будиночок' }
 ];
 
 const OTHER: CategoryMeta = {
@@ -259,9 +260,10 @@ export function keyFigure(p: MapPoint, colorBy: ColorBy): { value: string; unit:
 		};
 	}
 	const e = p.elec_kwh_2025;
-	if (e === null) return { value: '—', unit: '', label: 'немає даних про споживання за 2025 рік' };
-	if (e >= 10000) return { value: num(e / 1000, e >= 100000 ? 0 : 1), unit: 'МВт·год', label: 'електроенергії за 2025 рік' };
-	return { value: num(e), unit: 'кВт·год', label: 'електроенергії за 2025 рік' };
+	if (e === null || e <= 0) return { value: '—', unit: '', label: 'немає даних про споживання за 2025 рік' };
+	// Одна одиниця для всього списку — МВт·год (не змішуємо з кВт·год)
+	const mwh = e / 1000;
+	return { value: num(mwh, mwh < 1 ? 2 : mwh < 100 ? 1 : 0), unit: 'МВт·год', label: 'електроенергії за 2025 рік' };
 }
 
 // ---------- Завантаження ----------

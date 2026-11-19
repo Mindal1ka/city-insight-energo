@@ -44,6 +44,10 @@
 		bounds?: LatLngBounds | null;
 		/** Підпис для читачів екрана */
 		label?: string;
+		/** false — не відкривати картку Leaflet (сторінка показує власну, напр. на телефоні) */
+		popup?: boolean;
+		/** Скільки пікселів знизу мапи закрито (шторка/картка): вибраний маркер центруємо у видимій частині */
+		padBottom?: number;
 	}
 
 	let {
@@ -57,8 +61,11 @@
 		height = '100%',
 		compact = false,
 		bounds = null,
-		label = 'Мапа комунальних об’єктів Полтавської громади'
+		label = 'Мапа комунальних об’єктів Полтавської громади',
+		popup: usePopup = true,
+		padBottom = 0
 	}: Props = $props();
+	const skipId = `cm-after-${Math.random().toString(36).slice(2, 8)}`;
 
 	const activeScale = $derived(scale === undefined ? buildScale(points, colorBy) : scale);
 	const visible = $derived(points.filter(hasCoords));
@@ -282,6 +289,14 @@
 		}
 		const ll = e.m.getLatLng();
 		const z = Math.max(map.getZoom(), compact ? 14 : 15.5);
+		if (!usePopup) {
+			// Без картки Leaflet: маркер — у центрі видимої частини (над шторкою)
+			map.closePopup();
+			const t = map.unproject(map.project(ll, z).add([0, padBottom / 2]), z);
+			if (reduced) map.setView(t, z, { animate: false });
+			else map.flyTo(t, z, { duration: 0.7, easeLinearity: 0.2 });
+			return;
+		}
 		// Маркер трохи нижче центру, щоб над ним вмістилася картка
 		const shift = compact ? 70 : 110;
 		const target = map.unproject(map.project(ll, z).subtract([0, shift]), z);
@@ -390,6 +405,10 @@
 				if (b) map.fitBounds(b, { padding: compact ? [16, 16] : [36, 36], animate: false });
 				else map.setView(POLTAVA, 12, { animate: false });
 				map.on('zoomend', zoomScale);
+				// Без карток Leaflet дотик по порожній мапі знімає вибір
+				map.on('click', () => {
+					if (!usePopup && current !== null) choose(null);
+				});
 				zoomScale();
 				ro.observe(el);
 				ready = true;
@@ -438,6 +457,14 @@
 </script>
 
 <div class="cm-root" class:compact style:height>
+	<a
+		class="cm-skip"
+		href="#{skipId}"
+		onclick={(e) => {
+			e.preventDefault();
+			document.getElementById(skipId)?.focus();
+		}}>Пропустити мапу</a
+	>
 	<div
 		bind:this={el}
 		class="cm-map"
@@ -477,10 +504,11 @@
 		</div>
 		<ul class="cm-sr">
 			{#each srList as p (p.id)}
-				<li><a href="/object/{p.id}">{p.name}, {p.address}</a></li>
+				<li><a href="/object/{p.id}" tabindex="-1">{p.name}, {p.address}</a></li>
 			{/each}
 		</ul>
 	{/if}
+	<span id={skipId} class="cm-after" tabindex="-1"></span>
 </div>
 
 <style>
@@ -891,6 +919,37 @@
 		background: transparent !important;
 		border: 1.5px dashed var(--muted);
 		box-shadow: none !important;
+	}
+	.cm-skip {
+		position: absolute;
+		z-index: 1100;
+		top: 8px;
+		left: 8px;
+		padding: 0.45rem 0.8rem;
+		border-radius: 10px;
+		background: var(--navy, #10325a);
+		color: #fff;
+		font-weight: 650;
+		text-decoration: none;
+		transform: translateY(-160%);
+		transition: transform 0.15s;
+	}
+	.cm-skip:focus-visible,
+	.cm-skip:focus {
+		transform: none;
+		outline: 3px solid var(--focus);
+	}
+	.cm-after {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		width: 1px;
+		height: 1px;
+		outline: none;
+	}
+	/* Нижні елементи Leaflet (авторство) — над шторкою/кутами, якщо сторінка задала відступ */
+	.cm-root :global(.leaflet-bottom) {
+		bottom: var(--cm-inset-b, 0px);
 	}
 	.cm-sr {
 		position: absolute;

@@ -39,7 +39,7 @@ export function isReduced(): boolean {
 export const DUR = { fast: 150, base: 240, slow: 420 } as const;
 
 /** Затримка для i-го елемента списку («драбинка»), з верхньою межею, щоб довгі списки не чекали */
-export function stagger(i: number, step = 40, max = 400): number {
+export function stagger(i: number, step = 35, max = 280): number {
 	return isReduced() ? 0 : Math.min(i * step, max);
 }
 

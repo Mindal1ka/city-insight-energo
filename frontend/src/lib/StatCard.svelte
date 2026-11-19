@@ -70,6 +70,10 @@
 		bad: 'погано'
 	};
 	const srTone = $derived(toneLabel ?? TONE_TEXT[tone]);
+
+	// На телефоні пояснення обрізане до 2 рядків — дотик по картці розгортає його
+	// (екранні зчитувачі завжди отримують повний текст: обрізання лише візуальне)
+	let open = $state(false);
 </script>
 
 {#snippet body()}
@@ -113,7 +117,8 @@
 {#if href}
 	<a class="sc tone-{tone} is-link" {href}>{@render body()}</a>
 {:else}
-	<div class="sc tone-{tone}">{@render body()}</div>
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (лише візуальне розгортання підказки) -->
+	<div class="sc tone-{tone}" class:open onclick={() => hint && (open = !open)}>{@render body()}</div>
 {/if}
 
 <style>
@@ -208,7 +213,7 @@
 		align-self: flex-start;
 		padding: 0.05rem 0.45rem;
 		border-radius: 999px;
-		font-size: 0.6875rem;
+		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.08em;
 		color: var(--sun-ink, #8a4f00);
@@ -280,6 +285,97 @@
 	}
 	.is-link .sc-hint {
 		padding-right: 2rem;
+	}
+	/* Сенсорні екрани без hover: стрілку посилання видно завжди */
+	@media (hover: none) {
+		.sc-go {
+			opacity: 0.6;
+			transform: none;
+		}
+		.sc:hover {
+			transform: none;
+		}
+	}
+	/* --- Телефон: компактна картка для сітки 2×N --- */
+	@media (max-width: 640px) {
+		.sc {
+			gap: 0.4rem;
+			padding: 12px 12px 12px;
+			border-radius: 14px;
+		}
+		.sc:hover {
+			transform: none;
+		}
+		.sc-top {
+			gap: 0.45rem;
+			align-items: flex-start;
+		}
+		.sc-ico {
+			width: 1.75rem;
+			height: 1.75rem;
+			border-radius: 8px;
+		}
+		.sc-ico :global(svg) {
+			width: 16px;
+			height: 16px;
+		}
+		.sc-label {
+			font-size: 0.8125rem;
+			line-height: 1.25;
+			align-self: center;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+		}
+		.sc-demo {
+			font-size: 0.75rem;
+			padding: 0 0.35rem;
+			letter-spacing: 0.04em;
+		}
+		.sc-num {
+			font-size: var(--fs-stat, 1.6rem);
+		}
+		.sc-unit {
+			font-size: 0.8125rem;
+		}
+		.sc-tone {
+			width: 1.25rem;
+			height: 1.25rem;
+		}
+		.sc-tone :global(svg) {
+			width: 14px;
+			height: 14px;
+		}
+		.sc-hint {
+			font-size: 0.8125rem;
+			line-height: 1.4;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+		}
+		.open .sc-hint {
+			-webkit-line-clamp: unset;
+			line-clamp: none;
+		}
+		.sc-go {
+			right: 8px;
+			bottom: 8px;
+			width: 1.5rem;
+			height: 1.5rem;
+			opacity: 0.85;
+			transform: none;
+		}
+		.sc-go svg {
+			width: 14px;
+			height: 14px;
+		}
+		.is-link .sc-hint {
+			padding-right: 1.5rem;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.sc,

@@ -5,6 +5,7 @@
 	import { api, errMessage, ApiError, type BuildingFull, type Building } from '#lib/api.ts';
 	import { num, pct, scaleKwh, plural } from '#lib/format.ts';
 	import { classInfo } from '#lib/classes.ts';
+	import { catLabel } from '#lib/categories.ts';
 	import ClassBadge from '#lib/ClassBadge.svelte';
 	import CompareBar from '#lib/CompareBar.svelte';
 	import Status from '#lib/Status.svelte';
@@ -89,14 +90,14 @@
 {#if b && !loading}
 	<div class="page-head">
 		<div>
-			<p class="kicker">Паспорт даних · {b.category_short}</p>
+			<p class="kicker">Паспорт даних · {catLabel(b.category_short)}</p>
 			<h1>{b.name}</h1>
 			<p class="lead">{b.address}</p>
-			<p class="lead plain">Усе, що відомо про будівлю з даних <Term key="UMUNI" plain />: скільки електрики вона витрачає і як це порівняно зі схожими будівлями.</p>
+			<p class="lead plain hide-phone">Усе, що відомо про будівлю з даних <Term key="UMUNI" plain />: скільки електрики вона витрачає і як це порівняно зі схожими будівлями.</p>
 		</div>
 		<div class="actions no-print">
 			<a class="btn" href="/object/{b.id}"><Icon name="sun" size={18} /> Сонце й автономність</a>
-			<button type="button" class="btn btn-secondary" onclick={() => window.print()}>Друк / PDF</button>
+			<button type="button" class="btn btn-secondary hide-phone" onclick={() => window.print()}>Друк / PDF</button>
 		</div>
 	</div>
 
@@ -129,13 +130,13 @@
 		</Reveal>
 		<Reveal delay={140}>
 			<StatCard
-				label="Місце в рейтингу"
+				label="Черга на перевірку"
 				value={er && !er.excluded ? er.rank : null}
 				icon="chart"
 				unit={er && !er.excluded ? `з ${er.rankOf}` : ''}
 				href={er && !er.excluded ? `/rating?cat=${encodeURIComponent(b.category_short)}` : undefined}
 				hint={er && !er.excluded
-					? '1 — та, що витрачає найбільше на 1 м² серед схожих.'
+					? '№ 1 — та, що витрачає найбільше на 1 м² серед схожих: її перевіряють першою.'
 					: 'Будівля поки не в рейтингу — причина нижче.'}
 			/>
 		</Reveal>
@@ -220,7 +221,7 @@
 						<dt>Рік забудови</dt>
 						<dd>{b.year_built ?? 'не вказано'}</dd>
 						<dt>На карті</dt>
-						<dd>{b.has_coords ? 'так' : 'ні — немає координат'}</dd>
+						<dd>{b.has_coords ? 'так' : 'так, за адресою (координат немає в UMUNI)'}</dd>
 						<dt>Номер у UMUNI</dt>
 						<dd>{b.id > 0 ? b.id : 'немає в реєстрі будівель'}</dd>
 						{#each years as y (y)}
@@ -471,6 +472,64 @@
 	}
 	.print-only {
 		display: none;
+	}
+	/* Сенсорні екрани: «До рейтингу» — ціль ≥ 40 px */
+	@media (max-width: 768px) {
+		.back {
+			margin-bottom: 0.25rem;
+		}
+		.back a {
+			min-height: 40px;
+		}
+	}
+	/* Телефон: компактний паспорт */
+	@media (max-width: 640px) {
+		.kicker {
+			font-size: 0.8125rem;
+		}
+		h1 {
+			font-size: 1.3rem;
+			line-height: 1.25;
+		}
+		.page-head .lead {
+			font-size: 0.9375rem;
+		}
+		.actions {
+			width: 100%;
+		}
+		.actions .btn {
+			flex: 1 1 auto;
+			justify-content: center;
+		}
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+			margin-bottom: 1rem;
+		}
+		.stats > :global(:last-child:nth-child(odd)) {
+			grid-column: 1 / -1;
+		}
+		.main {
+			margin-bottom: 0.875rem;
+		}
+		.years {
+			gap: 0.7rem;
+		}
+		.y-track {
+			height: 10px;
+		}
+		.attrs {
+			grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+			gap: 0.35rem 0.9rem;
+			font-size: 0.9375rem;
+		}
+		.dgroups li {
+			padding: 0.65rem 0.8rem;
+		}
+		.toggle {
+			min-height: 40px;
+			font-size: 0.9375rem;
+		}
 	}
 	@media print {
 		.print-only {

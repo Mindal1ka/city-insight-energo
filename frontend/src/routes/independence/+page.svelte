@@ -15,6 +15,7 @@
 		type IndependenceItem
 	} from '#lib/api-independence.ts';
 	import { num } from '#lib/format.ts';
+	import { catLabel } from '#lib/categories.ts';
 	import { viewFrom, withView } from '#lib/view.ts';
 	import { fadeUp, stagger, DUR, isReduced } from '#lib/motion.ts';
 	import Status from '#lib/Status.svelte';
@@ -28,6 +29,16 @@
 	import StatCard from '#lib/StatCard.svelte';
 
 	const view = $derived(viewFrom(page.url));
+	const HEALTH = "Охорона здоров'я";
+	// Телефон (≤640): у вузьких картках 2×2 позначку «ДЕМО» не дублюємо — вона вже є в шапці сторінки
+	let phone = $state(false);
+	$effect(() => {
+		const mq = matchMedia('(max-width: 640px)');
+		const on = () => (phone = mq.matches);
+		on();
+		mq.addEventListener('change', on);
+		return () => mq.removeEventListener('change', on);
+	});
 
 	let data = $state<IndependenceList | null>(null);
 	let error = $state<string | null>(null);
@@ -82,7 +93,7 @@
 		c?.battery_sites ?? (data?.items ?? []).filter(hasBat).length
 	);
 
-	// ---------- 2. Найбільший ризик ----------
+	// ---------- 2. Де бракує даних про резерв ----------
 	// Критичні заклади без акумулятора: спершу ті, що споживають найбільше
 	const noReserve = $derived(
 		(data?.items ?? [])
@@ -92,7 +103,7 @@
 	const CRIT_TOP = 5;
 	let showAllCrit = $state(false);
 	function critAction(i: IndependenceItem): string {
-		return 'Резерв не зафіксовано';
+		return 'Дані про резерв не внесено';
 	}
 
 	// ---------- 4. Рейтинг ----------
@@ -139,6 +150,17 @@
 		limit = 20;
 	});
 	const filtersOn = $derived(!!(category || onlyCritical || onlyNoSes || query));
+	// Телефон: сортування й перемикачі — у нижній шторці «Фільтри»
+	let sheetEl = $state<HTMLDialogElement | null>(null);
+	const sheetCount = $derived((onlyCritical ? 1 : 0) + (onlyNoSes ? 1 : 0) + (sort !== 'strong' ? 1 : 0));
+	const SORTS: { v: 'strong' | 'weak' | 'name'; t: string }[] = [
+		{ v: 'strong', t: 'Спершу найкращі' },
+		{ v: 'weak', t: 'Спершу найменш захищені' },
+		{ v: 'name', t: 'За назвою' }
+	];
+	function pickCat(k: string) {
+		category = category === k ? '' : k;
+	}
 	function reset() {
 		category = '';
 		onlyCritical = false;
@@ -197,7 +219,7 @@
 			<div class="now-grid">
 				<div class="now-main" use:inview={() => (heroSeen = true)}>
 					<p class="nm-l"><Icon name="sun" size={22} /> Власне сонце дає</p>
-					<p class="nm-v"><span class="big-num"><CountUp value={c.self_sufficiency_pct} decimals={1} duration={1200} /></span><span class="u">%</span></p>
+					<p class="nm-v"><span class="big-num"><CountUp value={c.self_sufficiency_pct} decimals={1} duration={600} /></span><span class="u">%</span></p>
 					<p class="nm-s">
 						усієї електрики, яку {num(c.sites)} будівель громади споживають за рік. Решту
 						<b class="tnum">{num(100 - c.self_sufficiency_pct, 0)} %</b> купуємо з мережі.
@@ -213,35 +235,35 @@
 				</div>
 				<div class="stats">
 					<Reveal delay={80}>
-						<StatCard label="Будівлі з панелями" value={c.ses_sites} unit="з {num(c.sites)}" icon="panel" demo
+						<StatCard label={phone ? 'З панелями' : 'Будівлі з панелями'} value={c.ses_sites} unit="з {num(c.sites)}" icon="panel" demo={!phone}
 							hint="Мають сонячну станцію на даху." />
 					</Reveal>
 					<Reveal delay={160}>
-						<StatCard label="Будівлі з акумулятором" value={batterySites} unit="з {num(c.sites)}" icon="battery" demo
+						<StatCard label={phone ? 'З резервом' : 'Будівлі з акумулятором'} value={batterySites} unit="з {num(c.sites)}" icon="battery" demo={!phone}
 							hint="Мають резерв на випадок відключення світла." />
 					</Reveal>
 					<Reveal delay={240}>
-						<StatCard label="Типовий резерв" value={c.autonomy_hours_median} format={duration} icon="clock" demo
+						<StatCard label="Типовий резерв" value={c.autonomy_hours_median} format={duration} icon="clock" demo={!phone}
 							hint="Стільки заклад з акумулятором працює без світла." />
 					</Reveal>
 				</div>
 			</div>
 		</section>
 
-		<!-- 2. Найбільший ризик -->
+		<!-- 2. Де бракує даних про резерв (нейтрально: це прогалина в даних, а не встановлений факт) -->
 		<Reveal>
 			<section class="block risk" aria-labelledby="risk-h">
-				<h2 id="risk-h" class="kicker"><span class="step" aria-hidden="true">2</span>Найбільший ризик</h2>
+				<h2 id="risk-h" class="kicker"><span class="step" aria-hidden="true">2</span>Де бракує даних про резерв</h2>
 				{#if noReserve.length}
 					<p class="statement">
-						<b class="tnum">{noReserve.length} з {c.critical_sites_total}</b> медичних {critWord(c.critical_sites_total) === 'заклад' ? 'закладу' : 'закладів'} — у системі немає даних про резерв <span class="demo-tag">ДЕМО</span>
+						Дані про резерв внесено лише для <b class="tnum">{num(c.critical_sites_total - noReserve.length)} з {num(c.critical_sites_total)}</b> медзакладів <span class="demo-tag">ДЕМО</span>
 					</p>
-					<p class="muted sub">Після підключення реального реєстру станцій тут будуть справжні дані. Нижче — заклади, що споживають найбільше.</p>
+					<p class="muted sub">Це прогалина в даних, а не висновок про стан закладів. Після підключення реального реєстру станцій тут будуть справжні дані. Нижче — медзаклади без даних, що споживають найбільше.</p>
 					<ul class="crit-list" class:seen={critSeen} use:inview={() => (critSeen = true)}>
 						{#each showAllCrit ? noReserve : noReserve.slice(0, CRIT_TOP) as i, n (i.id)}
-							<li style:--i={n >= CRIT_TOP ? Math.min(n - CRIT_TOP, 10) : n}>
+							<li style:--i={n >= CRIT_TOP ? Math.min(n - CRIT_TOP, 6) : n}>
 								<a href={obj(i.id)}>
-									<span class="cl-ic" aria-hidden="true"><Icon name="alert" size={18} /></span>
+									<span class="cl-ic" aria-hidden="true"><Icon name="info" size={18} /></span>
 									<span class="cl-txt">
 										<span class="cl-name">{i.name}</span>
 										<span class="cl-do">{critAction(i)}</span>
@@ -283,13 +305,13 @@
 						<div class="pb">
 							<span class="seg-now" style:--w="{c.self_sufficiency_pct}%"></span><span class="seg-add" style:--w="{Math.max(0, c.potential_self_sufficiency_pct - c.self_sufficiency_pct)}%"></span>
 						</div>
-						<b class="pb-v tnum to"><CountUp value={potSeen ? c.potential_self_sufficiency_pct : c.self_sufficiency_pct} decimals={1} duration={1100} suffix=" %" /></b>
+						<b class="pb-v tnum to"><CountUp value={potSeen ? c.potential_self_sufficiency_pct : c.self_sufficiency_pct} decimals={1} duration={600} suffix=" %" /></b>
 					</div>
 					<div class="pb-scale" aria-hidden="true"><span></span><span class="ticks"><span>0</span><span>50 %</span><span>100 %</span></span><span></span></div>
 				</div>
 				<div class="pot-foot">
 					<p class="pot-facts">
-						Для цього — ще <b class="tnum">{num(c.potential_kw, 0)} кВт</b> панелей{#if c.potential_sites} на <b class="tnum">{num(c.potential_sites)}</b> будівлях{/if},
+						Для цього — ще <b class="tnum">{num(c.potential_kw, 0)} кВт</b> панелей{#if c.potential_sites}{' '}на <b class="tnum">{num(c.potential_sites)}</b> будівлях{/if},
 						кожна станція під власне споживання будівлі. Орієнтовна вартість — <b class="tnum">{money(c.potential_cost_uah)}</b>.
 					</p>
 					<a class="btn" href={withView('/solar', view)} data-sveltekit-reset="false">Де ставити нові СЕС <Icon name="arrow-right" size={18} /></a>
@@ -302,11 +324,68 @@
 			<section class="block rank-block" aria-labelledby="rank-h">
 				<h2 id="rank-h" class="kicker"><span class="step" aria-hidden="true">4</span>Рейтинг закладів</h2>
 				<p class="index-explain">
-					<b>Індекс енергонезалежності</b> — бал від 0 до 100: половина балів — за частку власного сонця,
+					<b>Індекс енергостійкості</b> — бал від 0 до 100: половина балів — за частку власного сонця,
 					половина — за години роботи на акумуляторі без світла. 0 — немає ні панелей, ні акумулятора.
 				</p>
 
-				<div class="filters" role="search">
+				<!-- Телефон: пошук + ряд чипів типів + шторка «Фільтри» -->
+				<div class="pf only-phone" role="search">
+					<div class="pf-top">
+						<div class="search">
+							<label for="iq-m" class="visually-hidden">Пошук за назвою або адресою</label>
+							<Icon name="search" size={18} />
+							<input id="iq-m" type="search" bind:value={query} placeholder="Назва або адреса" autocomplete="off" enterkeyhint="search" />
+						</div>
+						<button type="button" class="pf-btn" aria-haspopup="dialog" onclick={() => sheetEl?.showModal()}>
+							<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></svg>
+							Фільтри{#if sheetCount}<span class="pf-n">{sheetCount}</span>{/if}
+						</button>
+					</div>
+					<div class="chip-row pf-chips" role="group" aria-label="Тип закладу">
+						<button type="button" class="chip" aria-pressed={!category} onclick={() => (category = '')}>Усі типи</button>
+						{#each cats as k (k.category_short)}
+							<button type="button" class="chip" aria-pressed={category === k.category_short} onclick={() => pickCat(k.category_short)}>
+								{catLabel(k.category_short)}<span class="chip-n tnum">{k.sites}</span>
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+				<dialog class="sheet" bind:this={sheetEl} aria-labelledby="sheet-h" onclick={(e) => { if (e.target === sheetEl) sheetEl?.close(); }}>
+					<div class="sheet-in">
+						<span class="grab" aria-hidden="true"></span>
+						<div class="sheet-head">
+							<h3 id="sheet-h">Фільтри</h3>
+							<button type="button" class="sheet-x" aria-label="Закрити" onclick={() => sheetEl?.close()}>
+								<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+							</button>
+						</div>
+						<p class="sheet-l" id="sort-l">Порядок</p>
+						<div class="opts" role="radiogroup" aria-labelledby="sort-l">
+							{#each SORTS as o (o.v)}
+								<button type="button" role="radio" aria-checked={sort === o.v} class="opt" onclick={() => (sort = o.v)}>
+									<span class="radio" aria-hidden="true"></span>{o.t}
+								</button>
+							{/each}
+						</div>
+						<p class="sheet-l">Показати лише</p>
+						<div class="opts">
+							<button type="button" role="switch" aria-checked={onlyCritical} class="opt" onclick={() => (onlyCritical = !onlyCritical)}>
+								Медичні заклади<span class="sw" aria-hidden="true"><i></i></span>
+							</button>
+							<button type="button" role="switch" aria-checked={onlyNoSes} class="opt" onclick={() => (onlyNoSes = !onlyNoSes)}>
+								Без сонячних панелей<span class="sw" aria-hidden="true"><i></i></span>
+							</button>
+						</div>
+						<div class="sheet-foot">
+							<button type="button" class="btn btn-secondary" onclick={() => { onlyCritical = false; onlyNoSes = false; sort = 'strong'; }}>Скинути</button>
+							<button type="button" class="btn" onclick={() => sheetEl?.close()}>Показати {num(filtered.length)}</button>
+						</div>
+					</div>
+				</dialog>
+
+				<div class="filters hide-phone" role="search">
 					<div class="search">
 						<label for="iq" class="visually-hidden">Пошук за назвою або адресою</label>
 						<Icon name="search" size={18} />
@@ -317,7 +396,7 @@
 						<select bind:value={category}>
 							<option value="">Усі типи</option>
 							{#each cats as k (k.category_short)}
-								<option value={k.category_short}>{k.category_short} ({k.sites})</option>
+								<option value={k.category_short}>{catLabel(k.category_short)} ({k.sites})</option>
 							{/each}
 						</select>
 					</label>
@@ -342,18 +421,31 @@
 						Знайдено <b class="tnum">{num(filtered.length)}</b>
 						{#if filtersOn}· <button type="button" class="linkish" onclick={reset}>скинути фільтри</button>{/if}
 					</p>
-					<button type="button" class="tgl tgl-detail" aria-pressed={detailed} onclick={() => (detailed = !detailed)}>
+					<button type="button" class="tgl tgl-detail hide-phone" aria-pressed={detailed} onclick={() => (detailed = !detailed)}>
 						<span class="sw" aria-hidden="true"><i></i></span> Детальна таблиця
 					</button>
 				</div>
 
 				{#if filtered.length}
-					<div class="table-wrap">
+					<ul class="rank-list only-phone">
+						{#each filtered.slice(0, limit) as i (i.id)}
+							{@const s = status(i)}
+							<li class:crit={i.critical}>
+								<a href={obj(i.id)}>
+									<span class="rl-name">{i.name}</span>
+									<span class="rl-badge"><IndexBadge index={i.index} cls={i.index_class} size="sm" /></span>
+									<span class="rl-sub">{catLabel(i.category_short)}{#if i.critical && i.category_short !== HEALTH}{' '}· <b class="crit-t">медичний</b>{/if}</span>
+									<span class="rl-st st {s.tone}"><i aria-hidden="true"></i>{s.text}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+					<div class="table-wrap hide-phone">
 						<table class="rank" class:detailed>
 							<thead>
 								<tr>
 									<th scope="col">Заклад</th>
-									<th scope="col">Індекс</th>
+									<th scope="col">Індекс енергостійкості</th>
 									<th scope="col">Стан</th>
 									{#if detailed}
 										<th scope="col" class="num">Сонце покриває</th>
@@ -365,10 +457,10 @@
 							<tbody>
 								{#each filtered.slice(0, limit) as i, n (i.id)}
 									{@const s = status(i)}
-									<tr class:crit={i.critical} animate:flip={{ duration: isReduced() ? 0 : DUR.slow }} in:fadeUp={{ delay: stagger(n, 25, 300), y: 6 }}>
+									<tr class:crit={i.critical} animate:flip={{ duration: isReduced() ? 0 : DUR.slow }} in:fadeUp={{ delay: stagger(n, 25, 250), y: 6 }}>
 										<td class="name">
 											<a href={obj(i.id)}>{i.name}</a>
-											<span class="sub2">{i.category_short}{#if i.critical} · <b class="crit-t">медичний</b>{/if}</span>
+											<span class="sub2">{catLabel(i.category_short)}{#if i.critical && i.category_short !== HEALTH}{' '}· <b class="crit-t">медичний</b>{/if}</span>
 										</td>
 										<td><IndexBadge index={i.index} cls={i.index_class} size="sm" /></td>
 										<td><span class="st {s.tone}"><i aria-hidden="true"></i>{s.text}</span></td>
@@ -397,7 +489,19 @@
 				{/if}
 
 				<Disclosure summary="Підсумок за типами закладів" hint="{cats.length} типів" class="cat-disc">
-					<div class="table-wrap">
+					<ul class="cat-list only-phone">
+						{#each cats as k (k.category_short)}
+							<li>
+								<button type="button" onclick={() => { category = k.category_short; document.getElementById('rank-h')?.scrollIntoView({ behavior: isReduced() ? 'auto' : 'smooth' }); }}>
+									<span class="ct-name">{catLabel(k.category_short)}</span>
+									<b class="ct-pct tnum">{num(k.self_sufficiency_pct, 1)} %</b>
+									<span class="cbar ct-bar"><span style:width="{((k.self_sufficiency_pct ?? 0) / catMax) * 100}%"></span></span>
+									<span class="ct-sub">{num(k.sites)} будівель · з панелями {num(k.with_ses)} · резерв {k.autonomy_hours_median ? duration(k.autonomy_hours_median) : 'немає'}</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+					<div class="table-wrap hide-phone">
 						<table>
 							<thead>
 								<tr>
@@ -413,7 +517,7 @@
 									<tr>
 										<th scope="row">
 											<button type="button" class="linkish" onclick={() => { category = k.category_short; document.getElementById('rank-h')?.scrollIntoView({ behavior: isReduced() ? 'auto' : 'smooth' }); }}>
-												{k.category_short}
+												{catLabel(k.category_short)}
 											</button>
 										</th>
 										<td class="num">{num(k.sites)}</td>
@@ -436,11 +540,11 @@
 		<Reveal>
 			<section class="block how" aria-labelledby="how-h">
 				<h2 id="how-h" class="kicker"><span class="step" aria-hidden="true">5</span>Як ми рахуємо</h2>
-				<Disclosure summary="Звідки цифри і як рахується індекс">
+				<Disclosure summary="Звідки цифри і як рахується індекс енергостійкості">
 					<ul class="how-list">
 						<li><b>Частка власного сонця</b> — скільки з річного споживання електрики будівлі покривають її сонячні панелі (виробіток 1 кВт панелей — за даними <Term key="PVGIS" plain>PVGIS</Term> для Полтави).</li>
 						<li><b>Резерв</b> — скільки годин <Term key="акумулятор" plain>акумулятор</Term> тримає будівлю без світла і без сонця при звичайному навантаженні.</li>
-						<li><b>Індекс</b> — 50 балів за сонце (максимум, якщо сонце покриває 40 % і більше) + 50 балів за резерв (максимум від 8 годин).</li>
+						<li><b>Індекс енергостійкості</b> — 50 балів за сонце (максимум, якщо сонце покриває 40 % і більше) + 50 балів за резерв (максимум від 8 годин).</li>
 						<li><b>Програма СЕС</b> — панелі, підібрані під власне споживання кожної будівлі, без надлишку, який не можна продати.</li>
 					</ul>
 					{#if data.formula?.text}<p class="formula small">{data.formula.text}</p>{/if}
@@ -492,6 +596,8 @@
 	}
 	.story {
 		display: grid;
+		/* minmax(0,…): інакше колонка росте до min-content найширшого блоку (рейтинг) і сторінка їде вбік */
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1.5rem;
 	}
 	.block {
@@ -623,7 +729,7 @@
 
 	/* 2. Ризик */
 	.risk {
-		border-left: 6px solid var(--deficit);
+		border-left: 6px solid var(--line-strong);
 	}
 	.demo-tag {
 		display: inline-block;
@@ -638,7 +744,7 @@
 		letter-spacing: 0.06em;
 	}
 	.risk .statement b {
-		color: var(--deficit-ink);
+		color: var(--navy);
 	}
 	.crit-list {
 		list-style: none;
@@ -655,8 +761,8 @@
 		gap: 0.75rem;
 		padding: 0.8rem 1rem;
 		border-radius: 12px;
-		border: 1px solid #f1d3c4;
-		background: #fffaf7;
+		border: 1px solid var(--card-line);
+		background: var(--surface-2);
 		color: var(--text);
 		text-decoration: none;
 		transition:
@@ -665,7 +771,7 @@
 			transform 0.15s;
 	}
 	.crit-list a:hover {
-		border-color: var(--deficit);
+		border-color: var(--line-strong);
 		box-shadow: var(--shadow-md);
 	}
 	.crit-list a > :global(.icon:last-child) {
@@ -679,8 +785,8 @@
 		width: 2.1rem;
 		height: 2.1rem;
 		border-radius: 50%;
-		background: var(--deficit-soft);
-		color: var(--deficit-ink);
+		background: var(--bg-2);
+		color: var(--muted);
 	}
 	.cl-txt {
 		flex: 1;
@@ -695,7 +801,7 @@
 	}
 	.cl-do {
 		font-size: 0.9rem;
-		color: var(--deficit-ink);
+		color: var(--muted);
 		font-weight: 500;
 	}
 	.ok-msg {
@@ -714,8 +820,8 @@
 			opacity: 0;
 		}
 		.crit-list.seen li {
-			animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-			animation-delay: calc(var(--i, 0) * 70ms);
+			animation: rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+			animation-delay: calc(var(--i, 0) * 40ms);
 		}
 		@keyframes rise {
 			from {
@@ -731,9 +837,11 @@
 	}
 	.from {
 		color: var(--muted);
+		white-space: nowrap;
 	}
 	.to {
 		color: var(--surplus-ink);
+		white-space: nowrap;
 	}
 	.pot-bars {
 		display: grid;
@@ -788,10 +896,10 @@
 		.pot-bars .seg-now,
 		.pot-bars .seg-add,
 		.mix-sun {
-			transition: width 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+			transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 		}
 		.pot-bars .seg-add {
-			transition-delay: 0.25s;
+			transition-delay: 0.15s;
 		}
 		.pot-bars:not(.go) .seg-add,
 		.pot-bars:not(.go) .seg-now,
@@ -928,6 +1036,8 @@
 		box-shadow: inset 4px 0 0 var(--deficit);
 	}
 	.rank .name a {
+		display: inline-block;
+		padding-block: 0.3rem 0.1rem;
 		font-weight: 600;
 	}
 	.rank:not(.detailed) .name {
@@ -1115,6 +1225,384 @@
 		}
 		.rank:not(.detailed) tr.crit td:first-child {
 			box-shadow: none;
+		}
+	}
+
+	/* ---------- Телефон (≤640): нативний вигляд ---------- */
+	.pf-top {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 0.6rem;
+	}
+	.pf-top .search {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.pf-btn {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 44px;
+		padding: 0 0.85rem;
+		border-radius: 12px;
+		border: 1px solid var(--line);
+		background: var(--surface);
+		font: inherit;
+		font-weight: 600;
+		font-size: 0.95rem;
+		color: var(--text-2);
+		cursor: pointer;
+	}
+	.pf-n {
+		display: grid;
+		place-items: center;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		padding: 0 0.3rem;
+		border-radius: 999px;
+		background: var(--navy);
+		color: #fff;
+		font-size: 0.75rem;
+	}
+	.pf-chips {
+		margin-bottom: 0.75rem;
+	}
+	.chip-n {
+		font-weight: 500;
+		opacity: 0.7;
+		font-size: 0.8rem;
+	}
+	.sheet {
+		margin: auto 0 0;
+		width: 100%;
+		max-width: 100%;
+		max-height: 88dvh;
+		padding: 0;
+		border: 0;
+		border-radius: 20px 20px 0 0;
+		background: var(--surface);
+		color: var(--text);
+		box-shadow: var(--shadow-lg);
+		overscroll-behavior: contain;
+	}
+	.sheet::backdrop {
+		background: rgba(10, 31, 56, 0.45);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.sheet[open] {
+			animation: sheet-up 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+		}
+		@keyframes sheet-up {
+			from {
+				transform: translateY(100%);
+			}
+		}
+	}
+	.sheet-in {
+		padding: 0.5rem 1rem calc(1rem + var(--safe-b, 0px));
+	}
+	.grab {
+		display: block;
+		width: 2.5rem;
+		height: 4px;
+		border-radius: 999px;
+		background: var(--line);
+		margin: 0 auto 0.5rem;
+	}
+	.sheet-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.sheet-head h3 {
+		margin: 0;
+		font-size: 1.15rem;
+	}
+	.sheet-x {
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		margin-right: -0.5rem;
+		border: 0;
+		background: none;
+		color: var(--muted);
+		cursor: pointer;
+	}
+	.sheet-l {
+		margin: 0.75rem 0 0.35rem;
+		font-size: 0.8rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.opts {
+		display: grid;
+		border: 1px solid var(--line-soft);
+		border-radius: 14px;
+		overflow: hidden;
+	}
+	.opt {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		min-height: 50px;
+		padding: 0 1rem;
+		border: 0;
+		border-top: 1px solid var(--line-soft);
+		background: var(--surface);
+		font: inherit;
+		font-size: 1rem;
+		text-align: left;
+		color: var(--text);
+		cursor: pointer;
+	}
+	.opt:first-child {
+		border-top: 0;
+	}
+	.opt[role='radio'] {
+		justify-content: flex-start;
+	}
+	.radio {
+		flex: none;
+		width: 1.25rem;
+		height: 1.25rem;
+		border-radius: 50%;
+		border: 2px solid var(--line-strong);
+		transition:
+			border-width 0.15s,
+			border-color 0.15s;
+	}
+	.opt[aria-checked='true'] .radio {
+		border: 6px solid var(--navy-3);
+	}
+	.opt[aria-checked='true'] .sw {
+		background: var(--navy-3);
+	}
+	.opt[aria-checked='true'] .sw i {
+		transform: translateX(1rem);
+	}
+	.opt .sw {
+		flex: none;
+	}
+	.sheet-foot {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.6rem;
+		margin-top: 1rem;
+	}
+	.sheet-foot .btn {
+		justify-content: center;
+	}
+	.rank-list,
+	.cat-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		border: 1px solid var(--card-line);
+		border-radius: 14px;
+		overflow: hidden;
+		background: var(--surface);
+	}
+	.rank-list li + li,
+	.cat-list li + li {
+		border-top: 1px solid var(--line-soft);
+	}
+	.rank-list li.crit {
+		box-shadow: inset 4px 0 0 var(--deficit);
+	}
+	.rank-list a {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas: 'name badge' 'sub badge' 'st st';
+		align-items: center;
+		gap: 0.15rem 0.6rem;
+		padding: 0.7rem 0.9rem;
+		min-height: 64px;
+		color: var(--text);
+		text-decoration: none;
+	}
+	.rank-list a:active,
+	.cat-list button:active {
+		background: var(--surface-2);
+	}
+	.rl-name {
+		grid-area: name;
+		font-weight: 650;
+		line-height: 1.3;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+	}
+	.rl-badge {
+		grid-area: badge;
+		align-self: start;
+	}
+	.rl-sub {
+		grid-area: sub;
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+	.rank-list .rl-st {
+		grid-area: st;
+		margin-top: 0.2rem;
+		white-space: normal;
+		font-size: 0.875rem;
+	}
+	.cat-list button {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.3rem 0.75rem;
+		align-items: center;
+		width: 100%;
+		padding: 0.7rem 0.9rem;
+		border: 0;
+		background: none;
+		font: inherit;
+		text-align: left;
+		color: var(--text);
+		cursor: pointer;
+	}
+	.ct-name {
+		font-weight: 650;
+		color: var(--accent);
+	}
+	.cbar.ct-bar {
+		grid-column: 1 / -1;
+		width: 100%;
+		margin: 0;
+	}
+	.ct-sub {
+		grid-column: 1 / -1;
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+
+	@media (max-width: 640px) {
+		.head {
+			margin-bottom: 1rem;
+			gap: 0.5rem;
+		}
+		h1 {
+			font-size: 1.45rem;
+		}
+		.lead {
+			font-size: 0.975rem;
+		}
+		.story {
+			gap: 0.875rem;
+		}
+		.block {
+			padding: 1rem;
+			border-radius: 14px;
+			box-shadow: var(--shadow);
+		}
+		.risk,
+		.pot {
+			border-left-width: 4px;
+		}
+		.kicker {
+			font-size: 0.8rem;
+			margin-bottom: 0.6rem;
+		}
+		.step {
+			width: 1.4rem;
+			height: 1.4rem;
+			font-size: 0.75rem;
+		}
+		.statement {
+			font-size: 1.1rem;
+		}
+		.sub {
+			font-size: 0.925rem;
+			margin-bottom: 0.75rem;
+		}
+		.now-grid {
+			gap: 1rem;
+		}
+		.nm-l {
+			font-size: 1rem;
+		}
+		.nm-v .big-num {
+			font-size: 3.6rem;
+		}
+		.nm-v .u {
+			font-size: 1.8rem;
+		}
+		.nm-s {
+			font-size: 1rem;
+			margin-bottom: 0.8rem;
+		}
+		.mix {
+			height: 14px;
+		}
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+		}
+		.stats > :global(:last-child:nth-child(odd)) {
+			grid-column: 1 / -1;
+		}
+		.crit-list {
+			gap: 0.5rem;
+			margin-bottom: 0.75rem;
+		}
+		.crit-list a {
+			padding: 0.6rem 0.75rem;
+			gap: 0.6rem;
+			min-height: 56px;
+		}
+		.cl-ic {
+			width: 1.8rem;
+			height: 1.8rem;
+		}
+		.cl-name {
+			font-size: 0.95rem;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+		}
+		.cl-do {
+			font-size: 0.8rem;
+		}
+		.more-btn,
+		.pot-foot .btn,
+		.more .btn {
+			width: 100%;
+			justify-content: center;
+		}
+		.pot-bars {
+			margin: 0.75rem 0 1rem;
+		}
+		.pb-v {
+			font-size: 1.05rem;
+		}
+		.pb {
+			height: 16px;
+		}
+		.pot-facts {
+			font-size: 0.95rem;
+		}
+		.index-explain {
+			font-size: 0.9rem;
+			padding: 0.65rem 0.8rem;
+			margin-bottom: 0.9rem;
+		}
+		.rank-bar {
+			margin-bottom: 0.5rem;
+		}
+		.found {
+			font-size: 0.9rem;
+		}
+		.security {
+			align-items: flex-start;
 		}
 	}
 </style>

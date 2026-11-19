@@ -37,6 +37,13 @@
 		color: var(--sun-ink);
 		border: 1px dashed #d08a1c;
 		white-space: nowrap;
+		position: relative;
+	}
+	/* Зона натискання ≥ 40 px по висоті без зміни вигляду позначки */
+	.pill-btn::after {
+		content: '';
+		position: absolute;
+		inset: -8px -4px;
 	}
 	.dark .pill-btn {
 		background: rgba(245, 165, 36, 0.14);
@@ -54,7 +61,7 @@
 		z-index: 40;
 		top: calc(100% + 8px);
 		width: max-content;
-		max-width: 19rem;
+		max-width: min(19rem, calc(100vw - 2.5rem));
 		padding: 0.6rem 0.8rem;
 		border-radius: 10px;
 		background: #142235;

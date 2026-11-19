@@ -3,6 +3,7 @@
 	// Принцип: одне речення «що тут» → 4 картки → дві прості візуалізації; деталі — за «Детальніше».
 	import { api, errMessage, type Summary, type Building } from '#lib/api.ts';
 	import { num, pct, date, dateTime, scaleKwh, kwhText, plural } from '#lib/format.ts';
+	import { catLabel } from '#lib/categories.ts';
 	import Status from '#lib/Status.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
 	import Term from '#lib/Term.svelte';
@@ -50,6 +51,14 @@
 		median([...rating.rows.values()].filter((r) => !r.excluded && r.kwhM2 !== null).map((r) => r.kwhM2!))
 	);
 	const noData = $derived(data ? data.buildings - withElec.length : 0);
+	// З них — без жодного показника за базовий рік (ні електрики, ні тепла, газу чи води)
+	const RES = ['elec_kwh', 'heat_gcal', 'gas_m3', 'cold_m3', 'hot_m3'] as const;
+	const noneAtAll = $derived(
+		buildings.filter((b) => {
+			const y = b.years[BASE_YEAR];
+			return !y || RES.every((k) => !((y[k] ?? 0) > 0));
+		}).length
+	);
 
 	const baseScaled = $derived(scaleKwh(base?.elec_kwh));
 	const curScaled = $derived(scaleKwh(cur?.[1].elec_kwh));
@@ -93,7 +102,7 @@
 		<h1>Споживання електроенергії</h1>
 		<p class="lead">
 			Скільки електрики за рік витрачають школи, садочки, лікарні та інші комунальні будівлі громади —
-			і хто витрачає найбільше. Саме там економія та сонячні станції дадуть найбільший ефект.
+			і хто витрачає найбільше.<span class="hide-phone"> Саме там економія та сонячні станції дадуть найбільший ефект.</span>
 		</p>
 	</div>
 	{#if updated}
@@ -156,7 +165,7 @@
 					tone={noData ? 'warn' : 'neutral'}
 					toneLabel="є будівлі без даних"
 					hint={noData
-						? `У ${num(noData)} з них немає даних про електрику — дивіться «Якість даних».`
+						? `У ${num(noData)} немає даних про електрику за ${BASE_YEAR} рік, з них у ${num(noneAtAll)} — взагалі жодних показників (ні тепла, ні газу, ні води). Деталі — у «Якості даних».`
 						: 'Для всіх є дані про електрику.'}
 				/>
 			</Reveal>
@@ -172,7 +181,7 @@
 					{#each byCategory as c, i (c.name)}
 						<li>
 							<div class="cat-line">
-								<a href="/rating?cat={encodeURIComponent(c.name)}" class="cat-name">{c.name}</a>
+								<a href="/rating?cat={encodeURIComponent(c.name)}" class="cat-name" title={c.name}>{catLabel(c.name)}</a>
 								<span class="cat-pct tnum">{pct(c.share)}</span>
 							</div>
 							<span class="track" aria-hidden="true">
@@ -233,7 +242,7 @@
 								<span class="track thin" aria-hidden="true">
 									<span class="fill" style="width:{(kwh / topMax) * 100}%; --i:{i}"></span>
 								</span>
-								<span class="muted small">{b.category_short}</span>
+								<span class="muted small">{catLabel(b.category_short)}</span>
 							</span>
 							<span class="top-v tnum">{kwhText(kwh)}</span>
 						</li>
@@ -441,6 +450,78 @@
 		}
 		.top-v {
 			grid-column: 2;
+		}
+	}
+	/* Сенсорні екрани: посилання-категорія — ціль ≥ 40 px */
+	@media (max-width: 768px) {
+		.cat-name {
+			display: inline-flex;
+			align-items: center;
+			min-height: 40px;
+		}
+		.cats {
+			gap: 0.5rem;
+		}
+		.cats li {
+			gap: 0.15rem;
+		}
+	}
+	/* Телефон: компактний рядок «місце · назва (2 рядки) · смужка · категорія | кВт·год» */
+	@media (max-width: 640px) {
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+			margin-bottom: 1rem;
+		}
+		.stats > :global(:last-child:nth-child(odd)) {
+			grid-column: 1 / -1;
+		}
+		.top li {
+			grid-template-columns: 1.75rem minmax(0, 1fr) max-content;
+			grid-template-areas:
+				'n name name'
+				'n bar bar'
+				'n cat val';
+			gap: 0 0.6rem;
+			padding: 0.55rem 0;
+		}
+		.top-n {
+			grid-area: n;
+			width: 1.75rem;
+			height: 1.75rem;
+			font-size: 0.8125rem;
+		}
+		.top-txt {
+			display: contents;
+		}
+		.top-txt > a {
+			grid-area: name;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+			line-height: 1.35;
+		}
+		.top-txt > .track {
+			grid-area: bar;
+		}
+		.top-txt > .muted {
+			grid-area: cat;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.top-v {
+			grid-area: val;
+			font-size: 0.875rem;
+		}
+		.top-foot .btn {
+			flex: 1 1 100%;
+		}
+		.sub {
+			font-size: 0.9rem;
 		}
 	}
 </style>

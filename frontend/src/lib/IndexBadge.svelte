@@ -1,22 +1,30 @@
 <script lang="ts">
-	// Індекс енергонезалежності 0–100: число + слово + «стовпчики сигналу» (колір не єдиний носій сенсу)
+	// Індекс енергостійкості 0–100: число + слово + «стовпчики сигналу» (колір не єдиний носій сенсу)
 	import type { IndexClass } from './api-independence.ts';
 
 	let {
 		index,
 		cls,
 		size = 'md',
-		showWord = true
-	}: { index: number | null; cls: IndexClass; size?: 'sm' | 'md' | 'lg'; showWord?: boolean } = $props();
+		showWord = true,
+		muted = false
+	}: {
+		index: number | null;
+		cls: IndexClass;
+		size?: 'sm' | 'md' | 'lg';
+		showWord?: boolean;
+		/** Нейтральний сірий вигляд (рівень — лише стовпчиками), щоб не сперечатися кольором з іншим статусом поруч */
+		muted?: boolean;
+	} = $props();
 
 	const bars = $derived(cls === 'висока' ? 3 : cls === 'середня' ? 2 : cls === 'низька' ? 1 : 0);
 	const tone = $derived(cls === 'висока' ? 'hi' : cls === 'середня' ? 'mid' : cls === 'низька' ? 'low' : 'none');
 	const label = $derived(
-		`Індекс енергонезалежності ${index ?? 0} зі 100 — ${cls === 'відсутня' ? 'енергонезалежності немає' : cls}`
+		`Індекс енергостійкості ${index ?? 0} зі 100 — ${cls === 'відсутня' ? 'енергостійкості немає' : cls}`
 	);
 </script>
 
-<span class="ib {tone} {size}" role="img" aria-label={label} title={label}>
+<span class="ib {muted ? 'none' : tone} {size}" role="img" aria-label={label} title={label}>
 	<span class="bars" aria-hidden="true">
 		{#each [1, 2, 3] as b (b)}
 			<i class:on={b <= bars} style="height: {30 + b * 23}%"></i>

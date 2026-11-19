@@ -96,15 +96,15 @@
 	<div>
 		<h1>Якість даних</h1>
 		<p class="lead">
-			Помилки й пропуски в даних <Term key="UMUNI" plain />, які система знайшла сама. Ми згрупували їх
-			за типом і підказали, що зробити: виправите в UMUNI — і рейтинг та розрахунки стануть точнішими.
+			Помилки й пропуски в даних <Term key="UMUNI" plain />, які система знайшла сама.<span class="hide-phone"> Ми згрупували їх
+			за типом і підказали, що зробити: виправите в UMUNI — і рейтинг та розрахунки стануть точнішими.</span>
 		</p>
 	</div>
 	<a class="btn btn-secondary" href="/api/defects.csv" download="data-defects.csv">
 		<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"
 			><path d="M10 3v9m-4-4 4 4 4-4M4 15.5h12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg
 		>
-		Завантажити повний перелік (CSV)
+		<span class="hide-phone">Завантажити повний перелік (CSV)</span><span class="only-phone">Перелік у CSV</span>
 	</a>
 </div>
 
@@ -207,7 +207,7 @@
 					<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"
 						><path d="M3 5.25 7 9.25l4-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg
 					>
-					{open ? 'Сховати будівлі' : `Показати будівлі (${num(g.shown.length)})`}
+					<span class="g-tl">{open ? 'Сховати будівлі' : `Показати будівлі (${num(g.shown.length)})`}</span>
 				</button>
 				{#if open}
 					<div class="g-body" id="g-{gi}" in:fadeUp={{ y: -6 }}>
@@ -496,6 +496,92 @@
 		.g-toggle,
 		.g-body {
 			margin-left: 0;
+		}
+		/* Акордеон-картки: згорнута — важливість, назва, кількість; «чому» й «що робити» — після розгортання */
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+			margin-bottom: 1rem;
+		}
+		.stats > :global(:last-child:nth-child(odd)) {
+			grid-column: 1 / -1;
+		}
+		.chips {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			scrollbar-width: none;
+			max-width: 100%;
+			margin-inline: calc(-1 * var(--gutter, 1rem));
+			padding: 2px var(--gutter, 1rem);
+		}
+		.chips::-webkit-scrollbar {
+			display: none;
+		}
+		.sev-chip {
+			flex: none;
+			white-space: nowrap;
+			min-height: 40px;
+			padding: 0.35rem 0.75rem;
+		}
+		.search {
+			max-width: none;
+		}
+		.toggle {
+			font-size: 0.9375rem;
+		}
+		.groups {
+			gap: 0.65rem;
+		}
+		.group {
+			padding: 0.8rem 0.85rem 0.25rem;
+			border-radius: 14px;
+		}
+		.g-head {
+			grid-template-columns: 2.25rem minmax(0, 1fr);
+			gap: 0.15rem 0.7rem;
+		}
+		.g-ico {
+			width: 2.25rem;
+			height: 2.25rem;
+			border-radius: 10px;
+		}
+		.g-title {
+			font-size: 1.02rem;
+			margin: 0.3rem 0 0.15rem;
+		}
+		.g-why,
+		.g-todo {
+			font-size: 0.9375rem;
+		}
+		.group:not(.open) .g-why,
+		.group:not(.open) .g-todo {
+			display: none;
+		}
+		.g-toggle {
+			display: flex;
+			width: calc(100% + 1.7rem);
+			margin: 0.4rem -0.85rem 0;
+			padding: 0.6rem 0.85rem;
+			min-height: 44px;
+			border-top: 1px solid var(--line);
+			border-radius: 0 0 12px 12px;
+			justify-content: space-between;
+			flex-direction: row-reverse;
+		}
+		.open .g-toggle {
+			margin-bottom: 0.5rem;
+		}
+		.g-body {
+			margin: 0 0 0.75rem;
+			border-top: 0;
+			padding-top: 0;
+		}
+		.items li {
+			padding: 0.5rem 0;
+		}
+		.it-name {
+			font-size: 0.9375rem;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

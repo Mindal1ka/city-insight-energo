@@ -104,9 +104,9 @@
 	<div>
 		<h1>Оновити дані</h1>
 		<p class="lead">
-			Перетягніть сюди свіже вивантаження з <Term key="UMUNI" plain /> — і споживання, рейтинг, якість
-			даних та розрахунок <Term key="СЕС" plain>сонячних станцій</Term> оновляться самі. Розробник для цього
-			не потрібен.
+			<span class="hide-phone">Перетягніть сюди</span><span class="only-phone">Оберіть</span> свіже вивантаження з <Term key="UMUNI" plain /> — і споживання, рейтинг, якість
+			даних та розрахунок <Term key="СЕС" plain>сонячних станцій</Term> оновляться самі.<span class="hide-phone"> Розробник для цього
+			не потрібен.</span>
 		</p>
 	</div>
 </div>
@@ -167,7 +167,14 @@
 						<span class="drop-title">
 							{dragging ? 'Відпустіть файл тут' : 'Перетягніть файл XLSX сюди'}
 						</span>
-						<span class="muted">або <span class="fake-link">оберіть його на комп’ютері</span></span>
+						<span class="muted drop-or">або <span class="fake-link">оберіть його на комп’ютері</span></span>
+						<span class="pick-btn">
+							<svg viewBox="0 0 24 24" width="22" height="22"
+								><path d="M12 16V4m-5 5 5-5 5 5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
+							>
+							Обрати файл
+						</span>
+						<span class="muted small pick-sub">Excel (.xlsx) з UMUNI</span>
 					</label>
 				{/if}
 			</div>
@@ -259,7 +266,7 @@
 			</li>
 			<li>
 				<span class="n" aria-hidden="true">2</span>
-				<span><strong>Перетягніть його сюди</strong><br /><span class="muted">Система сама визначить тип звіту й рік.</span></span>
+				<span><strong><span class="hide-phone">Перетягніть його сюди</span><span class="only-phone">Оберіть його тут</span></strong><br /><span class="muted">Система сама визначить тип звіту й рік.</span></span>
 			</li>
 			<li>
 				<span class="n" aria-hidden="true">3</span>
@@ -573,6 +580,97 @@
 		}
 		.drop.dragging {
 			transform: none;
+		}
+	}
+	/* Велика кнопка «Обрати файл» — лише на телефоні (перетягування там не працює) */
+	.pick-btn,
+	.pick-sub {
+		display: none;
+	}
+	@media (max-width: 640px) {
+		.drop:not(.has-file):not(.bad) {
+			border: 0;
+			background: none;
+		}
+		.drop.bad {
+			border-style: solid;
+			border-width: 1px;
+		}
+		.drop:has(.drop-label:hover) {
+			background: none;
+		}
+		.drop-label {
+			padding: 0.25rem 0;
+			gap: 0.5rem;
+		}
+		.drop.bad .drop-label {
+			padding: 0.75rem;
+		}
+		.cloud,
+		.drop-title,
+		.drop-or {
+			display: none;
+		}
+		.pick-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.6rem;
+			width: 100%;
+			min-height: 60px;
+			padding: 0.9rem 1.25rem;
+			border-radius: 14px;
+			background: var(--accent);
+			color: #fff;
+			font-size: 1.125rem;
+			font-weight: 700;
+			box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 28%, transparent);
+			transition: transform 0.15s;
+		}
+		.drop-label:active .pick-btn {
+			transform: scale(0.98);
+		}
+		.pick-sub {
+			display: block;
+		}
+		:global(#file:focus-visible) + .drop {
+			outline: none;
+		}
+		:global(#file:focus-visible) + .drop .pick-btn {
+			outline: 3px solid var(--focus);
+			outline-offset: 3px;
+		}
+		.picked {
+			padding: 1rem;
+			gap: 0.6rem 0.75rem;
+		}
+		.picked-actions,
+		.res-actions {
+			flex-direction: column;
+			align-items: stretch;
+		}
+		.picked-actions .btn,
+		.res-actions .btn {
+			width: 100%;
+			justify-content: center;
+		}
+		.go {
+			min-height: 52px;
+		}
+		.res {
+			grid-template-columns: 1fr;
+			gap: 0.6rem;
+			padding: 0.9rem;
+		}
+		.done-stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+		}
+		.done-stats > :last-child:nth-child(odd) {
+			grid-column: 1 / -1;
+		}
+		.layout {
+			gap: 0.875rem;
 		}
 	}
 </style>

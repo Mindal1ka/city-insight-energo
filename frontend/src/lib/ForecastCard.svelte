@@ -320,7 +320,8 @@
 		border: 0;
 		background: transparent;
 		color: #4a3a1a;
-		padding: 0.3rem 0.6rem;
+		min-height: 40px;
+		padding: 0.3rem 0.7rem;
 		border-radius: 7px;
 		cursor: pointer;
 	}
@@ -425,13 +426,13 @@
 	@media (prefers-reduced-motion: no-preference) {
 		.rays {
 			transform-origin: 24px 24px;
-			animation: spin 40s linear infinite;
+			animation: spin 6s ease-out 1;
 		}
 		.spark .draw {
-			animation: reveal 1.1s cubic-bezier(0.22, 1, 0.36, 1) both 0.15s;
+			animation: reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both 0.1s;
 		}
 		.spark .pk {
-			animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both 1.1s;
+			animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both 0.6s;
 			transform-box: fill-box;
 			transform-origin: center;
 		}
@@ -572,6 +573,46 @@
 	}
 	.fc-skel i:last-child {
 		height: 48px;
+	}
+	/* Телефон: компактна картка, перемикач днів — на всю ширину */
+	@media (max-width: 640px) {
+		.fc {
+			padding: 0.85rem 1rem 0.8rem;
+			gap: 0.6rem;
+			border-radius: 14px;
+		}
+		.fc-days {
+			display: grid;
+			grid-auto-flow: column;
+			grid-auto-columns: minmax(0, 1fr);
+			width: 100%;
+		}
+		.fc-days button {
+			min-height: 40px;
+			padding-inline: 0.3rem;
+		}
+		.fc-main {
+			gap: 0.75rem;
+		}
+		.wx {
+			min-width: 3.5rem;
+		}
+		.wx :global(svg) {
+			width: 52px;
+			height: 52px;
+		}
+		.fc-say {
+			font-size: 1rem;
+		}
+		.fc-kwh .big-num {
+			font-size: 1.6rem;
+		}
+		.fc-sub {
+			font-size: 0.8125rem;
+		}
+		.spark svg {
+			height: 56px;
+		}
 	}
 	@media print {
 		.fc-days {

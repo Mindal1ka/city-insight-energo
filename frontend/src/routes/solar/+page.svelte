@@ -5,12 +5,14 @@
 	// стартуємо з наявних станцій, а для будівель, де станція вже є, додаємо лише те, чого бракує.
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { Tween } from 'svelte/motion';
 	import type { TransitionConfig } from 'svelte/transition';
 	import { getJSON, qs, errMessage, ApiError, type SolarList, type SolarItem, type SolarDetail } from '#lib/api.ts';
 	import type { IndependenceList, IndependenceItem } from '#lib/api-independence.ts';
 	import { num } from '#lib/format.ts';
+	import { catLabel } from '#lib/categories.ts';
 	import { isReduced, cubicOut, DUR } from '#lib/motion.ts';
 	import Status from '#lib/Status.svelte';
 	import ForecastCard from '#lib/ForecastCard.svelte';
@@ -101,7 +103,8 @@
 	// Живий перерахунок із невеликою затримкою, поки людина друкує
 	$effect(() => {
 		const q = query;
-		const t = setTimeout(() => load(q), data ? 350 : 0);
+		// untrack: інакше `data = d` у load() перезапускав би ефект → нескінченний цикл запитів
+		const t = setTimeout(() => load(q), untrack(() => data) ? 350 : 0);
 		return () => clearTimeout(t);
 	});
 
@@ -187,15 +190,19 @@
 	const budget = $derived(Math.max(0, (budgetM ?? 0) * 1e6));
 	const plan = $derived.by(() => {
 		let left = budget;
-		const picked: (Prog & { cum: number })[] = [];
+		const picked: (Prog & { cum: number; fill: boolean })[] = [];
 		const rest: Prog[] = [];
 		let cum = 0;
+		let skipped = false; // чи вже пропустили дорожчу станцію, що не вмістилася
 		for (const it of ordered) {
 			if (it.pb !== null && it.cost <= left) {
 				left -= it.cost;
 				cum += it.cost;
-				picked.push({ ...it, cum });
-			} else rest.push(it);
+				picked.push({ ...it, cum, fill: skipped });
+			} else {
+				if (it.pb !== null) skipped = true;
+				rest.push(it);
+			}
 		}
 		return { picked, rest, left };
 	});
@@ -216,6 +223,7 @@
 	}
 	const all = $derived(stats(prog.items.filter((i) => i.pb !== null)));
 	const sel = $derived(stats(plan.picked));
+	const fills = $derived(plan.picked.filter((i) => i.fill).length);
 
 	// ——— Енергонезалежність громади (узгоджено з /independence) ———
 	const comm = $derived(ind?.community ?? null);
@@ -248,8 +256,9 @@
 	const twPct = Tween.of(() => selPct, { duration: dur, easing: cubicOut });
 
 	// ——— Крива «гроші → енергонезалежність» ———
-	const CW = 560;
-	const CH = 230;
+	let curveW = $state(560);
+	const CW = $derived(Math.round(Math.max(300, Math.min(560, curveW || 560))));
+	const CH = $derived(CW < 480 ? 220 : 230);
 	const CP = { l: 44, r: 16, t: 16, b: 34 };
 	const curve = $derived.by(() => {
 		const seq = [...plan.picked, ...plan.rest.filter((i) => i.pb !== null)];
@@ -396,11 +405,13 @@
 		</div>
 	</div>
 
-	<div class="quick" role="group" aria-label="Швидкий вибір бюджету">
-		{#each presets as v (v)}
-			<button type="button" class="chip press" aria-pressed={budgetM === v} onclick={() => (budgetM = v)}>{v} млн</button>
-		{/each}
-		<button type="button" class="chip press" aria-pressed={budgetM === budgetMax} onclick={() => (budgetM = budgetMax)}>Уся програма</button>
+	<div class="quick">
+		<div class="chip-row quick-chips" role="group" aria-label="Швидкий вибір бюджету">
+			{#each presets as v (v)}
+				<button type="button" class="chip press" aria-pressed={budgetM === v} onclick={() => (budgetM = v)}>{v} млн</button>
+			{/each}
+			<button type="button" class="chip press" aria-pressed={budgetM === budgetMax} onclick={() => (budgetM = budgetMax)}>Уся програма</button>
+		</div>
 		<label class="exact">
 			<span>Точна сума</span>
 			<input type="number" min="0" step="0.5" inputmode="decimal" bind:value={budgetM} aria-label="Бюджет програми, млн грн (точна сума)" />
@@ -473,7 +484,7 @@
 					unit={buildings(sel.n)}
 					icon="building"
 					hint={sel.n
-						? `${num(sel.kw)} кВт панелей. Серед них ${sel.health} ${plural(sel.health, 'лікарня', 'лікарні', 'лікарень')} і ${sel.edu} ${plural(sel.edu, 'школа чи садок', 'школи чи садки', 'шкіл і садків')}.`
+						? `${num(sel.kw)} кВт панелей. Серед них ${sel.health} ${plural(sel.health, 'медзаклад', 'медзаклади', 'медзакладів')} і ${sel.edu} ${plural(sel.edu, 'заклад освіти', 'заклади освіти', 'закладів освіти')}.`
 						: 'Бюджету поки не вистачає на жодну станцію.'}
 				/>
 			</Reveal>
@@ -484,6 +495,7 @@
 					decimals={1}
 					unit="%"
 					icon="sun"
+					demo
 					tone={sel.n ? 'good' : 'neutral'}
 					toneLabel="зросте"
 					hint="Зараз {num(basePct, 1)} %. Уся програма дасть {num(potPct, 1)} %."
@@ -526,7 +538,7 @@
 				</div>
 				<div class="list-actions no-print">
 					<button type="button" class="btn press" onclick={exportCsv} disabled={!plan.picked.length}>Завантажити CSV</button>
-					<button type="button" class="btn btn-secondary press" onclick={() => window.print()}>Друк / PDF</button>
+					<button type="button" class="btn btn-secondary press" onclick={() => window.print()}><span class="hide-phone">Друк / PDF</span><span class="only-phone">Зберегти PDF</span></button>
 				</div>
 			</div>
 
@@ -551,9 +563,10 @@
 							<span class="r-name">
 								<a href="/solar/{it.id}{detailQs}" title={it.name}>{it.name}</a>
 								<span class="r-type">
-									{it.category_short}
+									{catLabel(it.category_short)}
 									{#if tier(it) === 0}<span class="tag crit"><span aria-hidden="true">✚</span> критичний</span>{/if}
 									{#if it.existingKw}<span class="tag ext">доповнення до наявної {num(it.existingKw, 1)} кВт</span>{/if}
+									{#if it.fill}<span class="tag fill" title="Наступна за чергою станція не вмістилася в залишок бюджету, тому добрали цю, меншу">у залишок бюджету</span>{/if}
 								</span>
 							</span>
 							<span class="r-kw r"><span class="lbl">Станція: </span><b>{it.existingKw ? '+' : ''}{num(it.kw, it.kw < 10 ? 1 : 0)}</b> кВт</span>
@@ -562,6 +575,11 @@
 						</li>
 					{/each}
 				</ol>
+				{#if fills}
+					<p class="small muted fill-note">
+						<span class="tag fill">у залишок бюджету</span> — наступна за чергою станція не вміщалася в залишок, тому добрали меншу, що вмістилася. Порядок черги від цього не змінюється.
+					</p>
+				{/if}
 				<p class="total">
 					<strong>Разом: {num(sel.n)} {buildings(sel.n)}</strong> · {num(sel.kw)} кВт · {money(sel.cost)} · економія {money(sel.save)} на рік
 				</p>
@@ -580,7 +598,7 @@
 									<span class="r-no" aria-hidden="true"></span>
 									<span class="r-name">
 										<a href="/solar/{it.id}{detailQs}" title={it.name}>{it.name}</a>
-										<span class="r-type">{it.category_short}{#if tier(it) === 0}<span class="tag crit"><span aria-hidden="true">✚</span> критичний</span>{/if}</span>
+										<span class="r-type">{catLabel(it.category_short)}{#if tier(it) === 0}<span class="tag crit"><span aria-hidden="true">✚</span> критичний</span>{/if}</span>
 									</span>
 									<span class="r-kw r"><span class="lbl">Станція: </span><b>{it.existingKw ? '+' : ''}{num(it.kw, it.kw < 10 ? 1 : 0)}</b> кВт</span>
 									<span class="r-cost r"><span class="lbl">Вартість: </span>{money(it.cost)}</span>
@@ -602,6 +620,7 @@
 					<h2>Як росте енергонезалежність із кожним мільйоном</h2>
 					<p class="muted small">Будівлі додаються в тому самому порядку, що й у переліку. Пунктир — ваш бюджет.</p>
 				</figcaption>
+				<div class="cv-box" bind:clientWidth={curveW}>
 				<svg
 					viewBox="0 0 {CW} {CH}"
 					role="img"
@@ -620,9 +639,10 @@
 					<rect x={CP.l} y={CP.t} width={Math.max(0, curve.X(twCost.current) - CP.l)} height={CH - CP.t - CP.b} class="selzone" />
 					<path d={curve.d} class="cline" pathLength="1" />
 					<line x1={curve.X(twBudget.current)} x2={curve.X(twBudget.current)} y1={CP.t} y2={CH - CP.b} class="bline" />
-					<text x={Math.min(curve.X(twBudget.current) + 6, CW - 150)} y={CP.t + 12} class="blabel">бюджет {mln(budget)} млн → {num(selPct, 1)} %</text>
+					<text x={Math.min(curve.X(twBudget.current) + 6, CW - 152)} y={CP.t + 12} class="blabel">бюджет {mln(budget)} млн → {num(selPct, 1)} %</text>
 					<circle cx={curve.X(twCost.current)} cy={curve.Y(twPct.current)} r="6" class="bdot" />
 				</svg>
+				</div>
 			</figure>
 		</Reveal>
 		<Reveal class="duo-side" delay={100}>
@@ -635,7 +655,7 @@
 		<section class="card why no-print" aria-labelledby="why-h">
 			<h2 id="why-h">Чому станції не більші?</h2>
 			<p class="why-lead">
-				Школа чи лікарня <strong>не може продати зайву електроенергію</strong> в мережу. Тому ми ставимо рівно стільки
+				Школа чи лікарня <strong>не може вигідно продати зайву електроенергію</strong> в мережу. Тому ми ставимо рівно стільки
 				панелей, скільки будівля сама спожиє вдень. Більша станція коштує дорожче, а заощаджує майже стільки ж.
 			</p>
 			{#if sizes.length}
@@ -688,12 +708,17 @@
 		{/if}
 		{#if data.excluded?.length}
 			<Disclosure summary="Будівлі без розрахунку — чому" hint="{num(data.excluded.length)} {buildings(data.excluded.length)}">
+				<p class="small">
+					Як складаються {num(data.items.length + data.excluded.length)} {buildings(data.items.length + data.excluded.length)}:
+					{num(all.n)} — у переліку програми{#if prog.covered.length}, {num(prog.covered.length)} уже мають достатню станцію (доповнення не потрібне){/if}{#if prog.items.length - all.n > 0}, {num(prog.items.length - all.n)} — станція не окупиться{/if},
+					{num(data.excluded.length)} — без розрахунку (причини нижче).
+				</p>
 				<div class="table-wrap">
 					<table>
 						<thead><tr><th scope="col">Будівля</th><th scope="col">Категорія</th><th scope="col">Причина</th></tr></thead>
 						<tbody>
 							{#each data.excluded as e (e.id)}
-								<tr><td class="name">{e.name}</td><td>{e.category_short}</td><td class="small">{e.reason}</td></tr>
+								<tr><td class="name">{e.name}</td><td>{catLabel(e.category_short)}</td><td class="small">{e.reason}</td></tr>
 							{/each}
 						</tbody>
 					</table>
@@ -744,7 +769,7 @@
 		border-radius: 50%;
 		background: var(--sun);
 		box-shadow: 0 0 0 4px var(--sun-soft);
-		animation: pulse 2.8s ease-in-out infinite;
+		animation: pulse 2.8s ease-in-out 3;
 	}
 	@keyframes pulse {
 		50% {
@@ -1213,6 +1238,14 @@
 		color: var(--bad);
 		border: 1px solid #f0c4c2;
 	}
+	.tag.fill {
+		background: var(--sun-soft);
+		color: var(--sun-ink);
+		border: 1px solid #f0d7a6;
+	}
+	.fill-note {
+		margin: 0.6rem 0 0;
+	}
 	.tag.ext {
 		background: var(--accent-soft);
 		color: var(--navy-3);
@@ -1304,7 +1337,12 @@
 	.curve figcaption p {
 		margin: 0;
 	}
+	.cv-box {
+		width: 100%;
+		min-width: 0;
+	}
 	.curve svg {
+		display: block;
 		width: 100%;
 		height: auto;
 	}
@@ -1337,7 +1375,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.cline {
-			animation: draw 1.4s var(--ease-out, ease-out) both 0.2s;
+			animation: draw 0.6s var(--ease-out, ease-out) both 0.1s;
 		}
 	}
 	@keyframes draw {
@@ -1423,7 +1461,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.sbar i {
-			animation: grow 0.9s var(--ease-out, ease-out) both 0.3s;
+			animation: grow 0.5s var(--ease-out, ease-out) both 0.15s;
 		}
 	}
 	@keyframes grow {
@@ -1441,5 +1479,185 @@
 	.notes li {
 		margin-bottom: 0.35rem;
 		max-width: 90ch;
+	}
+
+	.quick-chips {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	/* ---------- Телефон (≤640): питання + бюджет — головний екран ---------- */
+	@media (max-width: 640px) {
+		.ask {
+			padding: 1rem 1rem 0.25rem;
+			border-radius: 14px;
+			box-shadow: var(--shadow);
+			margin-bottom: 0.875rem;
+		}
+		.kicker {
+			font-size: 0.75rem;
+			margin-bottom: 0.35rem;
+		}
+		.ask-h {
+			font-size: 1.4rem;
+			line-height: 1.22;
+			margin-bottom: 0.6rem;
+		}
+		.ask-sum {
+			display: inline-block;
+		}
+		.big-range {
+			height: 52px;
+			touch-action: pan-y;
+		}
+		.big-range::-webkit-slider-runnable-track {
+			height: 10px;
+		}
+		.big-range::-webkit-slider-thumb {
+			width: 36px;
+			height: 36px;
+			margin-top: -13px;
+			border-width: 5px;
+		}
+		.big-range::-moz-range-thumb {
+			width: 30px;
+			height: 30px;
+		}
+		.range-scale {
+			font-size: 0.75rem;
+		}
+		.quick {
+			display: block;
+			margin: 0.6rem 0 1rem;
+		}
+		.quick-chips {
+			flex-wrap: nowrap;
+			margin-bottom: 0.6rem;
+		}
+		.chip {
+			min-height: 40px;
+			padding: 0.4rem 0.95rem;
+		}
+		.exact {
+			margin-left: 0;
+			justify-content: flex-start;
+		}
+		.exact input {
+			width: 6.5rem;
+		}
+		/* Пріоритет — сегментований перемикач */
+		.prio legend {
+			font-size: 0.9rem;
+			margin-bottom: 0.4rem;
+		}
+		.prio-opts {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0;
+			padding: 3px;
+			border-radius: 12px;
+			background: var(--bg-2);
+		}
+		.opt {
+			justify-content: center;
+			align-items: center;
+			min-height: 48px;
+			padding: 0.4rem 0.5rem;
+			border: 0;
+			border-radius: 10px;
+			background: transparent;
+			text-align: center;
+		}
+		.opt:hover {
+			border-color: transparent;
+		}
+		.opt.on {
+			background: var(--surface);
+			box-shadow: 0 1px 3px rgba(15, 35, 65, 0.16);
+		}
+		.opt-mark,
+		.opt-txt small {
+			display: none;
+		}
+		.opt-txt strong {
+			font-size: 0.875rem;
+			line-height: 1.2;
+		}
+		.opt.on .opt-txt strong {
+			color: var(--navy);
+		}
+		.settings {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.6rem;
+			align-items: end;
+		}
+		.settings input {
+			width: 100%;
+		}
+		.settings .btn {
+			grid-column: 1 / -1;
+		}
+
+		/* Відповідь: енергонезалежність на всю ширину, далі дві картки поруч */
+		.answer {
+			margin-bottom: 0.875rem;
+		}
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+		}
+		.stats > :global(.stat-cell:nth-child(2)) {
+			grid-column: 1 / -1;
+			order: -1;
+		}
+
+		/* Перелік — компактні рядки */
+		.list-head h2 {
+			font-size: 1.1rem;
+		}
+		.list-actions {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			width: 100%;
+		}
+		.list-actions .btn {
+			justify-content: center;
+			padding-inline: 0.5rem;
+			font-size: 0.9rem;
+		}
+		.row {
+			grid-template-columns: 1.4rem minmax(0, 1fr) auto;
+			grid-template-areas:
+				'no name name'
+				'. kw cost'
+				'. pb pb';
+			gap: 0.2rem 0.5rem;
+			padding: 0.6rem 0.25rem 0.6rem 0.5rem;
+			border-radius: 0;
+		}
+		.r-name a {
+			font-size: 0.95rem;
+			line-height: 1.3;
+		}
+		.r-kw,
+		.r-cost,
+		.r-pb {
+			font-size: 0.875rem;
+		}
+		.r-kw b {
+			font-size: 0.95rem;
+		}
+		.total {
+			font-size: 0.9rem;
+		}
+		.duo {
+			gap: 0.875rem;
+			margin-bottom: 0.875rem;
+		}
+		.curve figcaption h2 {
+			font-size: 1.05rem;
+		}
 	}
 </style>

@@ -51,7 +51,7 @@
 	bind:this={el}
 	class="reveal {klass}"
 	class:in={shown}
-	style:--rv-delay="{delay}ms"
+	style:--rv-delay="{Math.min(delay, 240)}ms"
 	style:--rv-y="{y}px"
 >
 	{@render children()}
@@ -63,8 +63,8 @@
 			opacity: 0;
 			transform: translateY(var(--rv-y));
 			transition:
-				opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay),
-				transform 620ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay);
+				opacity 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay),
+				transform 400ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay);
 		}
 		.reveal.in {
 			opacity: 1;

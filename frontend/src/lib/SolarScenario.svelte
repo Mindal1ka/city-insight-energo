@@ -64,12 +64,12 @@
 		return many;
 	}
 
-	/** Окупність словами, з округленням угору (чесно): 3,4 → «окупиться за 4 роки» */
+	/** Окупність словами, з одним знаком після коми: 3,64 → «окупиться за 3,6 року» */
 	export function paybackWords(years: number | null | undefined): string {
 		if (years === null || years === undefined || !Number.isFinite(years)) return 'не окупиться';
 		if (years < 1) return 'окупиться менш ніж за рік';
-		const n = Math.ceil(years - 0.05);
-		return `окупиться за ${n} ${plural(n, 'рік', 'роки', 'років')}`;
+		// дробове число → «року» (родовий однини), як і заведено в українській
+		return `окупиться за ${(Math.round(years * 10) / 10).toFixed(1).replace('.', ',')} року`;
 	}
 </script>
 
@@ -380,8 +380,22 @@
 		margin-bottom: 0.9rem;
 	}
 	@media (max-width: 640px) {
+		/* 2 в ряд; третя («Окупиться за») — на всю ширину */
 		.res {
-			grid-template-columns: 1fr;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+		}
+		.res > :global(:last-child:nth-child(odd)) {
+			grid-column: 1 / -1;
+		}
+		.chip {
+			min-height: 40px;
+		}
+		.tech input {
+			width: 100%;
+		}
+		.tech > :global(*) {
+			flex: 1 1 100%;
 		}
 	}
 	.verdict {

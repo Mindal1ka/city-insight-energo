@@ -95,4 +95,42 @@
 		color: var(--text);
 		font-weight: 600;
 	}
+
+	/* Телефон: компактний сегментований перемикач в один ряд на всю ширину */
+	@media (max-width: 640px) {
+		.vs {
+			max-width: none;
+			width: 100%;
+			gap: 0.3rem;
+		}
+		.vs-label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+			white-space: nowrap;
+		}
+		.seg {
+			display: flex;
+			width: 100%;
+			padding: 3px;
+			gap: 3px;
+			overflow: visible;
+		}
+		.seg.seg-sm a {
+			flex: 1 1 0;
+			justify-content: center;
+			min-height: 38px;
+			padding: 0.3rem 0.5rem;
+			font-size: 0.9rem;
+		}
+		.opt-sub {
+			display: none;
+		}
+		.when {
+			font-size: 0.8rem;
+			line-height: 1.35;
+		}
+	}
 </style>

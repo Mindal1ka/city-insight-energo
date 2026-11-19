@@ -6,7 +6,8 @@
 	import { page } from '$app/state';
 	import { tick } from 'svelte';
 	import { api, errMessage, ApiError, type SiteDetail } from '#lib/api.ts';
-	import { num, signed, date, moment, hh } from '#lib/format.ts';
+	import { num, signed, date, moment, hh, plural } from '#lib/format.ts';
+	import { catLabel } from '#lib/categories.ts';
 	import { viewFrom, withView } from '#lib/view.ts';
 	import { duration, type Improvement } from '#lib/api-independence.ts';
 	import { isReduced } from '#lib/motion.ts';
@@ -101,6 +102,18 @@
 	const autonomy = $derived(it ? (hasBat ? it.autonomy_hours : 0) : null);
 	const costToday = $derived(s ? s.today.consumed_kwh * s.limits.tariff_uah_kwh : null);
 
+	// Телефон: компактні картки 2×2 — без позначки «ДЕМО» на кожній (одна спільна над сіткою)
+	let phone = $state(false);
+	$effect(() => {
+		const mq = window.matchMedia('(max-width: 640px)');
+		const on = () => (phone = mq.matches);
+		on();
+		mq.addEventListener('change', on);
+		return () => mq.removeEventListener('change', on);
+	});
+	const days = (n: number) => `${num(n)} ${plural(n, ['день', 'дні', 'днів'])}`;
+	const anyDemo = $derived(!noData && (!!ses || !!it));
+
 	// --- Одна рекомендована дія ---
 	const WORD: Record<string, number> = { висока: 1, середня: 2, низька: 3 };
 	const prio = (p: Improvement['priority']) =>
@@ -143,12 +156,46 @@
 
 	// --- Навігація по розділах ---
 	const SECTIONS = $derived([
-		{ id: 'now', label: 'Що зараз', icon: 'bolt' as const },
-		{ id: 'outage', label: 'Якщо вимкнуть світло', icon: 'battery' as const },
-		{ id: 'tomorrow', label: 'Сонце завтра', icon: 'sun' as const },
-		{ id: 'todo', label: 'Що зробити', icon: 'check' as const },
-		{ id: 'tech', label: ses ? 'Технічні дані станції' : 'Дані будівлі', icon: 'inverter' as const }
+		{ id: 'now', label: 'Що зараз', short: 'Зараз', icon: 'bolt' as const },
+		{ id: 'outage', label: 'Якщо вимкнуть світло', short: 'Без світла', icon: 'battery' as const },
+		{ id: 'tomorrow', label: 'Сонце завтра', short: 'Завтра', icon: 'sun' as const },
+		{ id: 'todo', label: 'Що зробити', short: 'Що зробити', icon: 'check' as const },
+		{ id: 'tech', label: ses ? 'Технічні дані станції' : 'Дані будівлі', short: ses ? 'Техдані' : 'Будівля', icon: 'inverter' as const }
 	]);
+
+	// Активний розділ — підсвічуємо чип у змісті (на телефоні зміст «липне» під шапкою)
+	let activeSec = $state<string | null>(null);
+	let tocEl = $state<HTMLElement | null>(null);
+	$effect(() => {
+		if (!s || typeof IntersectionObserver === 'undefined') return;
+		const ids = SECTIONS.map((x) => x.id);
+		const seen = new Map<string, boolean>();
+		let io: IntersectionObserver | undefined;
+		tick().then(() => {
+			io = new IntersectionObserver(
+				(es) => {
+					for (const e of es) seen.set(e.target.id, e.isIntersecting);
+					activeSec = ids.find((x) => seen.get(x)) ?? (window.scrollY < 200 ? null : activeSec);
+				},
+				// «Активний» — той розділ, що перетинає смугу трохи нижче липкого змісту
+				{ rootMargin: '-30% 0px -60% 0px' }
+			);
+			for (const x of ids) {
+				const el = document.getElementById(x);
+				if (el) io.observe(el);
+			}
+		});
+		return () => io?.disconnect();
+	});
+	// Активний чип — у полі зору горизонтальної стрічки (без вертикальної прокрутки сторінки)
+	$effect(() => {
+		const id = activeSec;
+		if (!tocEl || !id || tocEl.scrollWidth <= tocEl.clientWidth) return;
+		const a = tocEl.querySelector<HTMLElement>(`[data-sec="${id}"]`);
+		if (!a) return;
+		const left = a.offsetLeft - (tocEl.clientWidth - a.offsetWidth) / 2;
+		tocEl.scrollTo({ left: Math.max(0, left), behavior: isReduced() ? 'auto' : 'smooth' });
+	});
 	function jump(e: MouseEvent, target: string) {
 		const el = document.getElementById(target);
 		if (!el) return;
@@ -195,18 +242,22 @@
 			<div class="hero-top">
 				<div class="hero-main">
 					<p class="eyebrow rise" style="--d: 0ms">
-						{b.category_short}
+						<span class="cat">{catLabel(b.category_short)}</span>
 						{#if it?.critical}
-							<span class="crit"><Icon name="alert" size={14} stroke={2.4} /> критичний заклад</span>
+							<span class="crit"><Icon name="alert" size={14} stroke={2.4} /> критичний<span class="crit-w"> заклад</span></span>
+						{/if}
+						{#if it}
+							<!-- На телефоні індекс — у цьому ж ряду чипів (праворуч від назви місця не вистачає) -->
+							<span class="idx-m"><IndexBadge index={it.index} cls={it.index_class} size="sm" /></span>
 						{/if}
 					</p>
-					<h1 id="obj-h" class="rise" style="--d: 40ms">{b.name}</h1>
-					<p class="place rise" style="--d: 80ms"><Icon name="pin" size={18} /> {place}</p>
+					<h1 id="obj-h" class="rise" style="--d: 40ms" title={b.name}>{b.name}</h1>
+					<p class="place rise" style="--d: 80ms"><Icon name="pin" size={18} /> <span class="place-t">{place}</span></p>
 				</div>
 				<div class="hero-side rise" style="--d: 120ms">
 					{#if it}
 						<div class="idx">
-							<span class="idx-l"><Term key="енергонезалежність">Енергонезалежність</Term></span>
+							<span class="idx-l"><Term key="індекс енергостійкості">Індекс енергостійкості</Term></span>
 							<IndexBadge index={it.index} cls={it.index_class} size="md" />
 						</div>
 					{/if}
@@ -219,7 +270,7 @@
 					Про споживання електроенергії цієї будівлі <b>ще немає даних</b>, тому порахувати, скільки вона протримається без світла, поки неможливо.
 				{:else}
 					{#if ses}
-						Сьогодні сонце покриває <b class="tnum">{num(selfShare, 0)} %</b> потреби закладу.
+						{view === 'summer' ? 'У цей день' : 'Сьогодні'} сонце покриває <b class="tnum">{num(selfShare, 0)} %</b> потреби закладу.
 					{:else}
 						Сонячної станції не зафіксовано — <b>електроенергія надходить з мережі</b>.
 					{/if}
@@ -227,38 +278,41 @@
 						{#if !hasBat}
 							<b class="bad-t">Резерв на випадок відключення не зафіксовано</b>.
 						{:else if autonomy !== null}
-							Якщо вимкнуть світло — протримається <b class="tnum">{duration(autonomy)}</b> <span class="demo-note">(за демо-моделлю)</span>.
+							Якщо вимкнуть світло, з повністю зарядженим акумулятором протримається <b class="tnum">{duration(autonomy)}</b> <span class="demo-note">(за демо-моделлю)</span>.
 						{/if}
 					{/if}
 				{/if}
 			</p>
 
+			{#if phone && anyDemo}
+				<p class="cards-cap rise" style="--d: 200ms"><span>Головне на зараз</span><DemoPill text="Генерація, акумулятор і ліміти змодельовані; споживання — реальні дані UMUNI" /></p>
+			{/if}
 			<div class="stat-grid cards rise" style="--d: 220ms">
 				{#if noData}
 					<StatCard label="Споживання за 2025 рік" value={null} icon="plug" hint="У системі UMUNI немає даних лічильника." tone="warn" toneLabel="немає даних" />
 					<StatCard label="Площа будівлі" value={b.heated_area} unit="м²" icon="building" hint="Опалювана площа за даними UMUNI." />
 					<StatCard label="Поверхів" value={b.floors} icon="building" hint="Кількість поверхів будівлі." />
 				{:else if ses}
-					<StatCard label="Сонце покриває сьогодні" value={selfShare} unit="%" icon="sun" tone={shareTone(selfShare)} demo
+					<StatCard label={phone ? 'Сонце покриває' : 'Сонце покриває сьогодні'} value={selfShare} unit="%" icon="sun" tone={shareTone(selfShare)} demo={!phone}
 						hint="Решту — {num(s.today.from_grid_kwh, 1)} кВт·год — бере з мережі.">
 						<span class="mini-bar" aria-hidden="true"><i style="--w: {Math.min(100, selfShare ?? 0)}%"></i></span>
 					</StatCard>
-					<StatCard label="Без світла протримається" value={autonomy} format={duration} icon="battery" tone={autoTone(autonomy)} demo
-						hint={hasBat ? `На акумуляторі ${num(batKwh, 1)} кВт·год, навіть уночі без сонця.` : 'Резерв не зафіксовано.'} />
+					<StatCard label={phone ? 'Без світла' : 'Без світла протримається'} value={autonomy} format={duration} icon="battery" tone={autoTone(autonomy)} demo={!phone}
+						hint={hasBat ? `З повністю зарядженим акумулятором ${num(batKwh, 1)} кВт·год — навіть уночі без сонця.` : 'Резерв не зафіксовано.'} />
 					<StatCard label="До кінця дня" value={s.distribution.balance_kwh} format={(n) => signed(n, 1)} unit="кВт·год" icon="bolt"
-						tone={s.distribution.enough ? 'good' : 'bad'} toneLabel={s.distribution.enough ? 'енергії достатньо' : 'енергії бракує'} demo
-						hint={s.distribution.enough ? 'Сонця й акумулятора вистачить із запасом.' : `Бракує ${num(Math.abs(s.distribution.balance_kwh), 1)} кВт·год — докупимо з мережі.`} />
-					<StatCard label="Заощаджено" value={s.period.saved_uah} unit="грн" icon="wallet" tone="good" toneLabel="економія" demo
-						hint="За {num(s.period.days)} днів роботи станції — менше платимо за світло." />
+						tone={s.distribution.enough ? 'good' : 'neutral'} toneLabel={s.distribution.enough ? 'енергії достатньо' : 'решту з мережі'} demo={!phone}
+						hint={s.distribution.enough ? 'Сонця й акумулятора вистачить із запасом.' : `Решту — ${num(Math.abs(s.distribution.balance_kwh), 1)} кВт·год — докупимо з мережі.`} />
+					<StatCard label="Заощаджено" value={s.period.saved_uah} unit="грн" icon="wallet" tone="good" toneLabel="економія" demo={!phone}
+						hint="За {days(s.period.days)} роботи станції — менше платимо за світло." />
 				{:else}
 					<StatCard label="Витрачено сьогодні" value={s.today.consumed_kwh} decimals={1} unit="кВт·год" icon="plug"
 						hint="Сонячної станції не зафіксовано — енергія з мережі." />
 					<StatCard label="Коштує сьогодні" value={costToday} unit="грн" icon="wallet"
 						hint="За тарифом {num(s.limits.tariff_uah_kwh, 2)} грн за 1 кВт·год." />
-					<StatCard label="Без світла протримається" value={autonomy} format={duration} icon="battery" tone={autoTone(autonomy)} demo
-						hint={hasBat ? `На акумуляторі ${num(batKwh, 1)} кВт·год.` : 'Резерв не зафіксовано: у даних немає ні станції, ні акумулятора.'} />
+					<StatCard label={phone ? 'Без світла' : 'Без світла протримається'} value={autonomy} format={duration} icon="battery" tone={autoTone(autonomy)} demo={!phone}
+						hint={hasBat ? `З повністю зарядженим акумулятором ${num(batKwh, 1)} кВт·год.` : 'Резерв не зафіксовано: у даних немає ні станції, ні акумулятора.'} />
 					<StatCard label="Місячний ліміт використано" value={s.limits.money_month_pct} unit="%" icon="gauge"
-						tone={limitTone(s.limits.money_month_pct, s.limits.over_money)} demo
+						tone={limitTone(s.limits.money_month_pct, s.limits.over_money)} demo={!phone}
 						hint="{num(s.limits.money_month_used_uah)} з {num(s.limits.money_month_uah)} грн на цей місяць." />
 				{/if}
 			</div>
@@ -281,10 +335,18 @@
 		</section>
 
 		<!-- Зміст сторінки -->
-		<nav class="toc no-print" aria-label="Розділи сторінки">
+		<nav class="toc no-print" aria-label="Розділи сторінки" bind:this={tocEl}>
 			{#each SECTIONS as sec, i (sec.id)}
-				<a href="#{sec.id}" onclick={(e) => jump(e, sec.id)} class="rise" style="--d: {340 + i * 40}ms">
-					<Icon name={sec.icon} size={16} /> {sec.label}
+				<a
+					href="#{sec.id}"
+					onclick={(e) => jump(e, sec.id)}
+					class="rise"
+					class:on={activeSec === sec.id}
+					aria-current={activeSec === sec.id ? 'location' : undefined}
+					data-sec={sec.id}
+					style="--d: {340 + i * 40}ms"
+				>
+					<Icon name={sec.icon} size={16} /> <span class="toc-l">{sec.label}</span><span class="toc-s" aria-hidden="true">{sec.short}</span>
 				</a>
 			{/each}
 		</nav>
@@ -353,7 +415,7 @@
 										{/if}
 										<div><dt>Витрачено з {date(s.period.consumed_since ?? '2025-01-01')}</dt><dd>{num(s.period.consumed_kwh)} <small>кВт·год</small></dd></div>
 										{#if ses}
-											<div><dt>Заощаджено за {num(s.period.days)} днів</dt><dd>{num(s.period.saved_uah)} <small>грн</small></dd></div>
+											<div><dt>Заощаджено за {days(s.period.days)}</dt><dd>{num(s.period.saved_uah)} <small>грн</small></dd></div>
 										{/if}
 									</dl>
 									<p class="src"><span class="real">споживання — реальні дані UMUNI</span>{#if ses}<DemoPill align="left" />{/if}</p>
@@ -403,7 +465,7 @@
 						<div class="au">
 							<span class="au-ic night" aria-hidden="true">☾</span>
 							<div>
-								<p class="au-l">Уночі, без сонця</p>
+								<p class="au-l">Уночі, з повним акумулятором</p>
 								<p class="au-v tnum">{hasBat ? duration(it.autonomy_hours) : '0 хв'}</p>
 							</div>
 						</div>
@@ -417,7 +479,7 @@
 						<DemoPill align="left" text="Станції й акумулятори в пакеті міста не вказані; автономність розраховано на змодельованих даних і реальному споживанні UMUNI" />
 						<p class="au-n">
 							{#if hasBat}
-								Це <Term key="автономність">автономність</Term> при звичайній роботі закладу. Змініть час і тривалість відключення нижче — побачите, що буде саме тоді.
+								Це <Term key="автономність">автономність</Term> при звичайній роботі закладу, якщо акумулятор повністю заряджений. Насправді на момент відключення він може бути заряджений менше — змініть час і тривалість нижче, і побачите, що буде саме тоді.
 							{:else}
 								Резерв не зафіксовано: у даних немає акумулятора{#if it.has_ses}, а сонячна станція без акумулятора вимикається разом із мережею{/if}.
 							{/if}
@@ -505,7 +567,7 @@
 								<div>
 									<p class="ts-l"><Term key="акумулятор">Акумулятор</Term></p>
 									<p class="ts-v tnum"><b>{num(ses.battery_kwh, 1)}</b> <Term key="кВт·год">кВт·год</Term></p>
-									<p class="ts-s">вистачить на {it ? duration(it.autonomy_hours) : '—'} без мережі</p>
+									<p class="ts-s">повного заряду вистачить на {it ? duration(it.autonomy_hours) : '—'} без мережі</p>
 								</div>
 							</div>
 							<div class="ts">
@@ -551,7 +613,7 @@
 						<dl class="kv tech-kv">
 							<div><dt>Місто</dt><dd>{b.city || '—'}</dd></div>
 							<div><dt>Адреса</dt><dd>{b.address}</dd></div>
-							<div><dt>Тип закладу</dt><dd>{b.category_short}</dd></div>
+							<div><dt>Тип закладу</dt><dd>{catLabel(b.category_short)}</dd></div>
 							<div><dt>Площа</dt><dd>{b.heated_area ? `${num(b.heated_area)} м²` : '—'}</dd></div>
 							<div><dt>Поверхів</dt><dd>{b.floors ?? '—'}</dd></div>
 							<div><dt>Електроенергія за 2025 рік</dt><dd>{b.elec_kwh_2025 ? `${num(b.elec_kwh_2025)} кВт·год` : 'немає даних'}</dd></div>
@@ -589,6 +651,7 @@
 	.back a {
 		display: inline-flex;
 		align-items: center;
+		min-height: 40px;
 		gap: 0.4rem;
 		font-weight: 600;
 		text-decoration: none;
@@ -823,6 +886,15 @@
 		color: var(--accent);
 		border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 		transform: translateY(-1px);
+	}
+	.toc a.on {
+		color: var(--accent);
+		border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+		background: var(--accent-soft, #e8f1fb);
+	}
+	.toc-s,
+	.idx-m {
+		display: none;
 	}
 
 	/* ---------- Розділи ---------- */
@@ -1175,6 +1247,31 @@
 		.hero {
 			padding: 1.25rem;
 		}
+		.auto {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.75rem;
+			padding: 0.9rem 1rem;
+		}
+		.au {
+			align-items: flex-start;
+			gap: 0.55rem;
+		}
+		.au-ic {
+			width: 2.1rem;
+			height: 2.1rem;
+			font-size: 1.05rem;
+		}
+		.au-l {
+			font-size: 0.8125rem;
+			line-height: 1.3;
+		}
+		.au-v {
+			font-size: 1.25rem;
+		}
+		.auto > :global(:not(.au)) {
+			grid-column: 1 / -1;
+		}
 		.au {
 			border-right: 0;
 			padding-right: 0;
@@ -1189,6 +1286,285 @@
 		}
 		.kv dd {
 			text-align: left;
+		}
+	}
+
+	/* ---------- Телефон: компактний «екран застосунку» ---------- */
+	@media (max-width: 640px) {
+		.back {
+			margin: -0.75rem 0 0.25rem;
+			font-size: 0.9375rem;
+		}
+		.back a {
+			min-height: 44px;
+		}
+		.obj {
+			gap: 0.875rem;
+		}
+		.hero {
+			padding: 1rem;
+			gap: 0.8rem;
+			border-radius: 18px;
+			background:
+				radial-gradient(420px 200px at 100% 0%, rgba(245, 165, 36, 0.12), transparent 70%),
+				var(--surface);
+		}
+		.hero-top {
+			gap: 0.75rem;
+		}
+		.hero-main {
+			flex-basis: 100%;
+		}
+		/* Ряд чипів: тип закладу · критичний · індекс */
+		.eyebrow {
+			flex-wrap: nowrap;
+			gap: 0.35rem;
+			font-size: 0.75rem;
+			letter-spacing: 0;
+			text-transform: none;
+		}
+		.eyebrow > * {
+			flex: none;
+		}
+		.eyebrow > .cat {
+			flex: 0 1 auto;
+			min-width: 0;
+		}
+		.cat {
+			display: inline-flex;
+			align-items: center;
+			min-height: 1.6rem;
+			padding: 0 0.55rem;
+			border-radius: 999px;
+			background: #eef2f6;
+			color: var(--text-2, #36425a);
+			max-width: 100%;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.crit {
+			min-height: 1.6rem;
+			padding: 0 0.5rem;
+			font-size: 0.75rem;
+			letter-spacing: 0;
+		}
+		.crit-w {
+			display: none;
+		}
+		.idx-m {
+			display: inline-flex;
+			letter-spacing: 0;
+			text-transform: none;
+		}
+		.hero-side .idx {
+			display: none;
+		}
+		h1 {
+			font-size: 1.3rem;
+			line-height: 1.25;
+			margin: 0.5rem 0 0.25rem;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+			overflow-wrap: anywhere;
+		}
+		.place {
+			font-size: 0.875rem;
+			gap: 0.3rem;
+			min-width: 0;
+		}
+		.place :global(.icon) {
+			flex: none;
+			width: 15px;
+			height: 15px;
+		}
+		.place-t {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		/* Перемикач «Зараз / Літній день» — один компактний ряд на всю ширину */
+		.hero-side {
+			width: 100%;
+			gap: 0;
+		}
+		.hero-side :global(.vs) {
+			width: 100%;
+			max-width: none;
+			gap: 0.3rem;
+		}
+		.hero-side :global(.vs-label),
+		.hero-side :global(.opt-sub) {
+			display: none;
+		}
+		.hero-side :global(.seg) {
+			display: flex;
+			width: 100%;
+			overflow: visible;
+		}
+		.hero-side :global(.seg a) {
+			flex: 1 1 0;
+			justify-content: center;
+			min-height: 40px;
+			padding: 0.35rem 0.5rem;
+			font-size: 0.9375rem;
+		}
+		.hero-side :global(.when) {
+			font-size: 0.8125rem;
+			line-height: 1.35;
+		}
+		.answer {
+			font-size: 1.0625rem;
+			line-height: 1.42;
+		}
+		.answer .demo-note {
+			font-size: 0.8125rem;
+		}
+		.cards {
+			margin: 0;
+		}
+		.cards-cap {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+			margin: 0 0 -0.35rem;
+			font-size: 0.8125rem;
+			font-weight: 700;
+			color: var(--muted);
+		}
+		/* Головна дія: короткий текст + кнопка на всю ширину */
+		.action {
+			gap: 0.7rem;
+			padding: 0.9rem;
+			border-left-width: 4px;
+			border-radius: 16px;
+		}
+		.act-ic {
+			display: none;
+		}
+		.act-txt {
+			flex-basis: 100%;
+		}
+		.act-k {
+			font-size: 0.6875rem;
+		}
+		.act-t {
+			font-size: 1.05rem;
+		}
+		.act-s {
+			font-size: 0.9rem;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+		}
+		.act-btn {
+			min-height: 48px;
+		}
+
+		/* Зміст → липка стрічка чипів під шапкою з горизонтальною прокруткою */
+		.toc {
+			position: sticky;
+			/* шапка на телефоні липка (--header-h + safe-area), зміст — одразу під нею */
+			top: calc(var(--header-h, 56px) + var(--safe-t, 0px));
+			z-index: 20;
+			flex-wrap: nowrap;
+			gap: 0.4rem;
+			margin: 0 calc(-1 * var(--gutter, 1rem));
+			padding: 0.5rem var(--gutter, 1rem);
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			scroll-snap-type: x proximity;
+			scroll-padding-inline: var(--gutter, 1rem);
+			scrollbar-width: none;
+			background: color-mix(in srgb, var(--bg, #f3f6fa) 88%, transparent);
+			-webkit-backdrop-filter: saturate(1.4) blur(12px);
+			backdrop-filter: saturate(1.4) blur(12px);
+			border-bottom: 1px solid color-mix(in srgb, var(--line, #dfe5ec) 70%, transparent);
+		}
+		.toc::-webkit-scrollbar {
+			display: none;
+		}
+		.toc a {
+			flex: none;
+			scroll-snap-align: start;
+			min-height: 40px;
+			padding: 0.35rem 0.85rem;
+			font-size: 0.875rem;
+			box-shadow: none;
+			white-space: nowrap;
+		}
+		.toc a:hover {
+			transform: none;
+		}
+		.toc a.on {
+			background: var(--navy, #0f2f52);
+			border-color: var(--navy, #0f2f52);
+			color: #fff;
+		}
+		.toc-l {
+			display: none;
+		}
+		.toc-s {
+			display: inline;
+		}
+
+		/* Розділи */
+		.sec {
+			gap: 0.75rem;
+			margin-top: 0.75rem;
+			scroll-margin-top: calc(var(--header-h, 56px) + var(--safe-t, 0px) + 4rem);
+		}
+		.sec-h {
+			gap: 0.7rem;
+			align-items: flex-start;
+		}
+		.sec-h h2 {
+			font-size: 1.2rem;
+			line-height: 1.25;
+		}
+		.sec-sub {
+			font-size: 0.9rem;
+			line-height: 1.4;
+		}
+		.sec-ic {
+			width: 2.25rem;
+			height: 2.25rem;
+			border-radius: 11px;
+		}
+		.sec-ic :global(.icon) {
+			width: 18px;
+			height: 18px;
+		}
+		.panel h3 {
+			font-size: 1.05rem;
+		}
+		.sub {
+			font-size: 0.875rem;
+		}
+		.detail-grid {
+			gap: 1rem;
+		}
+		.ts-v {
+			font-size: 1.15rem;
+		}
+		.tech-sum {
+			gap: 0.75rem;
+		}
+		.check {
+			padding: 0.7rem 0.8rem;
+			font-size: 0.9rem;
+		}
+	}
+	@media (max-width: 640px) and (pointer: coarse) {
+		.toc a {
+			min-height: 44px;
 		}
 	}
 </style>

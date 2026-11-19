@@ -25,6 +25,7 @@
 	import { tick } from 'svelte';
 	import { api, errMessage, type Building } from './api.ts';
 	import Icon from './Icon.svelte';
+	import { catLabel } from './categories.ts';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -95,8 +96,27 @@
 		});
 	});
 
+	// Абревіатури в назвах UMUNI → слова, якими шукають люди (і навпаки)
+	const SYNONYMS: [RegExp, string][] = [
+		[/азпсм|амбулатор/, 'азпсм амбулаторія сімейна медицина сімейний лікар'],
+		[/цпмсд|первинн/, 'цпмсд центр первинної допомоги медицина'],
+		[/днз|здо|дошкіл|садо|ясла/, 'днз здо садочок дитсадок садок дитячий садок'],
+		[/зош|нвк|ліцей|гімназ|школ|ззсо/, 'школа зош ліцей гімназія нвк'],
+		[/кнп|лікарн|госпітал|пологов|диспансер/, 'лікарня кнп медзаклад'],
+		[/стоматолог/, 'стоматологія зубний'],
+		[/виконком|виконавч|рада/, 'виконком міська рада адмінбудівля']
+	];
+	function expand(text: string): string {
+		return SYNONYMS.filter(([re]) => re.test(text))
+			.map(([, add]) => add)
+			.join(' ');
+	}
+
 	const index = $derived(
-		(buildings ?? []).map((b) => ({ b, hay: norm(`${b.name} ${b.address} ${b.category_short}`), name: norm(b.name) }))
+		(buildings ?? []).map((b) => {
+			const base = norm(`${b.name} ${b.address} ${b.category_short} ${catLabel(b.category_short)}`);
+			return { b, hay: base + ' ' + expand(base), name: norm(b.name) };
+		})
 	);
 
 	const MAX = 8;
@@ -120,8 +140,8 @@
 					id: 'b' + b.id,
 					href: `/object/${b.id}`,
 					label: b.name,
-					hint: b.address,
-					cat: b.category_short
+					hint: b.address || 'адреса не вказана',
+					cat: catLabel(b.category_short)
 				})
 			)
 		};
@@ -231,7 +251,7 @@
 				autocomplete="off"
 				spellcheck="false"
 			/>
-			<button type="button" class="cp-esc" onclick={() => (open = false)} aria-label="Закрити пошук">Esc</button>
+			<button type="button" class="cp-esc" onclick={() => (open = false)} aria-label="Закрити пошук"><span class="cp-esc-k">Esc</span><span class="cp-esc-t">Скасувати</span></button>
 		</div>
 
 		<ul id="cp-list" role="listbox" aria-label="Результати пошуку" bind:this={listEl}>
@@ -379,6 +399,9 @@
 		color: var(--muted);
 		cursor: pointer;
 	}
+	.cp-esc-t {
+		display: none;
+	}
 	ul {
 		list-style: none;
 		margin: 0;
@@ -489,14 +512,67 @@
 		text-align: center;
 		color: var(--text);
 	}
+	/* Телефон: повноекранний пошук, як у нативних застосунках */
 	@media (max-width: 640px) {
 		.cp {
-			margin-top: 1rem;
-			max-height: calc(100vh - 2rem);
+			width: 100vw;
+			max-width: 100vw;
+			height: 100dvh;
+			max-height: 100dvh;
+			margin: 0;
+			border-radius: 0;
+			box-shadow: none;
 		}
-		.cp-foot-r,
+		.cp-input {
+			gap: 0.55rem;
+			padding: calc(0.5rem + env(safe-area-inset-top, 0px)) calc(0.5rem + env(safe-area-inset-right, 0px)) 0.5rem calc(1rem + env(safe-area-inset-left, 0px));
+			min-height: 60px;
+		}
+		.cp-input input {
+			font-size: 17px;
+			min-height: 44px;
+		}
+		.cp-esc {
+			min-height: 44px;
+			padding: 0 0.85rem;
+			border: 0;
+			border-radius: 12px;
+			background: transparent;
+			color: var(--accent);
+			font-size: 1rem;
+			font-weight: 600;
+		}
+		.cp-esc-k {
+			display: none;
+		}
+		.cp-esc-t {
+			display: inline;
+		}
+		ul {
+			padding: 0.25rem 0.5rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+			overscroll-behavior: contain;
+		}
+		.cp-opt {
+			min-height: 56px;
+			padding: 0.5rem 0.6rem;
+		}
+		.cp-opt:active {
+			background: var(--accent-soft);
+		}
+		.cp-foot,
 		.cp-enter {
 			display: none;
+		}
+	}
+	@media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
+		.cp[open] {
+			animation: cp-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+		}
+		@keyframes cp-up {
+			from {
+				opacity: 0.6;
+				transform: translateY(24px);
+			}
 		}
 	}
 </style>

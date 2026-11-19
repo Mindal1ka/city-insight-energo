@@ -11,6 +11,16 @@
  *   Моушн:       .fade-in, .stagger (діти з'являються драбинкою), .lift (підйом при наведенні), .press
  *   Тривалості:  var(--dur-fast|--dur-base|--dur-slow), криві var(--ease-out|--ease-spring)
  *   Шкала:       --sp-1…--sp-8 (4…64 px), --fs-xs…--fs-3xl, --radius-sm|--radius|--radius-lg|--radius-xl
+ *
+ * ТЕЛЕФОН (див. блок «Мобільна версія» внизу)
+ *   Брейкпоінти: ≤640 — телефон (компактні відступи, 2 колонки StatCard), ≤768 — нижня панель вкладок.
+ *   Змінні:      --header-h (висота шапки), --tabbar-h (нижня панель, 0 на десктопі),
+ *                --safe-b / --safe-l / --safe-r (вирізи екрана), --gutter (бічний відступ сторінки).
+ *   Висота «на весь екран» під шапкою:  height: calc(100dvh - var(--header-h) - var(--tabbar-h));
+ *   Утиліти:     .chip-row (ряд чипів, горизонтальна прокрутка зі snap на телефоні),
+ *                .scroll-x (будь-який широкий блок — прокрутка всередині, а не сторінки),
+ *                .hide-phone / .only-phone, .stack-phone (flex → стовпчик на телефоні),
+ *                .full-bleed-phone (блок на всю ширину екрана, без бічних полів)
  */
 
 :root {
@@ -121,6 +131,15 @@
 	--sol-self: #1a7f37;
 	--sol-surplus: #c27a00;
 	--sol-cons: #4f5b6b;
+
+	/* Каркас (перевизначається для телефона нижче) */
+	--gutter: 2rem;
+	--header-h: 7.4rem;
+	--tabbar-h: 0px;
+	--safe-t: env(safe-area-inset-top, 0px);
+	--safe-b: env(safe-area-inset-bottom, 0px);
+	--safe-l: env(safe-area-inset-left, 0px);
+	--safe-r: env(safe-area-inset-right, 0px);
 }
 
 * {
@@ -193,7 +212,7 @@ h3 {
 }
 @media (max-width: 700px) {
 	h1 {
-		font-size: 1.55rem;
+		font-size: 1.6rem;
 	}
 	h2 {
 		font-size: 1.2rem;
@@ -777,7 +796,7 @@ td.name {
 }
 @media (prefers-reduced-motion: no-preference) {
 	.fade-in {
-		animation: fade-in 0.45s var(--ease-out) backwards;
+		animation: fade-in 0.4s var(--ease-out) backwards;
 	}
 	@keyframes fade-in {
 		from {
@@ -787,34 +806,34 @@ td.name {
 	}
 	/* Діти з'являються драбинкою (до 10 штук), напр. <div class="stat-grid stagger"> */
 	.stagger > * {
-		animation: fade-in 0.5s var(--ease-out) backwards;
+		animation: fade-in 0.4s var(--ease-out) backwards;
 	}
 	.stagger > :nth-child(2) {
-		animation-delay: 50ms;
+		animation-delay: 30ms;
 	}
 	.stagger > :nth-child(3) {
-		animation-delay: 100ms;
+		animation-delay: 60ms;
 	}
 	.stagger > :nth-child(4) {
-		animation-delay: 150ms;
+		animation-delay: 90ms;
 	}
 	.stagger > :nth-child(5) {
-		animation-delay: 200ms;
+		animation-delay: 120ms;
 	}
 	.stagger > :nth-child(6) {
-		animation-delay: 250ms;
+		animation-delay: 150ms;
 	}
 	.stagger > :nth-child(7) {
-		animation-delay: 300ms;
+		animation-delay: 180ms;
 	}
 	.stagger > :nth-child(8) {
-		animation-delay: 350ms;
+		animation-delay: 210ms;
 	}
 	.stagger > :nth-child(9) {
-		animation-delay: 400ms;
+		animation-delay: 240ms;
 	}
 	.stagger > :nth-child(n + 10) {
-		animation-delay: 450ms;
+		animation-delay: 270ms;
 	}
 }
 
@@ -908,6 +927,216 @@ kbd {
 * {
 	scrollbar-width: thin;
 	scrollbar-color: #b9c3d0 transparent;
+}
+
+/* =====================================================================
+ * Мобільна версія. Принцип: виправляємо причини переповнення (min-width, nowrap,
+ * широкі таблиці), а не ховаємо їх через overflow на body.
+ * ===================================================================== */
+.chip-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+.scroll-x {
+	max-width: 100%;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	-webkit-overflow-scrolling: touch;
+}
+.only-phone {
+	display: none !important;
+}
+img,
+video {
+	max-width: 100%;
+}
+pre {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+/* Сенсорні екрани: цілі для пальця ≥ 44 px */
+@media (pointer: coarse) {
+	.btn,
+	.btn-sm,
+	.chip,
+	.seg a,
+	.seg button,
+	select,
+	input[type='text'],
+	input[type='search'],
+	input[type='number'],
+	input[type='password'] {
+		min-height: 44px;
+	}
+	/* 16 px у полях — iOS не збільшує сторінку при фокусі */
+	input,
+	select,
+	textarea {
+		font-size: max(16px, 1rem);
+	}
+	/* Без «залипання» hover-ефектів після дотику */
+	.lift:hover,
+	.btn:hover {
+		transform: none;
+	}
+	a,
+	button {
+		-webkit-tap-highlight-color: rgba(11, 92, 173, 0.12);
+	}
+}
+
+@media (max-width: 768px) {
+	:root {
+		--header-h: 56px;
+		--tabbar-h: calc(64px + var(--safe-b));
+	}
+}
+
+@media (max-width: 640px) {
+	:root {
+		--gutter: 1rem;
+		--fs-stat: 1.6rem;
+	}
+	html {
+		scroll-padding-top: 4.5rem;
+	}
+	body {
+		background-attachment: scroll;
+	}
+	h1 {
+		font-size: 1.45rem;
+		letter-spacing: -0.015em;
+	}
+	h2 {
+		font-size: 1.15rem;
+	}
+	h3 {
+		font-size: 1.02rem;
+	}
+	.lead {
+		font-size: 0.975rem;
+	}
+	.page-head {
+		gap: 0.6rem;
+		margin-bottom: 1rem;
+		align-items: flex-start;
+	}
+	.page-head > :first-child {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+	.card {
+		padding: 1rem;
+		margin-bottom: 0.875rem;
+		border-radius: 14px;
+	}
+	.panel {
+		padding: 1rem;
+	}
+	.panel-head {
+		margin-bottom: 0.75rem;
+	}
+	.grid-2 {
+		gap: 0.875rem;
+	}
+	.notice {
+		padding: 0.75rem 0.9rem;
+		margin-bottom: 1rem;
+	}
+
+	/* Показники: 2 в ряд, непарна остання — на всю ширину */
+	.stat-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.625rem;
+		margin-bottom: 1rem;
+	}
+	.stat-grid > :last-child:nth-child(odd) {
+		grid-column: 1 / -1;
+	}
+
+	/* Таблиці: прокрутка всередині обгортки */
+	.table-wrap {
+		max-width: 100%;
+		overscroll-behavior-x: contain;
+		-webkit-overflow-scrolling: touch;
+		border-radius: 12px;
+	}
+	table {
+		font-size: 0.875rem;
+	}
+	th,
+	td {
+		padding: 0.55rem 0.7rem;
+	}
+	td.name {
+		min-width: 11rem;
+	}
+	.table-wrap.tall {
+		max-height: 70dvh;
+	}
+
+	/* Ряди чипів: одна лінія з прокруткою й snap, що «виходить» за поля */
+	.chip-row {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		scroll-snap-type: x proximity;
+		scroll-padding-inline: var(--gutter);
+		overscroll-behavior-x: contain;
+		margin-inline: calc(-1 * var(--gutter));
+		padding: 2px var(--gutter);
+		scrollbar-width: none;
+		-webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - var(--gutter)), transparent 100%);
+		mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - var(--gutter)), transparent 100%);
+	}
+	.chip-row::-webkit-scrollbar {
+		display: none;
+	}
+	.chip-row > * {
+		flex: none;
+		scroll-snap-align: start;
+	}
+
+	.toolbar {
+		gap: 0.6rem;
+	}
+	.toolbar > .field,
+	.toolbar > input,
+	.toolbar > select {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+	.seg {
+		max-width: 100%;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.seg a,
+	.seg button {
+		padding: 0.5rem 0.8rem;
+		white-space: nowrap;
+	}
+	.empty {
+		padding: 1.75rem 1rem;
+	}
+
+	.hide-phone {
+		display: none !important;
+	}
+	.only-phone {
+		display: revert !important;
+	}
+	.stack-phone {
+		flex-direction: column !important;
+		align-items: stretch !important;
+	}
+	.full-bleed-phone {
+		margin-inline: calc(-1 * var(--gutter));
+		border-radius: 0 !important;
+		border-left: 0 !important;
+		border-right: 0 !important;
+	}
 }
 
 /* --- Глобальний вимикач анімацій --- */

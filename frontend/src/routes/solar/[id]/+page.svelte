@@ -5,6 +5,7 @@
 	import { getJSON, qs, errMessage, ApiError, type SolarDetail, type SolarList } from '#lib/api.ts';
 	import type { IndependenceItem } from '#lib/api-independence.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
+	import { catLabel } from '#lib/categories.ts';
 	import Status from '#lib/Status.svelte';
 	import SolarScenario, { paybackWords, type ScenarioParams } from '#lib/SolarScenario.svelte';
 	import ForecastCard from '#lib/ForecastCard.svelte';
@@ -142,7 +143,7 @@
 	<div class="page-head">
 		<div>
 			<p class="muted kicker">
-				Сонячна станція · {it.category_short}
+				Сонячна станція · {catLabel(it.category_short)}
 				{#if critical}<span class="pill pill-bad"><span aria-hidden="true">✚</span> критичний заклад</span>{/if}
 				{#if it.rank}<span class="pill">№ {it.rank} за окупністю</span>{/if}
 			</p>
@@ -320,7 +321,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.a-ico svg {
-			animation: spin 30s linear infinite;
+			animation: spin 6s ease-out 1;
 		}
 	}
 	@keyframes spin {
@@ -359,7 +360,7 @@
 	}
 	@media (max-width: 1100px) {
 		.layout {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 		.side-col {
 			position: static;
@@ -399,5 +400,49 @@
 	.assume {
 		margin: 0 0 0.5rem;
 		padding-left: 1.2rem;
+	}
+	/* Телефон: відповідь-речення зверху, дії — два рівні кнопки */
+	@media (max-width: 640px) {
+		h1 {
+			font-size: 1.2rem;
+			line-height: 1.3;
+		}
+		.kicker {
+			font-size: 0.8125rem;
+		}
+		.head-actions {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			width: 100%;
+		}
+		.head-actions .btn {
+			justify-content: center;
+			padding-inline: 0.5rem;
+		}
+		.answer {
+			gap: 0.75rem;
+			padding: 0.9rem 1rem;
+			margin-bottom: 0.875rem;
+			border-radius: 14px;
+			box-shadow: var(--shadow);
+		}
+		.a-ico {
+			width: 36px;
+			height: 36px;
+		}
+		.a-ico svg {
+			width: 22px;
+			height: 22px;
+		}
+		.a-main {
+			font-size: 1.05rem;
+		}
+		.a-sub {
+			font-size: 0.9rem;
+		}
+		.layout {
+			gap: 0.875rem;
+			margin-bottom: 0.875rem;
+		}
 	}
 </style>

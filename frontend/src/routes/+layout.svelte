@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { goto, afterNavigate, onNavigate } from '$app/navigation';
 	import { tick } from 'svelte';
-	import { fly } from 'svelte/transition';
+	import { fly, fade } from 'svelte/transition';
 	import { auth, logout, initials, safeNext } from '#lib/auth.svelte.ts';
 	import { isReduced, scaleIn, cubicOut } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
@@ -143,8 +143,89 @@
 		if (next && root && !root.contains(next)) menuOpen = false;
 	}
 
-	// --- Мобільне меню (< 900 px) ---
+	// --- Мобільне меню (769–899 px: випадне під шапкою) ---
 	let navOpen = $state(false);
+	let burgerBtn = $state<HTMLButtonElement>();
+
+	// --- Телефон (≤ 768 px): нижня панель вкладок + аркуш «Меню» ---
+	const tabs: (NavItem & { short: string })[] = primary.map((p) => ({
+		...p,
+		short: p.href === '/independence' ? 'Незалежність' : p.href === '/solar' ? 'СЕС' : p.label
+	}));
+	let sheetOpen = $state(false);
+	let sheetEl = $state<HTMLDivElement>();
+	let sheetTrigger: HTMLElement | null = null;
+	let dragY = $state(0);
+	let dragging = $state(false);
+	const tabIndex = $derived.by(() => {
+		if (sheetOpen || analyticsActive) return 4;
+		return tabs.findIndex((t) => isActive(t.href));
+	});
+
+	async function openSheet(e?: Event) {
+		sheetTrigger = (e?.currentTarget as HTMLElement | null) ?? (document.activeElement as HTMLElement | null);
+		sheetOpen = true;
+		dragY = 0;
+		await tick();
+		sheetEl?.querySelector<HTMLElement>('.sheet-close')?.focus();
+	}
+	function closeSheet(restore = true) {
+		if (!sheetOpen) return;
+		sheetOpen = false;
+		dragY = 0;
+		if (restore) sheetTrigger?.focus?.();
+	}
+	function sheetKey(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			e.stopPropagation();
+			closeSheet();
+		} else if (e.key === 'Tab' && sheetEl) {
+			// Фокус не виходить за межі аркуша
+			const f = [...sheetEl.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')];
+			if (!f.length) return;
+			const first = f[0];
+			const last = f[f.length - 1];
+			if (e.shiftKey && (document.activeElement === first || document.activeElement === sheetEl)) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && document.activeElement === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		}
+	}
+	// Свайп униз за «ручку» чи заголовок закриває аркуш
+	let startY = 0;
+	function dragStart(e: PointerEvent) {
+		if ((e.target as HTMLElement).closest('button')) return;
+		startY = e.clientY;
+		dragging = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+	function dragMove(e: PointerEvent) {
+		if (dragging) dragY = Math.max(0, e.clientY - startY);
+	}
+	function dragEnd() {
+		if (!dragging) return;
+		dragging = false;
+		if (dragY > 90) closeSheet();
+		else dragY = 0;
+	}
+	// Поки аркуш відкритий — сторінка під ним не прокручується
+	$effect(() => {
+		if (!sheetOpen) return;
+		const el = document.documentElement;
+		const prev = el.style.overflow;
+		el.style.overflow = 'hidden';
+		return () => {
+			el.style.overflow = prev;
+		};
+	});
+	function helpFromSheet() {
+		closeSheet(false);
+		openHelp();
+	}
 
 	// --- Глобальний пошук ---
 	let paletteOpen = $state(false);
@@ -211,6 +292,7 @@
 	afterNavigate(() => {
 		menuOpen = false;
 		navOpen = false;
+		sheetOpen = false;
 	});
 
 	function globalKey(e: KeyboardEvent) {
@@ -219,6 +301,7 @@
 			e.preventDefault();
 			paletteOpen = !paletteOpen;
 		} else if (e.key === 'Escape') {
+			if (sheetOpen) closeSheet();
 			if (helpOpen) closeHelp(true);
 			if (menuOpen || navOpen) {
 				menuOpen = false;
@@ -229,7 +312,7 @@
 	function globalDown(e: PointerEvent) {
 		const t = e.target as HTMLElement;
 		if (menuOpen && !t.closest?.('.dd')) menuOpen = false;
-		if (helpOpen && !t.closest?.('.help-wrap')) closeHelp();
+		if (helpOpen && !t.closest?.('.help-wrap') && !t.closest?.('.sheet')) closeHelp();
 	}
 </script>
 
@@ -258,6 +341,7 @@
 				<span class="logo" aria-hidden="true"><Icon name="bolt" size={20} stroke={2.2} /></span>
 				<span class="brand-txt">
 					<span class="brand-name">City Insight Map <span class="brand-dot">·</span> Енергія</span>
+					<span class="brand-short" aria-hidden="true">Енергія</span>
 					<span class="brand-sub">Полтавська громада</span>
 				</span>
 			</a>
@@ -341,12 +425,25 @@
 					<span class="user-name">{auth.user.full_name}</span>
 					<span class="user-role">{auth.user.position}</span>
 				</span>
-				<button type="button" class="out" onclick={logout} title="Вийти">
+				<button type="button" class="out" onclick={logout} title="Вийти" aria-label="Вийти">
 					<Icon name="logout" size={18} /> <span class="out-txt">Вийти</span>
 				</button>
 			</div>
 
 			<button
+				type="button"
+				class="me-btn"
+				aria-haspopup="dialog"
+				aria-expanded={sheetOpen}
+				aria-controls="m-sheet"
+				aria-label="Профіль і меню: {auth.user.full_name}"
+				onclick={openSheet}
+			>
+				<span class="avatar" aria-hidden="true">{initials(auth.user.full_name)}</span>
+			</button>
+
+			<button
+				bind:this={burgerBtn}
 				type="button"
 				class="burger"
 				aria-expanded={navOpen}
@@ -427,6 +524,100 @@
 
 	<CommandPalette bind:open={paletteOpen} />
 
+	<!-- Телефон: нижня панель вкладок -->
+	<nav class="tabbar no-print" aria-label="Основні розділи">
+		<span class="tab-ind" class:show={tabIndex >= 0} style:--i={Math.max(0, tabIndex)} aria-hidden="true"></span>
+		{#each tabs as t (t.href)}
+			<a
+				class="tab"
+				href={t.href}
+				class:tour-hl={hl.includes(t.href)}
+				aria-current={isActive(t.href) && !sheetOpen ? 'page' : undefined}
+				aria-label={t.label}
+			>
+				<span class="tab-ico">{#if t.map}{@render mapIcon()}{:else}<Icon name={t.icon} size={22} />{/if}</span>
+				<span class="tab-txt" aria-hidden="true">{t.short}</span>
+			</a>
+		{/each}
+		<button
+			type="button"
+			class="tab"
+			class:on={sheetOpen || !!analyticsActive}
+			aria-haspopup="dialog"
+			aria-expanded={sheetOpen}
+			aria-controls="m-sheet"
+			onclick={(e) => (sheetOpen ? closeSheet() : openSheet(e))}
+		>
+			<span class="tab-ico"><svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.8" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8" /><circle cx="16.75" cy="16.75" r="3.25" /></svg></span>
+			<span class="tab-txt">Меню</span>
+		</button>
+	</nav>
+
+	{#if sheetOpen}
+		<div class="sheet-backdrop no-print" onclick={() => closeSheet()} aria-hidden="true" transition:fade={{ duration: isReduced() ? 0 : 200 }}></div>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions (Esc і пастка фокусу) -->
+		<div
+			id="m-sheet"
+			class="sheet no-print"
+			class:dragging
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="m-sheet-title"
+			tabindex="-1"
+			bind:this={sheetEl}
+			onkeydown={sheetKey}
+			style:transform={dragY ? `translateY(${dragY}px)` : undefined}
+			transition:fly={{ y: isReduced() ? 0 : 480, duration: isReduced() ? 0 : 340, easing: cubicOut, opacity: 1 }}
+		>
+			<!-- svelte-ignore a11y_no_static_element_interactions (свайп униз — дублює кнопку «Закрити») -->
+			<div
+				class="sheet-top"
+				onpointerdown={dragStart}
+				onpointermove={dragMove}
+				onpointerup={dragEnd}
+				onpointercancel={dragEnd}
+			>
+				<span class="sheet-grab" aria-hidden="true"></span>
+				<div class="sheet-head">
+					<span class="avatar lg" aria-hidden="true">{initials(auth.user.full_name)}</span>
+					<span class="sheet-who">
+						<span class="sheet-name" id="m-sheet-title">{auth.user.full_name}</span>
+						<span class="sheet-role">{auth.user.position}</span>
+					</span>
+					<button type="button" class="sheet-close" aria-label="Закрити меню" onclick={() => closeSheet()}>
+						<svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true"><path d="m3 3 8 8m0-8-8 8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
+					</button>
+				</div>
+			</div>
+
+			<div class="sheet-body">
+				<p class="sheet-label"><Icon name="chart" size={16} /> Аналітика</p>
+				<ul class="sheet-list">
+					{#each analytics as item (item.href)}
+						<li>
+							<a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+								<span class="sl-txt">
+									<span class="sl-label">{item.label}</span>
+									<span class="sl-hint">{item.hint}</span>
+								</span>
+								<svg class="sl-chev" width="16" height="16" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							</a>
+						</li>
+					{/each}
+				</ul>
+
+				<div class="sheet-actions">
+					<button type="button" class="sheet-btn" onclick={helpFromSheet}>
+						<span class="sb-q" aria-hidden="true">?</span> Як користуватися
+					</button>
+					<button type="button" class="sheet-btn out-m" onclick={logout}>
+						<Icon name="logout" size={18} /> Вийти
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<main id="main" class="wrap" tabindex="-1">
 		{@render children()}
 	</main>
@@ -446,11 +637,11 @@
 	:global(.wrap) {
 		max-width: 1480px;
 		margin: 0 auto;
-		padding: 0 2rem;
+		padding: 0 calc(var(--gutter, 2rem) + var(--safe-r, 0px)) 0 calc(var(--gutter, 2rem) + var(--safe-l, 0px));
 	}
 	@media (max-width: 700px) {
 		:global(.wrap) {
-			padding: 0 1rem;
+			--gutter: 1rem;
 		}
 	}
 	.skip {
@@ -1248,6 +1439,441 @@
 			display: none;
 		}
 	}
+	/* ================= Телефон (≤ 768 px): нативний каркас ================= */
+	.brand-short,
+	.me-btn,
+	.tabbar {
+		display: none;
+	}
+	@media (max-width: 768px) {
+		.site-header {
+			position: sticky;
+			top: 0;
+			z-index: 30;
+			padding-top: var(--safe-t, 0px);
+			box-shadow: 0 6px 20px -14px rgba(8, 20, 38, 0.7);
+		}
+		.hdr-bg::after {
+			display: none;
+		}
+		.head-row {
+			height: 56px;
+			gap: 0.5rem;
+			padding-top: 0;
+			padding-bottom: 0;
+		}
+		.brand {
+			gap: 0.6rem;
+			margin-right: auto;
+		}
+		.logo {
+			width: 2.1rem;
+			height: 2.1rem;
+			border-radius: 10px;
+		}
+		.logo :global(svg) {
+			width: 18px;
+			height: 18px;
+		}
+		.brand-name,
+		.brand-sub {
+			display: none;
+		}
+		.brand-short {
+			display: block;
+			font-family: var(--font-display);
+			font-weight: 700;
+			font-size: 1.15rem;
+			letter-spacing: -0.01em;
+		}
+		.search-btn {
+			margin-left: 0;
+			width: 44px;
+			min-width: 0;
+			height: 44px;
+			padding: 0;
+			justify-content: center;
+			border-radius: 50%;
+			background: rgba(255, 255, 255, 0.08);
+		}
+		.search-btn:active,
+		.me-btn:active {
+			transform: scale(0.94);
+		}
+		.search-txt,
+		.search-kbd {
+			display: none;
+		}
+		.help-btn,
+		.user,
+		.burger,
+		.main-nav,
+		.main-nav.open {
+			display: none;
+		}
+		.me-btn {
+			display: grid;
+			place-items: center;
+			width: 44px;
+			height: 44px;
+			padding: 0;
+			border: 0;
+			border-radius: 50%;
+			background: none;
+			color: #fff;
+			font: inherit;
+			cursor: pointer;
+			flex: none;
+			transition: transform var(--dur-fast) var(--ease-out);
+		}
+		.me-btn .avatar {
+			width: 2.1rem;
+			height: 2.1rem;
+			font-size: 0.8rem;
+			display: grid;
+		}
+		/* Тур: аркуш над нижньою панеллю (видно підсвічені вкладки) */
+		.help-pop {
+			position: fixed;
+			top: auto;
+			left: calc(0.5rem + var(--safe-l, 0px));
+			right: calc(0.5rem + var(--safe-r, 0px));
+			bottom: calc(var(--tabbar-h, 64px) + 0.5rem);
+			width: auto;
+			max-height: calc(100dvh - var(--tabbar-h, 64px) - 72px);
+			overflow-y: auto;
+			padding: 1rem 1rem 0.9rem;
+			border-radius: 20px;
+			transform-origin: 50% 100%;
+		}
+		.help-pop::before {
+			display: none;
+		}
+		.help-stage {
+			min-height: 7.4rem;
+		}
+		.hbtn {
+			min-height: 44px;
+		}
+		.help-x {
+			width: 40px;
+			height: 40px;
+		}
+
+		main {
+			padding-top: 1rem;
+			padding-bottom: 1.5rem;
+		}
+		.site-footer {
+			padding-bottom: calc(1rem + var(--tabbar-h, 64px));
+			font-size: 0.8125rem;
+		}
+
+		/* --- Нижня панель вкладок --- */
+		.tabbar {
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 40;
+			display: grid;
+			grid-template-columns: repeat(5, minmax(0, 1fr));
+			height: var(--tabbar-h, 64px);
+			padding: 0 var(--safe-r, 0px) var(--safe-b, 0px) var(--safe-l, 0px);
+			background: rgba(255, 255, 255, 0.92);
+			-webkit-backdrop-filter: saturate(1.6) blur(16px);
+			backdrop-filter: saturate(1.6) blur(16px);
+			border-top: 1px solid rgba(15, 35, 65, 0.1);
+			box-shadow: 0 -8px 24px -18px rgba(8, 20, 38, 0.45);
+			view-transition-name: tabbar;
+		}
+		.tab {
+			position: relative;
+			z-index: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 3px;
+			min-width: 0;
+			height: 64px;
+			padding: 0 2px;
+			border: 0;
+			background: none;
+			color: #5b6878;
+			font: inherit;
+			text-decoration: none;
+			cursor: pointer;
+			-webkit-tap-highlight-color: transparent;
+			transition: color var(--dur-base);
+		}
+		.tab:hover {
+			color: var(--navy);
+			text-decoration: none;
+		}
+		.tab-ico {
+			display: grid;
+			place-items: center;
+			width: 52px;
+			height: 30px;
+			transition: transform var(--dur-base) var(--ease-spring);
+		}
+		.tab:active .tab-ico {
+			transform: scale(0.88);
+		}
+		.tab-txt {
+			max-width: 100%;
+			font-size: 0.6875rem;
+			font-weight: 600;
+			line-height: 1.1;
+			letter-spacing: -0.015em;
+			white-space: nowrap;
+		}
+		.tab[aria-current='page'],
+		.tab.on {
+			color: var(--navy);
+		}
+		.tab[aria-current='page'] .tab-txt,
+		.tab.on .tab-txt {
+			font-weight: 700;
+		}
+		.tab[aria-current='page'] :global(.icon),
+		.tab.on :global(.icon) {
+			stroke-width: 2.1;
+		}
+		/* Ковзна «пігулка» під значком активної вкладки */
+		.tab-ind {
+			position: absolute;
+			top: 8px;
+			left: var(--safe-l, 0px);
+			width: calc((100% - var(--safe-l, 0px) - var(--safe-r, 0px)) / 5);
+			height: 30px;
+			display: grid;
+			place-items: center;
+			opacity: 0;
+			transform: translateX(calc(var(--i, 0) * 100%));
+			transition:
+				transform 420ms var(--ease-spring),
+				opacity var(--dur-base);
+			pointer-events: none;
+		}
+		.tab-ind::before {
+			content: '';
+			width: 56px;
+			height: 30px;
+			border-radius: 999px;
+			background: linear-gradient(180deg, #ffe7a8, #ffd56b);
+			box-shadow: 0 4px 12px -6px rgba(224, 138, 0, 0.8);
+		}
+		.tab-ind.show {
+			opacity: 1;
+		}
+		.tab.tour-hl {
+			color: var(--navy) !important;
+			background: rgba(245, 165, 36, 0.14) !important;
+			border-radius: 14px !important;
+		}
+
+		/* --- Аркуш «Меню» --- */
+		.sheet-backdrop {
+			position: fixed;
+			inset: 0;
+			z-index: 60;
+			background: rgba(8, 20, 38, 0.48);
+			-webkit-backdrop-filter: blur(2px);
+			backdrop-filter: blur(2px);
+		}
+		.sheet {
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 61;
+			display: flex;
+			flex-direction: column;
+			max-height: calc(100dvh - 2.5rem - var(--safe-t, 0px));
+			padding: 0 calc(1rem + var(--safe-r, 0px)) calc(1rem + var(--safe-b, 0px)) calc(1rem + var(--safe-l, 0px));
+			background: var(--surface);
+			color: var(--text);
+			border-radius: 22px 22px 0 0;
+			box-shadow: 0 -20px 50px -20px rgba(8, 20, 38, 0.55);
+			transition: transform 260ms var(--ease-out);
+			outline: none;
+		}
+		.sheet.dragging {
+			transition: none;
+		}
+		.sheet-top {
+			touch-action: none;
+			cursor: grab;
+		}
+		.sheet-grab {
+			display: block;
+			width: 40px;
+			height: 5px;
+			margin: 8px auto 10px;
+			border-radius: 999px;
+			background: #cfd7e2;
+		}
+		.sheet-head {
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			padding-bottom: 0.85rem;
+			border-bottom: 1px solid var(--line-soft);
+		}
+		.avatar.lg {
+			display: grid;
+			width: 2.75rem;
+			height: 2.75rem;
+			color: #fff;
+			font-size: 0.95rem;
+		}
+		.sheet-who {
+			display: flex;
+			flex-direction: column;
+			min-width: 0;
+			flex: 1;
+			line-height: 1.3;
+		}
+		.sheet-name {
+			font-weight: 700;
+			color: var(--ink);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.sheet-role {
+			font-size: 0.85rem;
+			color: var(--muted);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.sheet-close {
+			display: grid;
+			place-items: center;
+			width: 44px;
+			height: 44px;
+			flex: none;
+			border: 0;
+			border-radius: 50%;
+			background: var(--neutral-soft);
+			color: var(--text-2);
+			cursor: pointer;
+		}
+		.sheet-body {
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			margin: 0 -0.25rem;
+			padding: 0 0.25rem;
+		}
+		.sheet-label {
+			display: flex;
+			align-items: center;
+			gap: 0.4rem;
+			margin: 0.9rem 0 0.35rem;
+			font-size: 0.75rem;
+			font-weight: 700;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: var(--muted);
+		}
+		.sheet-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			border-radius: 16px;
+			background: var(--surface-2);
+			border: 1px solid var(--line-soft);
+			overflow: hidden;
+		}
+		.sheet-list li + li {
+			border-top: 1px solid var(--line-soft);
+		}
+		.sheet-list a {
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			min-height: 56px;
+			padding: 0.55rem 0.9rem;
+			color: var(--text);
+			text-decoration: none;
+			transition: background var(--dur-fast);
+		}
+		.sheet-list a:active {
+			background: var(--accent-soft);
+		}
+		.sheet-list a[aria-current='page'] {
+			background: var(--sun-soft);
+			box-shadow: inset 3px 0 0 var(--sun-strong);
+		}
+		.sl-txt {
+			display: flex;
+			flex-direction: column;
+			flex: 1;
+			min-width: 0;
+			line-height: 1.3;
+		}
+		.sl-label {
+			font-weight: 600;
+		}
+		.sl-hint {
+			font-size: 0.8125rem;
+			color: var(--muted);
+		}
+		.sl-chev {
+			flex: none;
+			color: var(--line-strong);
+		}
+		.sheet-actions {
+			display: grid;
+			grid-template-columns: 1.5fr 1fr;
+			gap: 0.6rem;
+			margin-top: 0.9rem;
+		}
+		.sheet-btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.5rem;
+			min-height: 48px;
+			padding: 0.5rem 0.75rem;
+			white-space: nowrap;
+			border-radius: 14px;
+			border: 1px solid var(--line);
+			background: var(--surface);
+			color: var(--navy);
+			font: inherit;
+			font-weight: 600;
+			cursor: pointer;
+		}
+		.sheet-btn:active {
+			transform: scale(0.98);
+		}
+		.sb-q {
+			display: grid;
+			place-items: center;
+			width: 1.4rem;
+			height: 1.4rem;
+			border-radius: 50%;
+			background: var(--navy);
+			color: #ffd56b;
+			font-size: 0.8rem;
+			font-weight: 700;
+		}
+		.out-m {
+			color: var(--bad);
+			border-color: color-mix(in srgb, var(--bad) 30%, var(--line));
+		}
+	}
+	@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+		.tab-ind,
+		.sheet {
+			transition: none;
+		}
+	}
+
 	@media print {
 		.site-footer {
 			border-top: 1px solid #999;

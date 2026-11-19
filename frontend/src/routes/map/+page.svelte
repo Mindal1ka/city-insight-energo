@@ -2,6 +2,7 @@
 	// «Мапа об'єктів»: усі комунальні будівлі громади на мапі + пошук, фільтри й синхронний список.
 	// Правило безпеки: тут немає жодних даних про СЕС, акумулятори, генератори чи резервне живлення.
 	import { onMount, tick } from 'svelte';
+	import { fly } from 'svelte/transition';
 	import { page } from '$app/state';
 	import { errMessage } from '#lib/api.ts';
 	import { num } from '#lib/format.ts';
@@ -46,12 +47,15 @@
 	let colorBy = $state<ColorBy>('category');
 	let selectedId = $state<number | null>(Number.isFinite(urlId) && urlId > 0 ? urlId : null);
 	let hoverId = $state<number | null>(null);
-	let legendOpen = $state(true);
+	// Легенда на мапі стартує згорнутою, щоб не закривати третину мапи
+	let legendOpen = $state(false);
+	// Телефон: легенда в шторці теж згорнута
+	let legendPhone = $state(false);
 
-	const MODES: { key: ColorBy; label: string; icon: 'building' | 'bolt' | 'sun' }[] = [
-		{ key: 'category', label: 'За типом', icon: 'building' },
-		{ key: 'consumption', label: 'За споживанням', icon: 'bolt' },
-		{ key: 'potential', label: 'За потенціалом сонця', icon: 'sun' }
+	const MODES: { key: ColorBy; label: string; short: string; icon: 'building' | 'bolt' | 'sun' }[] = [
+		{ key: 'category', label: 'За типом', short: 'Тип', icon: 'building' },
+		{ key: 'consumption', label: 'За споживанням', short: 'Споживання', icon: 'bolt' },
+		{ key: 'potential', label: 'За потенціалом сонця', short: 'Сонце', icon: 'sun' }
 	];
 
 	const all = $derived(data?.points ?? []);
@@ -124,22 +128,94 @@
 	let mapBox = $state<HTMLElement>();
 	const reduced =
 		typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-	const isMobile = () => typeof matchMedia !== 'undefined' && matchMedia('(max-width: 767px)').matches;
+	// --- Телефон: мапа на весь екран + шторка з трьома положеннями ---
+	let phone = $state(false);
+	let mpH = $state(0);
+	type Snap = 'peek' | 'half' | 'full';
+	let snap = $state<Snap>('peek');
+	let dragTy = $state<number | null>(null);
+	const PEEK = 116; // ручка + пошук + рядок із кількістю
+	const TOPGAP = 8;
+	const sheetH = $derived(Math.max(0, mpH - TOPGAP));
+	function visibleOf(s: Snap): number {
+		return s === 'peek' ? PEEK : s === 'half' ? Math.round(mpH * 0.52) : sheetH;
+	}
+	const ty = $derived(dragTy ?? Math.max(0, sheetH - visibleOf(snap)));
+	const SNAP_LABEL: Record<Snap, string> = {
+		peek: 'Розгорнути список',
+		half: 'Розгорнути на весь екран',
+		full: 'Згорнути список'
+	};
+
+	let drag: { y: number; ty: number; moved: boolean; id: number; lastY: number; lastT: number; v: number } | null =
+		null;
+	let suppressClick = false;
+	function gDown(e: PointerEvent) {
+		if (!phone || (e.pointerType === 'mouse' && e.button !== 0)) return;
+		drag = { y: e.clientY, ty, moved: false, id: e.pointerId, lastY: e.clientY, lastT: e.timeStamp, v: 0 };
+	}
+	function gMove(e: PointerEvent) {
+		if (!drag || e.pointerId !== drag.id) return;
+		const dy = e.clientY - drag.y;
+		if (!drag.moved) {
+			if (Math.abs(dy) < 6) return;
+			drag.moved = true;
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		}
+		const dt = e.timeStamp - drag.lastT;
+		if (dt > 0) drag.v = drag.v * 0.4 + ((e.clientY - drag.lastY) / dt) * 0.6;
+		drag.lastY = e.clientY;
+		drag.lastT = e.timeStamp;
+		const max = sheetH - PEEK;
+		let nt = drag.ty + dy;
+		if (nt < 0) nt = nt / 3;
+		if (nt > max) nt = max + (nt - max) / 3;
+		dragTy = nt;
+	}
+	function gUp(e: PointerEvent) {
+		if (!drag || e.pointerId !== drag.id) return;
+		const d = drag;
+		drag = null;
+		if (!d.moved) return;
+		suppressClick = true;
+		setTimeout(() => (suppressClick = false), 80);
+		const vis = sheetH - (dragTy ?? ty);
+		const order: Snap[] = ['peek', 'half', 'full'];
+		let next: Snap;
+		if (Math.abs(d.v) > 0.4) {
+			// Швидкий змах — до наступного положення в напрямку руху
+			next =
+				d.v > 0
+					? ([...order].reverse().find((s) => visibleOf(s) < vis - 4) ?? 'peek')
+					: (order.find((s) => visibleOf(s) > vis + 4) ?? 'full');
+		} else {
+			next = order.reduce((a, b) => (Math.abs(visibleOf(b) - vis) < Math.abs(visibleOf(a) - vis) ? b : a));
+		}
+		snap = next;
+		dragTy = null;
+	}
+	function cycleSnap() {
+		if (suppressClick) return;
+		snap = snap === 'peek' ? 'half' : snap === 'half' ? 'full' : 'peek';
+	}
+
+	const selP = $derived(selectedId !== null ? (all.find((p) => p.id === selectedId) ?? null) : null);
+	const selFig = $derived(selP ? keyFigure(selP, colorBy) : null);
 
 	function pickFromList(id: number) {
 		selectedId = selectedId === id ? null : id;
 		const p = all.find((x) => x.id === id);
-		// На телефоні мапа над списком — повертаємося до неї, щоб побачити переліт
-		// (мапа «липка», тому її власна позиція не годиться — беремо верх усього блоку)
-		if (selectedId !== null && p && hasCoords(p) && isMobile() && root) {
-			const top = root.getBoundingClientRect().top + window.scrollY;
-			window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });
-		}
+		// На телефоні опускаємо шторку, щоб побачити переліт і картку над нею
+		if (phone && selectedId !== null && p && hasCoords(p)) snap = 'peek';
 	}
 
 	async function pickFromMap(id: number | null) {
 		selectedId = id;
-		if (id === null || isMobile()) return;
+		if (phone) {
+			if (id !== null) snap = 'peek';
+			return;
+		}
+		if (id === null) return;
 		await tick();
 		listEl
 			?.querySelector(`[data-id="${id}"]`)
@@ -162,7 +238,23 @@
 		load();
 		measure();
 		window.addEventListener('resize', measure);
-		return () => window.removeEventListener('resize', measure);
+		const mq = matchMedia('(max-width: 768px)');
+		phone = mq.matches;
+		const onMq = (e: MediaQueryListEvent) => (phone = e.matches);
+		mq.addEventListener('change', onMq);
+		return () => {
+			window.removeEventListener('resize', measure);
+			mq.removeEventListener('change', onMq);
+		};
+	});
+
+	// Телефон: сторінка не прокручується — жести керують лише мапою та шторкою
+	$effect(() => {
+		if (!phone) return;
+		const html = document.documentElement;
+		window.scrollTo(0, 0);
+		html.classList.add('mp-lock');
+		return () => html.classList.remove('mp-lock');
 	});
 
 	const precOrder: Precision[] = ['UMUNI', 'будинок', 'вулиця', 'населений пункт'];
@@ -179,14 +271,28 @@
 {#snippet legend(where: string)}
 	<fieldset class="mp-mode">
 		<legend class="mp-label">Колір на мапі</legend>
-		<div class="mp-seg">
-			{#each MODES as m (m.key)}
-				<label class:on={colorBy === m.key}>
-					<input type="radio" name="colorby-{where}" value={m.key} bind:group={colorBy} />
-					<Icon name={m.icon} size={16} />
-					<span>{m.label}</span>
-				</label>
-			{/each}
+		<div class="mp-mode-row">
+			<div class="mp-seg">
+				{#each MODES as m (m.key)}
+					<label class:on={colorBy === m.key}>
+						<input type="radio" name="colorby-{where}" value={m.key} bind:group={colorBy} />
+						<Icon name={m.icon} size={16} />
+						<span class="l-long">{m.label}</span><span class="l-short">{m.short}</span>
+					</label>
+				{/each}
+			</div>
+			{#if where === 'panel'}
+				<button
+					type="button"
+					class="mp-leg-btn"
+					aria-expanded={legendPhone}
+					aria-label="Легенда: що означають кольори"
+					title="Легенда"
+					onclick={() => (legendPhone = !legendPhone)}
+				>
+					<Icon name="info" size={20} />
+				</button>
+			{/if}
 		</div>
 
 		{#if where === 'map'}
@@ -194,7 +300,12 @@
 				{legendOpen ? 'Сховати пояснення' : 'Що означають кольори?'}
 			</button>
 		{/if}
-		<div class="mp-legend" aria-live="polite" hidden={where === 'map' && !legendOpen}>
+		<div
+			class="mp-legend"
+			class:ph-closed={where === 'panel' && !legendPhone}
+			aria-live="polite"
+			hidden={where === 'map' && !legendOpen}
+		>
 			{#if colorBy === 'category' || !scale}
 				<p class="mp-legend-title">Колір і значок у кружечку — тип закладу</p>
 				<ul class="mp-legend-cats">
@@ -278,9 +389,15 @@
 	</li>
 {/snippet}
 
-<div class="mp" bind:this={root} style="--top:{topPx}px">
-	<aside class="mp-panel" aria-label="Пошук і список об’єктів">
-		<div class="mp-handle" aria-hidden="true"></div>
+<div class="mp" bind:this={root} bind:clientHeight={mpH} style="--top:{topPx}px; --peek:{PEEK}px">
+	<aside
+		class="mp-panel"
+		class:dragging={dragTy !== null}
+		aria-label="Пошук і список об’єктів"
+		style:transform={phone ? `translate3d(0, ${ty}px, 0)` : undefined}
+	>
+		<div role="presentation" class="mp-grab" onpointerdown={gDown} onpointermove={gMove} onpointerup={gUp} onpointercancel={gUp}>
+		<button type="button" class="mp-handle" aria-label={SNAP_LABEL[snap]} onclick={cycleSnap}></button>
 		<header class="mp-head">
 			<h1>Мапа об’єктів</h1>
 			{#if data}
@@ -298,12 +415,35 @@
 			{/if}
 		</header>
 
-		<div class="mp-controls">
+		<div class="mp-search-row">
 			<label class="mp-search">
 				<span class="visually-hidden">Пошук за назвою або адресою</span>
 				<Icon name="search" size={18} />
-				<input type="search" bind:value={query} placeholder="Назва або адреса, напр. «школа 3»" autocomplete="off" />
+				<input
+					type="search"
+					bind:value={query}
+					placeholder="Назва або адреса, напр. «школа 3»"
+					autocomplete="off"
+					enterkeyhint="search"
+					onfocus={() => {
+						if (phone && snap !== 'full') snap = 'full';
+					}}
+				/>
 			</label>
+		</div>
+		<p class="mp-pcount" aria-live="polite">
+			{#if data}
+				<strong>{filtersOn ? `Знайдено ${num(filtered.length)} з ${num(total)}` : `${num(total)} об’єктів`}</strong>
+				<span class="muted"> · {sortHint}</span>
+				{#if filtersOn}<button type="button" class="mp-link" onclick={resetFilters}>Скинути</button>{/if}
+			{:else if !error}
+				<span class="muted">Завантажуємо об’єкти…</span>
+			{/if}
+		</p>
+		</div>
+
+		<div class="mp-body">
+		<div class="mp-controls">
 
 			<div class="mp-legend-inpanel">{@render legend('panel')}</div>
 
@@ -390,6 +530,7 @@
 				{/if}
 			{/if}
 		</div>
+		</div>
 	</aside>
 
 	<div class="mp-map" bind:this={mapBox}>
@@ -403,12 +544,45 @@
 				bounds={data.bounds}
 				onselect={pickFromMap}
 				onhover={(id) => (hoverId = id)}
+				popup={!phone}
+				padBottom={phone ? 170 : 0}
 			/>
 		{:else}
 			<div class="mp-map-loading" aria-hidden="true"></div>
 		{/if}
 		<div class="mp-legend-onmap">{@render legend('map')}</div>
 	</div>
+
+	<!-- Телефон: компактна картка вибраного об'єкта над шторкою -->
+	{#if phone && selP && hasCoords(selP) && snap === 'peek' && dragTy === null}
+		{@const cat = categoryMeta(selP.category_short)}
+		<div class="mp-card" role="region" aria-label="Вибраний об’єкт" transition:fly={{ y: 24, duration: reduced ? 0 : 220 }}>
+			<div class="mp-card-top">
+				<span class="mp-card-type"
+					><span class="mp-sw" style="--c:{cat.color};--ink:{cat.ink}"
+						><svg viewBox="0 0 10 10" aria-hidden="true"><path d={cat.glyph} /></svg></span
+					>{cat.label}</span
+				>
+				<button type="button" class="mp-card-x" aria-label="Закрити картку" onclick={() => (selectedId = null)}>
+					<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+						><path d="M6 6l12 12M18 6L6 18" /></svg
+					>
+				</button>
+			</div>
+			<p class="mp-card-name">{selP.name}</p>
+			<p class="mp-card-addr">
+				{selP.address || 'адреса не вказана'}{#if isApprox(selP)}<span class="mp-tag mp-tag-approx">≈ приблизно</span>{/if}
+			</p>
+			<div class="mp-card-row">
+				<span class="mp-card-fig">
+					{#if selFig?.unit}<strong>{selFig.value}</strong> {selFig.unit}<small>{selFig.label}</small>{:else}<small
+							>{selFig?.label}</small
+						>{/if}
+				</span>
+				<a class="btn btn-sm" href="/object/{selP.id}">Відкрити <Icon name="arrow-right" size={16} /></a>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -1001,54 +1175,368 @@
 		}
 	}
 
-	/* ---------- Телефон: мапа зверху, список — «шторкою» знизу ---------- */
-	@media (max-width: 767px) {
+	/* ---------- Нові блоки (десктоп) ---------- */
+	.mp-search-row {
+		padding: 0.7rem 1.1rem 0;
+	}
+	.mp-controls {
+		padding-top: 0.9rem;
+	}
+	.mp-pcount,
+	.mp-leg-btn,
+	.l-short {
+		display: none;
+	}
+	.mp-check label {
+		min-height: 44px;
+	}
+	.mp-tag {
+		font-size: 0.75rem;
+	}
+
+	/* ---------- Телефон: мапа на весь екран між шапкою і нижньою панеллю, список — шторкою ---------- */
+	:global(html.mp-lock),
+	:global(html.mp-lock body) {
+		overflow: hidden;
+		overscroll-behavior: none;
+	}
+	/* Підвал під повноекранною мапою не потрібен (і не має просвічувати крізь шторку) */
+	:global(html.mp-lock .site-footer) {
+		display: none;
+	}
+	@media (max-width: 768px) {
 		.mp {
-			display: flex;
-			flex-direction: column-reverse;
+			position: fixed;
+			z-index: 28; /* під шапкою (30) і нижньою панеллю, над підвалом */
+			top: var(--header-h, 56px);
+			left: 0;
+			right: 0;
+			bottom: var(--tabbar-h, 64px);
+			display: block;
 			height: auto;
-			margin: -0.75rem -2rem 0;
+			margin: 0;
 			border: 0;
 			border-radius: 0;
 			box-shadow: none;
-			overflow: visible;
-			background: none;
+			overflow: hidden;
+			overflow: clip; /* фокус/scrollIntoView не зсуває мапу й шторку */
+			background: #eef1f4;
+			animation: none;
 		}
 		.mp-map {
-			position: sticky;
+			position: absolute;
 			top: 0;
-			z-index: 0;
-			height: 56dvh;
-			min-height: 320px;
+			left: 0;
+			right: 0;
+			bottom: calc(var(--peek) - 18px);
+			--cm-inset-b: 18px;
 		}
 		.mp-panel {
-			position: relative;
-			z-index: 1;
-			overflow: visible;
-			margin-top: -20px;
+			position: absolute;
+			z-index: 2;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			height: calc(100% - 8px);
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+			overflow: clip;
 			border-right: 0;
-			border-radius: 20px 20px 0 0;
-			box-shadow: 0 -10px 30px -12px rgba(15, 23, 42, 0.35);
-			min-height: 60dvh;
+			border-radius: 18px 18px 0 0;
+			box-shadow:
+				0 -1px 0 rgba(15, 23, 42, 0.06),
+				0 -10px 28px -12px rgba(15, 23, 42, 0.4);
+			transition: transform 0.34s cubic-bezier(0.2, 0.85, 0.25, 1);
+			will-change: transform;
+			scrollbar-gutter: auto;
+		}
+		.mp-panel.dragging {
+			transition: none;
+		}
+		.mp-grab {
+			flex: none;
+			touch-action: none;
+			user-select: none;
+			-webkit-user-select: none;
+			padding-bottom: 0.45rem;
+			border-bottom: 1px solid var(--line-soft, #e6ebf1);
 		}
 		.mp-handle {
 			display: block;
-			width: 44px;
+			width: 100%;
+			height: 20px;
+			padding: 0;
+			border: 0;
+			background: none;
+			cursor: grab;
+		}
+		.mp-handle::before {
+			content: '';
+			display: block;
+			width: 40px;
 			height: 5px;
-			margin: 0.6rem auto 0;
+			margin: 8px auto 0;
 			border-radius: 3px;
 			background: var(--line-strong);
 		}
+		.mp-handle:focus-visible {
+			outline-offset: -3px;
+		}
+		.mp-head h1,
+		.mp-counts {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+			white-space: nowrap;
+		}
 		.mp-head {
-			padding-top: 0.6rem;
+			padding: 0 1rem;
 		}
-		.mp-legend-cats {
-			grid-template-columns: 1fr 1fr;
+		.mp-mock {
+			margin: 0 0 0.4rem;
 		}
-	}
-	@media (max-width: 700px) {
-		.mp {
-			margin-inline: -1rem;
+		.mp-search-row {
+			padding: 0 1rem;
+		}
+		.mp-search input {
+			font-size: 1rem; /* ≥16px — iOS не зумить при фокусі */
+		}
+		.mp-pcount {
+			display: flex;
+			align-items: baseline;
+			gap: 0.35rem;
+			margin: 0.4rem 0 0;
+			padding: 0 1rem;
+			font-size: 0.85rem;
+			white-space: nowrap;
+			overflow: hidden;
+		}
+		.mp-pcount .muted {
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.mp-pcount .mp-link {
+			margin-left: auto;
+		}
+		.mp-body {
+			flex: 1;
+			min-height: 0;
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			-webkit-overflow-scrolling: touch;
+		}
+		.mp-list-head {
+			display: none;
+		}
+		.mp-controls {
+			gap: 0.7rem;
+			padding: 0.75rem 1rem 0.8rem;
+		}
+
+		/* Колір на мапі — компактний ряд чипів */
+		.mp-mode .mp-label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+		}
+		.mp-mode-row {
+			display: flex;
+			align-items: center;
+			gap: 0.4rem;
+		}
+		.mp-seg {
+			flex: 1 1 auto;
+			min-width: 0;
+			padding: 2px;
+			gap: 0.35rem;
+			background: none;
+			border: 0;
+			border-radius: 0;
+			overflow-x: auto;
+			scrollbar-width: none;
+			overscroll-behavior-x: contain;
+		}
+		.mp-seg::-webkit-scrollbar {
+			display: none;
+		}
+		.mp-seg label {
+			flex: none;
+			flex-direction: row;
+			gap: 0.35rem;
+			min-height: 36px;
+			padding: 0.25rem 0.75rem;
+			border: 1px solid #cfd7e1;
+			border-radius: 999px;
+			background: #fff;
+			font-size: 0.85rem;
+			white-space: nowrap;
+		}
+		.mp-seg label.on {
+			background: var(--navy);
+			border-color: var(--navy);
+			color: #fff;
+			box-shadow: none;
+		}
+		.l-long {
+			display: none;
+		}
+		.l-short {
+			display: inline;
+		}
+		.mp-leg-btn {
+			flex: none;
+			display: grid;
+			place-items: center;
+			width: 40px;
+			height: 40px;
+			margin-left: auto;
+			padding: 0;
+			border: 1px solid #cfd7e1;
+			border-radius: 50%;
+			background: #fff;
+			color: var(--accent);
+			cursor: pointer;
+		}
+		.mp-leg-btn[aria-expanded='true'] {
+			background: var(--accent-soft);
+			border-color: var(--accent);
+		}
+		.mp-seg label :global(svg) {
+			display: none;
+		}
+		.mp-legend.ph-closed {
+			display: none;
+		}
+		.mp-legend {
+			margin-top: 0.5rem;
+			padding: 0.6rem 0.7rem;
+			border-radius: 12px;
+			background: var(--surface-2, #f8fafc);
+		}
+
+		/* Типи — ряд чипів, що гортається */
+		.mp-chips {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			margin: 0 -1rem;
+			padding: 2px 1rem;
+			scrollbar-width: none;
+			overscroll-behavior-x: contain;
+		}
+		.mp-chips::-webkit-scrollbar {
+			display: none;
+		}
+		.mp-chips :global(.chip) {
+			flex: none;
+			min-height: 36px;
+		}
+		.mp-check label {
+			min-height: 44px;
+		}
+
+		/* Список */
+		.mp-list {
+			padding: 0.25rem 0.5rem calc(1.25rem + var(--safe-b, 0px));
+		}
+		.mp-item-btn {
+			min-height: 52px;
+			padding: 0.6rem 0.6rem;
+		}
+		.mp-item.sel {
+			box-shadow: inset 3px 0 0 var(--accent);
+		}
+
+		/* Картка вибраного об'єкта над шторкою */
+		.mp-card {
+			position: absolute;
+			z-index: 3;
+			left: 10px;
+			right: 10px;
+			bottom: calc(var(--peek) + 8px);
+			padding: 0.7rem 0.85rem 0.75rem;
+			border-radius: 16px;
+			background: #fff;
+			box-shadow:
+				0 2px 4px rgba(16, 24, 40, 0.06),
+				0 14px 32px -10px rgba(16, 24, 40, 0.4);
+		}
+		.mp-card-top {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+		}
+		.mp-card-type {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.4rem;
+			font-size: 0.75rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+			color: var(--muted);
+		}
+		.mp-card-x {
+			display: grid;
+			place-items: center;
+			width: 36px;
+			height: 36px;
+			margin: -0.35rem -0.45rem -0.35rem 0;
+			border: 0;
+			border-radius: 50%;
+			background: none;
+			color: var(--muted);
+			cursor: pointer;
+		}
+		.mp-card-name {
+			margin: 0.15rem 0 0;
+			font-weight: 650;
+			font-size: 1rem;
+			line-height: 1.3;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
+		}
+		.mp-card-addr {
+			margin: 0.1rem 0 0;
+			font-size: 0.8125rem;
+			color: var(--muted);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.mp-card-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.6rem;
+			margin-top: 0.55rem;
+		}
+		.mp-card-fig {
+			min-width: 0;
+			font-size: 0.85rem;
+			color: var(--muted);
+			font-variant-numeric: tabular-nums;
+		}
+		.mp-card-fig strong {
+			color: var(--text);
+			font-size: 1.15rem;
+		}
+		.mp-card-fig small {
+			display: block;
+			font-size: 0.75rem;
+			line-height: 1.25;
+		}
+		.mp-card-row .btn {
+			flex: none;
+			min-height: 40px;
 		}
 	}
 

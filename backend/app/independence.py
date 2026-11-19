@@ -30,7 +30,7 @@ from datetime import date, datetime, timedelta
 from . import solar
 from .sites import DAY_PROFILES, WEEKEND_FACTOR, _profile, simulate_day
 
-# --- Індекс енергонезалежності (ПРИПУЩЕННЯ, пояснюється користувачу у formula) ---
+# --- Індекс енергостійкості (ПРИПУЩЕННЯ, пояснюється користувачу у formula) ---
 W_SELF = 50.0  # вага частки власного сонця, балів
 W_AUTONOMY = 50.0  # вага автономності, балів
 SELF_CAP_PCT = 40.0  # 40 % власного сонця = максимум балів (реально сонце покриває до ~30 %, за словами енергоменеджера)
@@ -196,7 +196,7 @@ def class_of(index: int, has_assets: bool) -> str:
 
 def formula() -> dict:
     return {
-        "text": (f"Індекс = {W_SELF:g} × min(частка власного сонця; {SELF_CAP_PCT:g} %) ÷ {SELF_CAP_PCT:g} % + "
+        "text": (f"Індекс енергостійкості = {W_SELF:g} × min(частка власного сонця; {SELF_CAP_PCT:g} %) ÷ {SELF_CAP_PCT:g} % + "
                  f"{W_AUTONOMY:g} × min(автономність на акумуляторі; {AUTONOMY_CAP_H:g} год) ÷ {AUTONOMY_CAP_H:g} год. "
                  f"Клас: висока ≥ 70, середня 40–69, низька 1–39, відсутня — 0 (немає ні СЕС, ні акумулятора). "
                  f"Автономність = ємність акумулятора × {1 - OUTAGE_SOC_FLOOR:.0%} (розряд до {OUTAGE_SOC_FLOOR:.0%}) ÷ "
@@ -405,7 +405,7 @@ def explain(ev: dict, now: datetime) -> list[str]:
         lines.append("Акумулятора немає — у відключення будівля без живлення (мережева СЕС без акумулятора вимикається разом із мережею).")
     a = ev["self_sufficiency_pct"]
     h = ev["autonomy_hours"] or 0.0
-    lines.append(f"Індекс = {W_SELF:g} × {_num(min(a, SELF_CAP_PCT))}/{SELF_CAP_PCT:g} + {W_AUTONOMY:g} × "
+    lines.append(f"Індекс енергостійкості = {W_SELF:g} × {_num(min(a, SELF_CAP_PCT))}/{SELF_CAP_PCT:g} + {W_AUTONOMY:g} × "
                  f"{_num(min(h, AUTONOMY_CAP_H))}/{AUTONOMY_CAP_H:g} = {ev['index']} ({ev['index_class']}).")
     if ev["critical"]:
         lines.append("Критичний об'єкт (охорона здоров'я) — перший у черзі на акумулятори й СЕС.")

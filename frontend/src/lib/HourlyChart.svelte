@@ -18,17 +18,23 @@
 	} = $props();
 
 	// Ширина контейнера → viewBox у справжніх пікселях, щоб підписи не дрібнішали на планшеті
+	const data = $derived([...hours].sort((a, b) => a.hour - b.hour));
+	const hasGen = $derived(data.some((d) => d.gen_kwh > 0));
+	const hasSoc = $derived(data.some((d) => d.soc_pct !== null));
+
+	// На телефоні (вузький контейнер) — viewBox = реальна ширина, менші поля й рідші підписи годин
 	let cw = $state(1000);
-	const W = $derived(Math.max(520, Math.round(cw) || 1000));
-	const H = $derived(W < 760 ? 300 : 360);
-	const PAD = { l: 58, r: 58, t: 34, b: 38 };
+	const narrow = $derived(cw > 0 && cw < 560);
+	const W = $derived(narrow ? Math.max(280, Math.round(cw)) : Math.max(520, Math.round(cw) || 1000));
+	const H = $derived(narrow ? 250 : W < 760 ? 300 : 360);
+	const PAD = $derived(
+		narrow ? { l: 36, r: hasSoc ? 36 : 10, t: 34, b: 30 } : { l: 58, r: 58, t: 34, b: 38 }
+	);
+	const hourStep = $derived(narrow ? 6 : 3);
 	const plotW = $derived(W - PAD.l - PAD.r);
 	const plotH = $derived(H - PAD.t - PAD.b);
 	const slot = $derived(plotW / 24);
 
-	const data = $derived([...hours].sort((a, b) => a.hour - b.hour));
-	const hasGen = $derived(data.some((d) => d.gen_kwh > 0));
-	const hasSoc = $derived(data.some((d) => d.soc_pct !== null));
 	// «Гарний» крок шкали: 1, 2, 2,5 або 5 × 10ⁿ, приблизно 4–5 поділок
 	const scale = $derived.by(() => {
 		const top = Math.max(1, ...data.map((d) => Math.max(d.gen_kwh, d.cons_kwh))) * 1.1;
@@ -120,6 +126,19 @@
 		}
 	}
 
+	// Дотик і перетягування пальцем по графіку → підказка для години під пальцем
+	function onPointer(e: PointerEvent) {
+		if (e.pointerType === 'mouse' && e.type === 'pointerdown') return;
+		const svg = e.currentTarget as SVGSVGElement;
+		const r = svg.getBoundingClientRect();
+		if (!r.width || !data.length) return;
+		const x = ((e.clientX - r.left) / r.width) * W;
+		const h = Math.floor((x - PAD.l) / slot);
+		if (h < 0 || h > 23) return;
+		const i = data.findIndex((d) => d.hour === h);
+		if (i !== -1) active = i;
+	}
+
 	function hourText(d: SiteHour): string {
 		return (
 			`${hh(d.hour)}${d.forecast ? ', прогноз' : ''}: ` +
@@ -159,6 +178,12 @@
 			onkeydown={onKey}
 			onblur={() => (active = null)}
 			onmouseleave={() => (active = null)}
+			onpointerdown={onPointer}
+			onpointermove={onPointer}
+			onpointerleave={(e) => {
+				if (e.pointerType === 'mouse') active = null;
+			}}
+			class:narrow
 		>
 			<defs>
 				<linearGradient id="hc-gen" x1="0" x2="0" y1="0" y2="1">
@@ -184,22 +209,26 @@
 			<!-- Сітка й ліва шкала -->
 			{#each ticks as t, i (i)}
 				<line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke={i === 0 ? '#c3ccd7' : '#e6ebf1'} />
-				<text x={PAD.l - 10} y={y(t)} text-anchor="end" dominant-baseline="middle" class="axis">{num(t, t % 1 ? 1 : 0)}</text>
+				<text x={PAD.l - (narrow ? 6 : 10)} y={y(t)} text-anchor="end" dominant-baseline="middle" class="axis">{num(t, t % 1 ? 1 : 0)}</text>
 			{/each}
-			<text x={PAD.l - 10} y={PAD.t - 14} text-anchor="end" class="axis unit">кВт·год</text>
+			{#if narrow}
+				<text x="2" y={PAD.t - 16} class="axis unit">кВт·год</text>
+			{:else}
+				<text x={PAD.l - 10} y={PAD.t - 14} text-anchor="end" class="axis unit">кВт·год</text>
+			{/if}
 
 			<!-- Права шкала заряду -->
 			{#if hasSoc}
 				{#each [0, 50, 100] as p (p)}
-					<text x={W - PAD.r + 10} y={ys(p)} dominant-baseline="middle" class="axis soc-axis">{p} %</text>
+					<text x={W - PAD.r + (narrow ? 5 : 10)} y={ys(p)} dominant-baseline="middle" class="axis soc-axis">{p}{narrow ? '%' : ' %'}</text>
 				{/each}
-				<text x={W - PAD.r + 10} y={PAD.t - 14} class="axis unit soc-axis">заряд</text>
+				<text x={narrow ? W - 2 : W - PAD.r + 10} y={PAD.t - (narrow ? 16 : 14)} text-anchor={narrow ? 'end' : 'start'} class="axis unit soc-axis">заряд</text>
 			{/if}
 
 			<!-- Підписи годин -->
 			{#each data as d (d.hour)}
-				{#if d.hour % 3 === 0}
-					<text x={cx(d.hour)} y={H - PAD.b + 22} text-anchor="middle" class="axis">{hh(d.hour)}</text>
+				{#if d.hour % hourStep === 0}
+					<text x={cx(d.hour)} y={H - PAD.b + (narrow ? 19 : 22)} text-anchor="middle" class="axis">{hh(d.hour)}</text>
 				{/if}
 			{/each}
 
@@ -350,11 +379,26 @@
 		height: auto;
 		border-radius: 8px;
 		cursor: crosshair;
+		/* Вертикальна прокрутка сторінки лишається, горизонтальний рух пальця — вибір години */
+		touch-action: pan-y;
+		-webkit-tap-highlight-color: transparent;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 	svg:focus-visible {
 		outline: 3px solid var(--focus);
 		outline-offset: 4px;
 		box-shadow: none;
+	}
+	svg.narrow .axis {
+		font-size: 11.5px;
+	}
+	svg.narrow .unit,
+	svg.narrow .zone {
+		font-size: 10.5px;
+	}
+	svg.narrow .peak {
+		font-size: 12px;
 	}
 	.axis {
 		font-size: 13px;
@@ -401,7 +445,7 @@
 			transform-box: fill-box;
 			transform-origin: 50% 100%;
 			transition:
-				transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 30ms),
+				transform 0.45s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 10ms),
 				opacity 0.2s;
 		}
 		.plot:not(.seen) .bar {
@@ -410,16 +454,16 @@
 		.draw {
 			stroke-dasharray: 1;
 			stroke-dashoffset: 0;
-			transition: stroke-dashoffset 1.3s cubic-bezier(0.45, 0, 0.2, 1) 0.15s;
+			transition: stroke-dashoffset 0.6s cubic-bezier(0.45, 0, 0.2, 1) 0.05s;
 		}
 		.plot:not(.seen) .draw {
 			stroke-dashoffset: 1;
 		}
 		.fade {
-			transition: opacity 0.6s ease 0.3s;
+			transition: opacity 0.4s ease 0.15s;
 		}
 		.fade.late {
-			transition-delay: 1.1s;
+			transition-delay: 0.5s;
 		}
 		.plot:not(.seen) .fade {
 			opacity: 0;
@@ -458,6 +502,19 @@
 		font-size: 0.875rem;
 		min-width: 13rem;
 		z-index: 5;
+	}
+	@media (max-width: 640px) {
+		.legend {
+			gap: 0.3rem 0.9rem;
+			font-size: 0.8125rem;
+		}
+		.tip {
+			top: 1.75rem;
+			min-width: 11.5rem;
+			max-width: calc(100% - 0.5rem);
+			padding: 0.5rem 0.65rem;
+			font-size: 0.8125rem;
+		}
 	}
 	.tip p {
 		margin: 0.1rem 0;

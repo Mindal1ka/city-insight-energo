@@ -7,6 +7,7 @@
 	import { api, errMessage, type Building } from '#lib/api.ts';
 	import { num, kwhText, plural } from '#lib/format.ts';
 	import { classInfo, CLASSES } from '#lib/classes.ts';
+	import { catLabel } from '#lib/categories.ts';
 	import ClassBadge from '#lib/ClassBadge.svelte';
 	import Status from '#lib/Status.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
@@ -100,9 +101,9 @@
 		<h1>Рейтинг будівель</h1>
 		<p class="lead">
 			Порівнюємо схожі будівлі — школи зі школами, садочки із садочками — за
-			<Term key="питоме споживання">питомим споживанням</Term>: скільки електрики будівля витрачає на
-			кожен квадратний метр. Так можна чесно порівнювати великі й малі будівлі.
-			<strong>Місце 1</strong> — та, що витрачає найбільше: з неї варто почати перевірку.
+			<Term key="питоме споживання">питомим споживанням</Term><span class="hide-phone">: скільки електрики будівля витрачає на
+			кожен квадратний метр. Так можна чесно порівнювати великі й малі будівлі</span>.
+			<strong>№ 1 у черзі на перевірку</strong> — будівля, що витрачає найбільше на 1 м²: її варто перевірити першою.
 		</p>
 	</div>
 </div>
@@ -143,7 +144,7 @@
 						query = '';
 					}}
 				>
-					{c.name} <span class="count">{c.rated}</span>
+					<span title={c.name}>{catLabel(c.name)}</span> <span class="count">{c.rated}</span>
 				</a>
 			{/each}
 		</nav>
@@ -214,7 +215,7 @@
 
 		<div class="list-card">
 			<div class="list-head" aria-hidden="true">
-				<span>Місце</span>
+				<span>№ у черзі</span>
 				<span>Будівля</span>
 				<span>Витрачає на 1 м² за рік</span>
 				<span>Порівняно з типовою</span>
@@ -231,8 +232,8 @@
 							animate:flip={{ duration: flipMs }}
 							in:fadeUp|global={{ delay: stagger(i, 22, 450) }}
 						>
-							<span class="rank tnum" title="Місце {r.rank} з {r.rankOf}">
-								<span class="visually-hidden">Місце</span>{r.rank}
+							<span class="rank tnum" title="№ {r.rank} з {r.rankOf} у черзі на перевірку">
+								<span class="visually-hidden">№ у черзі на перевірку</span>{r.rank}
 							</span>
 							<span class="name">
 								<a href="/building/{r.b.id}">{r.b.name}</a>
@@ -266,6 +267,7 @@
 										<div><dt>Адреса</dt><dd>{r.b.address || '—'}</dd></div>
 										<div><dt>Електрика за {BASE_YEAR} рік</dt><dd>{kwhText(r.kwh)}</dd></div>
 										<div><dt>Площа</dt><dd>{num(r.b.heated_area, 0)} м²</dd></div>
+										<div class="only-phone"><dt>Порівняно з типовою</dt><dd>{ratioWords(r.ratio)}</dd></div>
 										<div>
 											<dt><Term key="умовний клас">Клас</Term></dt>
 											<dd>{info ? `${info.letter} — ${info.text}` : '—'}</dd>
@@ -650,6 +652,130 @@
 		}
 		.details {
 			grid-column: 1 / -1;
+		}
+	}
+	/* Телефон: компактні ряди «місце · назва (2 рядки) | значення + смужка · клас»,
+	   категорії й сортування — одна лінія з горизонтальною прокруткою */
+	@media (max-width: 640px) {
+		.formula {
+			gap: 0.35rem 0.4rem;
+			padding: 0.6rem 0.75rem;
+			margin-bottom: 1rem;
+		}
+		.f-part {
+			padding: 0.2rem 0.55rem;
+			font-size: 0.8125rem;
+		}
+		.f-op {
+			font-size: 1rem;
+		}
+		.f-ex {
+			display: none;
+		}
+		.cats,
+		.toolbar .seg {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			scrollbar-width: none;
+			max-width: 100%;
+		}
+		.cats::-webkit-scrollbar,
+		.toolbar .seg::-webkit-scrollbar {
+			display: none;
+		}
+		.cats > a,
+		.toolbar .seg > button {
+			flex: none;
+			white-space: nowrap;
+		}
+		.cats {
+			margin-bottom: 1rem;
+		}
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+			margin-bottom: 1rem;
+		}
+		.stats > :global(:last-child:nth-child(odd)) {
+			grid-column: 1 / -1;
+		}
+		.search {
+			max-width: none;
+		}
+		.shown {
+			margin: 0;
+			font-size: 0.875rem;
+		}
+		.row {
+			grid-template-columns: 2rem minmax(0, 1fr) auto;
+			gap: 0.35rem 0.6rem;
+			padding: 0.6rem 0.75rem;
+			align-items: center;
+		}
+		.rank {
+			grid-row: 1 / span 2;
+			align-self: start;
+			width: 2rem;
+			height: 2rem;
+			font-size: 0.875rem;
+		}
+		.name {
+			grid-column: 2;
+			grid-row: 1;
+			min-width: 0;
+		}
+		.name a {
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			overflow: hidden;
+			line-height: 1.3;
+			font-size: 0.9375rem;
+		}
+		.more {
+			grid-column: 3;
+			grid-row: 1;
+			width: 2.5rem;
+			height: 2.5rem;
+		}
+		.val {
+			grid-column: 2;
+			grid-row: 2;
+			flex-direction: row;
+			align-items: center;
+			gap: 0.6rem;
+			min-width: 0;
+		}
+		.v {
+			font-size: 0.875rem;
+		}
+		.mini {
+			flex: 1 1 auto;
+			min-width: 2.5rem;
+		}
+		.cmp {
+			grid-column: 3;
+			grid-row: 2;
+			justify-content: center;
+		}
+		.cmp-txt {
+			display: none;
+		}
+		.details {
+			grid-column: 1 / -1;
+			grid-row: auto;
+		}
+		.details dl {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.5rem 1rem;
+		}
+		.details dl > div:first-child {
+			grid-column: 1 / -1;
+		}
+		.list-card {
+			border-radius: 14px;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

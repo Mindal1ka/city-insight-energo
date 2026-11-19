@@ -63,6 +63,17 @@
 		return { sun, bat, gap: Math.max(0, t.load_kwh - sun - bat) };
 	};
 	const zero = $derived(!!r && !r.survives_all && r.survives_hours < 0.05);
+	/** Дрібний дефіцит (менше 1 кВт·год або ≥ 90 % часу зі світлом) — нейтральний тон, без «потрібен генератор» */
+	const minor = $derived(
+		!!r && !r.survives_all && !zero && (r.unmet_kwh < 1 || r.survives_hours / Math.max(0.01, r.hours) >= 0.9)
+	);
+	const tone = $derived(!r ? 'ok' : r.survives_all ? 'ok' : minor ? 'warn' : 'bad');
+	/** Акумулятор на початок відключення заряджений не повністю — пояснюємо чому */
+	const socNote = $derived(
+		r && r.soc_start_pct != null && r.soc_start_pct < 97 && !zero
+			? `До ${hh(r.start_hour)} акумулятор віддасть частину енергії будівлі, тож на початок відключення він заряджений на ${num(r.soc_start_pct, 0)} %.`
+			: ''
+	);
 	const okPct = $derived(
 		!r ? 0 : r.survives_all ? 100 : Math.max(0, Math.min(100, (r.survives_hours / Math.max(0.01, r.hours)) * 100))
 	);
@@ -70,17 +81,20 @@
 		if (!r) return '';
 		if (r.survives_all) return `Заклад протримається всі ${r.hours} год: з ${hh(r.start_hour)} до ${clock(r.hours)}.`;
 		if (zero) return `Резерв не зафіксовано: з ${hh(r.start_hour)} бракуватиме ${num(r.unmet_kwh, 1)} кВт·год.`;
-		return `Заклад протримається ${duration(r.survives_hours)} з ${r.hours} год, приблизно до ${clock(r.survives_hours)}. Бракуватиме ${num(r.unmet_kwh, 1)} кВт·год.`;
+		return `Заклад протримається ${duration(r.survives_hours)} з ${r.hours} год, приблизно до ${clock(r.survives_hours)}. Бракуватиме ${num(r.unmet_kwh, 1)} кВт·год. ${socNote}`;
 	});
 </script>
 
 <section class="panel os" aria-labelledby="os-h">
-	<div class="panel-head">
+	<!-- Позначка «ДЕМО» — у DOM одразу після заголовка, як і візуально (порядок Tab = порядок читання) -->
+	<div class="panel-head os-head">
 		<div>
-			<h3 id="os-h">Перевірте самі</h3>
+			<div class="os-hrow">
+				<h3 id="os-h">Перевірте самі</h3>
+				<DemoPill text="Навантаження — типовий добовий профіль за реальним річним споживанням UMUNI; СЕС і акумулятор змодельовані" />
+			</div>
 			<p class="muted sub">Оберіть, коли і на скільки зникне світло, — одразу побачите, скільки заклад протримається на <Term key="акумулятор">акумуляторі</Term> і сонці.</p>
 		</div>
-		<DemoPill text="Навантаження — типовий добовий профіль за реальним річним споживанням UMUNI; СЕС і акумулятор змодельовані" />
 	</div>
 
 	<div class="controls">
@@ -111,14 +125,16 @@
 	{#if error}
 		<div class="notice notice-error" role="alert"><p><strong>Не вдалося порахувати.</strong> {error}</p></div>
 	{:else if r}
-		<div class="result {r.survives_all ? 'ok' : 'bad'}" class:stale={loading}>
-			<span class="r-sign" aria-hidden="true">{#key r.survives_all}<span class="r-glyph">{r.survives_all ? '✓' : '!'}</span>{/key}</span>
+		<div class="result {tone}" class:stale={loading}>
+			<span class="r-sign" aria-hidden="true">{#key tone}<span class="r-glyph">{tone === 'ok' ? '✓' : tone === 'warn' ? '≈' : '!'}</span>{/key}</span>
 			<div class="r-body">
 				<p class="r-title" aria-hidden="true">
 					{#if r.survives_all}
 						Протримається всі {r.hours} год
 					{:else if zero}
 						Резерв не зафіксовано
+					{:else if minor}
+						Майже вистачить: <CountUp value={r.survives_hours} format={duration} duration={600} /> з {r.hours} год
 					{:else}
 						Протримається <CountUp value={r.survives_hours} format={duration} duration={600} /> з {r.hours} год
 					{/if}
@@ -128,10 +144,13 @@
 						Світло зникне о {hh(r.start_hour)} і повернеться о {clock(r.hours)} — сонця й акумулятора вистачить на весь цей час.
 					{:else if zero}
 						Світло зникне о {hh(r.start_hour)}: у даних немає зарядженого акумулятора, а сонця в цей час замало. Бракуватиме {num(r.unmet_kwh, 1)} кВт·год.
+					{:else if minor}
+						Світло зникне о {hh(r.start_hour)} — енергії вистачить майже на весь час, приблизно до {clock(r.survives_hours)}. Бракуватиме лише {num(r.unmet_kwh, 1)} кВт·год — досить наприкінці вимкнути частину техніки.
 					{:else}
-						Світло зникне о {hh(r.start_hour)}{#if r.soc_start_pct != null}, акумулятор заряджений на {num(r.soc_start_pct, 0)} %{/if} — енергії вистачить приблизно до {clock(r.survives_hours)}. Далі бракуватиме {num(r.unmet_kwh, 1)} кВт·год: потрібен генератор або більший акумулятор.
+						Світло зникне о {hh(r.start_hour)} — енергії вистачить приблизно до {clock(r.survives_hours)}. Далі бракуватиме {num(r.unmet_kwh, 1)} кВт·год: потрібен генератор або більший акумулятор.
 					{/if}
 				</p>
+				{#if socNote}<p class="r-soc" aria-hidden="true"><Icon name="battery" size={15} /> <span>{socNote}</span></p>{/if}
 				<p class="r-demo"><DemoPill align="left" text="Навантаження — типовий профіль за реальним річним споживанням UMUNI; СЕС і акумулятор змодельовані" /></p>
 				<p class="visually-hidden" role="status" aria-live="polite">{srText}</p>
 			</div>
@@ -152,12 +171,13 @@
 			</div>
 			<div class="run-scale tnum">
 				<span><b>{hh(r.start_hour)}</b> світло зникло</span>
-				<span><b>{clock(r.hours)}</b> світло повернулось</span>
+				<span class="rs-end"><b>{clock(r.hours)}</b> світло повернулось</span>
 			</div>
 		</div>
 
 		<Disclosure summary="Погодинно: звідки береться енергія" hint="{tl.length} год">
 			<figure class="tl">
+				<div class="tl-scroll">
 				<div class="cols" style="--n: {tl.length}" aria-hidden="true">
 					{#each tl as t, i (i)}
 						{@const p = parts(t)}
@@ -172,7 +192,9 @@
 						</div>
 					{/each}
 				</div>
-				<table class="visually-hidden">
+				</div>
+				<!-- Таблиця для екранних зчитувачів: обгортка, бо сама таблиця не стискається до 1 px і розширює сторінку -->
+				<div class="visually-hidden"><table>
 					<caption>Погодинно під час відключення</caption>
 					<thead><tr><th>Година</th><th>Потрібно, кВт·год</th><th>Сонце</th><th>Акумулятор</th><th>Чи вистачає</th></tr></thead>
 					<tbody>
@@ -180,7 +202,7 @@
 							<tr><td>{hh(t.hour)}</td><td>{num(t.load_kwh, 1)}</td><td>{num(t.solar_kwh, 1)}</td><td>{num(t.from_battery_kwh, 1)}</td><td>{t.covered ? 'так' : 'ні'}</td></tr>
 						{/each}
 					</tbody>
-				</table>
+				</table></div>
 				<figcaption class="legend">
 					<span><i class="k sun"></i>сонце</span>
 					<span><i class="k bat"></i>акумулятор</span>
@@ -207,6 +229,20 @@
 	.sub {
 		margin: 0.2rem 0 0;
 		max-width: 70ch;
+	}
+	.os-head > div {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.os-hrow {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.4rem 1rem;
+	}
+	.os-hrow h3 {
+		margin: 0;
 	}
 	.controls {
 		display: flex;
@@ -301,6 +337,28 @@
 	.result.bad {
 		background: var(--deficit-soft);
 		border-color: var(--deficit);
+	}
+	.result.warn {
+		background: var(--sun-soft, #fff4dc);
+		border-color: #e0a63a;
+	}
+	.warn .r-sign {
+		background: #c98a12;
+	}
+	.warn .r-title {
+		color: var(--sun-ink, #7a4b00);
+	}
+	.r-soc {
+		display: flex;
+		gap: 0.35rem;
+		align-items: flex-start;
+		margin: 0.45rem 0 0;
+		font-size: 0.875rem;
+		color: #3d4857;
+	}
+	.r-soc :global(.icon) {
+		flex: none;
+		margin-top: 0.15rem;
 	}
 	.stale {
 		opacity: 0.6;
@@ -542,6 +600,12 @@
 		align-items: flex-start;
 		margin: 0;
 	}
+	.rs-end {
+		text-align: right;
+	}
+	.tl-scroll {
+		position: relative;
+	}
 	@media (max-width: 700px) {
 		.cols {
 			height: 10rem;
@@ -549,6 +613,131 @@
 		}
 		.hl {
 			font-size: 0.65rem;
+		}
+	}
+
+	/* ---------- Телефон: великі елементи під палець ---------- */
+	@media (max-width: 640px) {
+		.os {
+			gap: 1rem;
+		}
+		.os .panel-head {
+			flex-wrap: wrap;
+			gap: 0.5rem;
+		}
+		.sub {
+			font-size: 0.875rem;
+		}
+		.controls {
+			flex-direction: column;
+			gap: 1rem;
+			padding: 0.9rem;
+			margin-inline: -0.25rem;
+		}
+		.ctl {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0.5rem;
+		}
+		.ctl-l {
+			font-size: 0.9375rem;
+		}
+		.stepper {
+			display: grid;
+			grid-template-columns: 3.25rem minmax(0, 1fr) 3.25rem;
+			width: 100%;
+			border-radius: 14px;
+		}
+		.sb {
+			width: 100%;
+			height: 3.25rem;
+			font-size: 1.6rem;
+			touch-action: manipulation;
+		}
+		.sb:active:not(:disabled) {
+			background: var(--accent-soft);
+		}
+		.sv {
+			min-width: 0;
+			font-size: 1.5rem;
+			border-inline: 1px solid var(--line-soft, #e6ebf1);
+			line-height: 3.25rem;
+		}
+		input[type='range'] {
+			width: 100%;
+			height: 2.75rem;
+			margin: 0;
+		}
+		/* Пресети — чипи в один ряд з прокруткою */
+		.presets {
+			flex-wrap: nowrap;
+			gap: 0.4rem;
+			overflow-x: auto;
+			scrollbar-width: none;
+			margin-inline: -0.9rem;
+			padding: 2px 0.9rem;
+			scroll-padding-inline: 0.9rem;
+		}
+		.presets::-webkit-scrollbar {
+			display: none;
+		}
+		.chip {
+			flex: 1 0 auto;
+			min-height: 44px;
+			padding: 0.3rem 0.9rem;
+			font-size: 0.9375rem;
+			touch-action: manipulation;
+		}
+		.result {
+			align-items: flex-start;
+			gap: 0.75rem;
+			padding: 0.85rem 0.9rem;
+			border-left-width: 4px;
+		}
+		.r-sign {
+			width: 2.25rem;
+			height: 2.25rem;
+			font-size: 1.2rem;
+		}
+		.r-title {
+			font-size: 1.2rem;
+		}
+		.r-text {
+			font-size: 0.9rem;
+		}
+		.run-lbl {
+			padding: 0 0.6rem;
+			font-size: 0.8125rem;
+		}
+		.run-scale {
+			font-size: 0.8125rem;
+			gap: 0.5rem;
+		}
+		.run-scale span {
+			display: flex;
+			flex-direction: column;
+			line-height: 1.3;
+		}
+		.rs-end {
+			align-items: flex-end;
+		}
+		/* Погодинна стрічка: на вузькому екрані — горизонтальна прокрутка всередині, не всієї сторінки */
+		.tl-scroll {
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			scrollbar-width: thin;
+			padding-bottom: 0.25rem;
+		}
+		.cols {
+			min-width: calc(var(--n) * 22px);
+			gap: 3px;
+		}
+		.hl {
+			font-size: 0.6875rem;
+		}
+		.legend {
+			font-size: 0.8125rem;
+			gap: 0.35rem 0.9rem;
 		}
 	}
 </style>

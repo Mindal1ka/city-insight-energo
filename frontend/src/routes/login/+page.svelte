@@ -59,7 +59,7 @@
 		<h1 id="hero-h" class="rise" style="--d: 80ms">Енергія громади —<br /><span class="hl">видно з першого погляду</span></h1>
 		<p class="one rise" style="--d: 160ms">
 			Карта будівель Полтавської громади: скільки електрики споживає кожна школа, садочок чи лікарня — і
-			де варто поставити сонячні панелі й батареї, щоб світло було завжди.
+			де варто поставити сонячні панелі й батареї, щоб у школах і лікарнях світло було довше.
 		</p>
 
 		<svg class="art rise" style="--d: 240ms" viewBox="0 0 520 300" aria-hidden="true" focusable="false">
@@ -196,7 +196,7 @@
 				<span>Це тестовий вхід: справжньої перевірки пароля немає, дані зберігаються лише в цій вкладці.</span>
 			</p>
 		</form>
-		<p class="foot">Poltava Open Data Hackathon · трек «Енергетичний менеджмент»</p>
+		<p class="foot">Poltava Open Data Hackathon · трек 2 «Енергетичний менеджмент»</p>
 	</section>
 </div>
 
@@ -211,13 +211,13 @@
 		padding: 3rem clamp(1.25rem, 5vw, 5.5rem);
 		color: #fff;
 		background: linear-gradient(160deg, #0d2b4d 0%, #0a1f38 55%, #08182c 100%);
-		overflow: hidden;
 		isolation: isolate;
 	}
 	.bg {
 		position: absolute;
 		inset: 0;
 		z-index: -1;
+		overflow: hidden;
 		pointer-events: none;
 	}
 	.orb {
@@ -421,7 +421,8 @@
 		margin-top: 0.5rem;
 	}
 	.pchip {
-		padding: 0.2rem 0.6rem;
+		min-height: 32px;
+		padding: 0.2rem 0.7rem;
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		background: #fff;
@@ -659,7 +660,7 @@
 
 	@media (max-width: 980px) {
 		.login {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 			align-content: start;
 			gap: 2rem;
 			padding-top: 2rem;
@@ -681,6 +682,92 @@
 		}
 		.one {
 			font-size: 1rem;
+		}
+	}
+	@media (pointer: coarse) {
+		.pchip {
+			min-height: 40px;
+		}
+	}
+	/* Телефон: усе на одному-півтора екранах, форма — головне */
+	@media (max-width: 640px) {
+		.login {
+			min-height: 100dvh;
+			gap: 1rem;
+			align-content: center;
+			padding: calc(1rem + env(safe-area-inset-top, 0px)) calc(1rem + env(safe-area-inset-right, 0px)) calc(1rem + env(safe-area-inset-bottom, 0px)) calc(1rem + env(safe-area-inset-left, 0px));
+		}
+		.brand {
+			margin-bottom: 0.9rem;
+			gap: 0.65rem;
+		}
+		.logo {
+			width: 2.4rem;
+			height: 2.4rem;
+			border-radius: 12px;
+		}
+		.brand-name {
+			font-size: 1.02rem;
+		}
+		.brand-sub {
+			font-size: 0.8rem;
+		}
+		h1 {
+			font-size: 1.5rem;
+			margin-bottom: 0;
+		}
+		h1 br {
+			display: none;
+		}
+		.one {
+			display: none;
+		}
+		.card-form {
+			padding: 1.1rem 1rem 1rem;
+			border-radius: 20px;
+		}
+		.test-tag {
+			margin-bottom: 0.5rem;
+		}
+		.card-form h2 {
+			font-size: 1.35rem;
+			margin-bottom: 0.25rem;
+		}
+		.sub {
+			font-size: 0.875rem;
+			line-height: 1.4;
+			margin-bottom: 0.9rem;
+		}
+		.f {
+			margin-bottom: 0.75rem;
+		}
+		.inp input {
+			min-height: 48px;
+		}
+		/* Підказки посади — один ряд із прокруткою */
+		.pos-chips {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			scroll-snap-type: x proximity;
+			margin-inline: -1rem;
+			padding: 2px 1rem;
+			scrollbar-width: none;
+		}
+		.pos-chips::-webkit-scrollbar {
+			display: none;
+		}
+		.pchip {
+			flex: none;
+			scroll-snap-align: start;
+			white-space: nowrap;
+		}
+		.test-note {
+			margin-top: 0.75rem;
+			font-size: 0.8rem;
+		}
+		.foot {
+			font-size: 0.75rem;
+			text-align: center;
 		}
 	}
 </style>

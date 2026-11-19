@@ -4,6 +4,8 @@
 	// Другорядні цифри сховано в «Детальніше»; подробиці кожної будівлі — на сторінці об'єкта.
 	import { page } from '$app/state';
 	import { flip } from 'svelte/animate';
+	import { fade, fly } from 'svelte/transition';
+	import { tick } from 'svelte';
 	import type { MapPoint } from '#lib/api-map.ts';
 	import { api, errMessage, type SitesResponse, type SiteItem } from '#lib/api.ts';
 	import { auth, greetingName } from '#lib/auth.svelte.ts';
@@ -18,6 +20,7 @@
 	import DemoPill from '#lib/DemoPill.svelte';
 	import CategoryIcon from '#lib/CategoryIcon.svelte';
 	import IndexBadge from '#lib/IndexBadge.svelte';
+	import { catLabel } from '#lib/categories.ts';
 	import CommunityDistribution from '#lib/CommunityDistribution.svelte';
 	import {
 		independenceApi,
@@ -90,22 +93,16 @@
 	);
 
 	// --- Фільтри ---
-	const SHORT: Record<string, string> = {
-		'Заклади освіти': 'Школи',
-		'Дошкільні заклади': 'Садочки',
-		"Охорона здоров'я": 'Медзаклади',
-		'Громадські будівлі': 'Громадські',
-		'Житлові будинки': 'Житлові',
-		'Спортивні споруди': 'Спорт'
-	};
-	const short = (c: string) => SHORT[c] ?? c;
+	const short = (c: string) => catLabel(c);
 
 	let query = $state('');
 	let category = $state('');
 	let onlyCritical = $state(false);
 	let sort = $state<'attention' | 'best' | 'name'>('best');
-	let limit = $state(48);
-	const STEP = 48;
+	// На телефоні показуємо менше за раз: довгий список — це тисячі пікселів прокрутки
+	const STEP =
+		typeof matchMedia !== 'undefined' && matchMedia('(max-width: 640px)').matches ? 24 : 48;
+	let limit = $state(STEP);
 
 	// Посилання з картки «Медзаклади з резервом»: ?critical=1 вмикає фільтр
 	$effect(() => {
@@ -172,11 +169,56 @@
 		onlyCritical = false;
 	}
 
+	// --- Телефон: «Фільтри» — нижня шторка з порядком і «лише критичні» ---
+	const SORTS: { key: typeof sort; label: string }[] = [
+		{ key: 'best', label: 'Спершу найкраще захищені' },
+		{ key: 'attention', label: 'Спершу медзаклади без даних про резерв' },
+		{ key: 'name', label: 'За назвою (А–Я)' }
+	];
+	let sheetOpen = $state(false);
+	let sheetEl = $state<HTMLElement>();
+	let sheetBtn = $state<HTMLButtonElement>();
+	const sheetCount = $derived((onlyCritical ? 1 : 0) + (sort !== 'best' ? 1 : 0));
+	async function openSheet() {
+		sheetOpen = true;
+		await tick();
+		sheetEl?.focus();
+	}
+	function closeSheet() {
+		sheetOpen = false;
+		sheetBtn?.focus();
+	}
+	// Шторку виносимо в <body>: <main> має власний контекст накладання, і без цього її перекриє нижня панель
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return { destroy: () => node.remove() };
+	}
+	// Шторку можна стягнути пальцем донизу
+	let sheetDrag = $state(0);
+	let dragFrom: number | null = null;
+	function sheetDown(e: PointerEvent) {
+		dragFrom = e.clientY;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+	function sheetMove(e: PointerEvent) {
+		if (dragFrom !== null) sheetDrag = Math.max(0, e.clientY - dragFrom);
+	}
+	function sheetUp() {
+		if (dragFrom === null) return;
+		dragFrom = null;
+		if (sheetDrag > 90) closeSheet();
+		sheetDrag = 0;
+	}
+
 	/** Коротко для картки: 0,5-годинна точність, бо змодельоване значення не має бути «точним до хвилини» */
 	function hours(h: number): string {
-		if (h < 1) return `${Math.max(10, Math.round((h * 60) / 10) * 10)} хв`;
 		if (h > 72) return 'понад 3 доби';
-		return `${num(Math.round(h * 2) / 2, Number.isInteger(Math.round(h * 2) / 2) ? 0 : 1)} год`;
+		// Округлюємо до 10 хв: «6 год 40 хв»
+		const m = Math.max(10, Math.round((h * 60) / 10) * 10);
+		const hh = Math.floor(m / 60);
+		const mm = m % 60;
+		if (!hh) return `${mm} хв`;
+		return mm ? `${hh} год ${mm} хв` : `${hh} год`;
 	}
 
 	// --- Рядок стану на картці: одне речення словами + значок (колір — лише підсилення) ---
@@ -184,6 +226,8 @@
 	interface Line {
 		tone: Tone;
 		text: string;
+		/** Коротко для рядка списку на телефоні */
+		short?: string;
 	}
 	function lineOf(it: SiteItem): Line {
 		const x = indById.get(it.id);
@@ -194,11 +238,15 @@
 		if (hasBattery(x)) {
 			const h = x.autonomy_hours;
 			if (h === null || h === undefined) return { tone: 'good', text: 'Резерв на випадок відключення є' };
-			return { tone: Math.round(h * 2) / 2 >= 6 ? 'good' : 'warn', text: `Протримається ${hours(h)} без світла` };
+			return {
+				tone: h >= 6 ? 'good' : 'warn',
+				text: `Протримається ${hours(h)} без світла`,
+				short: `Без світла — ${hours(h)}`
+			};
 		}
-		if (x.critical) return { tone: 'bad', text: 'Критичний: резерв не зафіксовано' };
 		if (x.data_ok === false) return { tone: 'nodata', text: 'Немає даних про споживання' };
-		return { tone: 'none', text: 'Резерв не зафіксовано' };
+		// Відсутність запису в системі ≠ відсутність резерву в закладі — тому нейтрально, без червоного
+		return { tone: 'none', text: 'Дані про резерв не внесено' };
 	}
 
 	// --- Детальніше про громаду ---
@@ -261,7 +309,7 @@
 					class="dot"
 					aria-hidden="true">·</span
 				>{/if}
-			<span>Енергія громади{#if today}, {today}{/if}</span>
+			<span class="eb-date">Енергія громади{#if today}, {today}{/if}</span>
 			<DemoPill
 				align="left"
 				text="Сонячні станції й акумулятори змодельовані: перелік від міста ще не надано. Будівлі та річне споживання — реальні дані UMUNI 2025."
@@ -269,14 +317,26 @@
 		</p>
 		<h1>
 			{#if ic}
-				<span in:fadeUp|global={{ duration: DUR.slow }}>
+				<!-- Телефон: коротко, два головні числа -->
+				<span class="h1-short" in:fadeUp|global={{ duration: DUR.slow }}>
+					Сонце: <mark class="hl">{shareText} %</mark>{#if critShare !== null}<span class="h1-sep" aria-hidden="true">
+							·
+						</span><span class="h1-br"
+							>Дані про резерв: <mark class="hl"
+								>{ic.critical_with_battery} з {ic.critical_sites_total}</mark
+							>
+							{plural(ic.critical_sites_total, 'медзакладу', 'медзакладів', 'медзакладів')}</span
+						>
+						<span class="h1-demo">(ДЕМО)</span>{/if}
+				</span>
+				<span class="h1-long" in:fadeUp|global={{ duration: DUR.slow }}>
 					Сонце дає громаді {sharePct !== null && sharePct < 20 ? 'лише ' : ''}<mark class="hl"
 						>{shareText} %</mark
-					> електроенергії{#if critShare !== null}, а резерв на випадок відключення зафіксовано{critShare < 0.5 ? ' лише' : ''} в
-						<mark class="hl {critShare < 0.5 ? 'bad' : ''}"
-							>{ic.critical_with_battery} з {ic.critical_sites_total}</mark
-						>
-						{plural(ic.critical_sites_total, 'медзакладу', 'медзакладів', 'медзакладів')}{/if}.
+					> електроенергії{#if critShare !== null}, а дані про резерв на випадок відключення в системі поки
+						внесено{critShare < 0.5 ? ' лише' : ''} для
+						<mark class="hl">{ic.critical_with_battery} з {ic.critical_sites_total}</mark>
+						{plural(ic.critical_sites_total, 'медзакладу', 'медзакладів', 'медзакладів')}
+						<span class="h1-demo">(ДЕМО)</span>{/if}.
 				</span>
 			{:else if data}
 				<span in:fadeUp|global>Стан енергії {num(data.totals.sites)} будівель громади</span>
@@ -298,7 +358,7 @@
 <section class="stats" aria-label="Головні показники громади">
 	<div class="stat" in:fadeUp|global={{ delay: 0 }}>
 		<StatCard
-			label="Електроенергії дає сонце"
+			label="Частка сонця"
 			value={sharePct}
 			decimals={sharePct !== null && sharePct < 10 ? 1 : 0}
 			unit="%"
@@ -311,12 +371,12 @@
 	</div>
 	<div class="stat" in:fadeUp|global={{ delay: 70 }}>
 		<StatCard
-			label="Медзаклади з резервом"
+			label="Дані про резерв"
 			value={ic?.critical_with_battery ?? null}
 			unit={ic ? `з ${ic.critical_sites_total}` : ''}
-			icon="alert"
-			tone={critShare === null ? 'neutral' : critShare < 0.5 ? 'bad' : critShare < 0.9 ? 'warn' : 'good'}
-			hint="Лікарні й амбулаторії, де зафіксовано акумулятор на випадок відключення."
+			icon="battery"
+			tone="neutral"
+			hint="Медзаклади, для яких у систему внесено акумулятор на випадок відключення."
 			href={withView('/', view, { critical: '1' }) + '#buildings'}
 			demo
 		/>
@@ -347,6 +407,7 @@
 				? `Стільки дасть сонце, якщо поставити станції ще на ${num(ic.potential_sites ?? 0)} ${plural(ic.potential_sites ?? 0, 'будівлі', 'будівлях', 'будівлях')}.`
 				: 'Скільки дасть сонце з новими станціями.'}
 			href="/solar"
+			demo
 		/>
 	</div>
 </section>
@@ -413,16 +474,16 @@
 			{#if show === 'grid'}
 				<DemoPill
 					align="left"
-					text="Рядок про резерв і індекс розраховано на змодельованих станціях та акумуляторах. «Резерв не зафіксовано» означає, що в даних його немає, а не що його точно немає в закладі."
+					text="Рядок про резерв і індекс розраховано на змодельованих станціях та акумуляторах. «Дані про резерв не внесено» означає, що в системі запису немає, а не що резерву точно немає в закладі."
 				/>
 			{/if}
 		</div>
-		<div class="b-tools">
+		<div class="b-tools hide-ph">
 			<div class="sort" hidden={show === 'map'}>
 				<label for="sort">Порядок</label>
 				<select id="sort" bind:value={sort}>
 					<option value="best">Спершу найкраще захищені</option>
-					<option value="attention">Спершу критичні без резерву</option>
+					<option value="attention">Спершу медзаклади без даних про резерв</option>
 					<option value="name">За назвою (А–Я)</option>
 				</select>
 			</div>
@@ -469,6 +530,53 @@
 				autocomplete="off"
 			/>
 		</div>
+		<!-- Телефон: кнопка «Фільтри» і перемикач плитки/мапа поруч із пошуком -->
+		<button
+			type="button"
+			class="f-btn only-ph"
+			class:on={sheetCount > 0}
+			bind:this={sheetBtn}
+			onclick={openSheet}
+			aria-haspopup="dialog"
+			aria-expanded={sheetOpen}
+		>
+			<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+				><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg
+			>
+			<span class="visually-hidden">Фільтри</span>
+			{#if sheetCount}<span class="f-n" aria-label="увімкнено: {sheetCount}">{sheetCount}</span>{/if}
+		</button>
+		<nav class="seg seg-ph only-ph" aria-label="Як показати будівлі">
+			<a
+				href={showHref('grid')}
+				aria-current={show === 'grid' ? 'page' : undefined}
+				aria-label="Списком"
+				title="Списком"
+				data-sveltekit-reset="false"
+				data-sveltekit-replacestate
+				data-sveltekit-noscroll
+			>
+				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+					><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.5" cy="6" r="1.2" fill="currentColor" /><circle cx="4.5" cy="12" r="1.2" fill="currentColor" /><circle
+						cx="4.5"
+						cy="18"
+						r="1.2"
+						fill="currentColor"
+					/></svg
+				>
+			</a>
+			<a
+				href={showHref('map')}
+				aria-current={show === 'map' ? 'page' : undefined}
+				aria-label="На мапі"
+				title="На мапі"
+				data-sveltekit-reset="false"
+				data-sveltekit-replacestate
+				data-sveltekit-noscroll
+			>
+				<Icon name="pin" size={18} />
+			</a>
+		</nav>
 		<div class="chips" role="group" aria-label="Тип будівлі">
 			<button type="button" class="chip" aria-pressed={category === ''} onclick={() => (category = '')}>
 				Усі
@@ -488,7 +596,7 @@
 		</div>
 		<button
 			type="button"
-			class="chip crit"
+			class="chip crit hide-ph"
 			aria-pressed={onlyCritical}
 			onclick={() => (onlyCritical = !onlyCritical)}
 			title="Лише лікарні й амбулаторії — заклади, які не можна залишати без світла"
@@ -547,7 +655,7 @@
 						{selectedId}
 						colorBy="category"
 						compact
-						height="min(62vh, 560px)"
+						height="min(var(--home-map-h, 62vh), 560px)"
 						onselect={(id) => (selectedId = id)}
 						label="Мапа будівель громади за типом закладу"
 					/>
@@ -575,7 +683,7 @@
 								<span class="type-t">{short(it.category_short)}</span>
 							</span>
 							{#if x && x.data_ok !== false && x.index_class !== 'відсутня'}
-								<IndexBadge index={x.index} cls={x.index_class} size="sm" />
+								<IndexBadge index={x.index} cls={x.index_class} size="sm" muted />
 							{/if}
 						</span>
 						<span class="name" title={it.name}>{it.name}</span>
@@ -592,7 +700,9 @@
 									<Icon name="info" size={17} />
 								{/if}
 							</span>
-							<span>{ln.text}</span>
+							<span class="l-long">{ln.text}</span>{#if ln.short}<span class="l-short" aria-hidden="true"
+										>{ln.short}</span
+									>{/if}
 						</span>
 					</a>
 				</li>
@@ -607,6 +717,69 @@
 		{/if}
 	{/if}
 </section>
+
+{#if sheetOpen}
+	<div class="fs-back" use:portal transition:fade={{ duration: reducedMotion.current ? 0 : 180 }} onclick={closeSheet} aria-hidden="true"></div>
+	<div
+		class="fs"
+		use:portal
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="fs-h"
+		tabindex="-1"
+		bind:this={sheetEl}
+		style:transform={sheetDrag ? `translateY(${sheetDrag}px)` : undefined}
+		class:dragging={sheetDrag > 0}
+		transition:fly={{ y: 420, duration: reducedMotion.current ? 0 : 280, opacity: 1 }}
+		onkeydown={(e) => e.key === 'Escape' && closeSheet()}
+	>
+		<div role="presentation" class="fs-grab" onpointerdown={sheetDown} onpointermove={sheetMove} onpointerup={sheetUp} onpointercancel={sheetUp}>
+			<span class="fs-handle" aria-hidden="true"></span>
+			<div class="fs-top">
+				<h2 id="fs-h">Фільтри</h2>
+				<button type="button" class="fs-x" onclick={closeSheet} aria-label="Закрити">
+					<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+						><path d="M6 6l12 12M18 6L6 18" /></svg
+					>
+				</button>
+			</div>
+		</div>
+		<fieldset class="fs-group">
+			<legend>Порядок</legend>
+			{#each SORTS as o (o.key)}
+				<label class="fs-opt">
+					<input type="radio" name="sort-ph" value={o.key} bind:group={sort} />
+					<span>{o.label}</span>
+				</label>
+			{/each}
+		</fieldset>
+		<label class="fs-switch">
+			<span class="fs-sw-t">
+				<span class="fs-sw-ic" aria-hidden="true"><Icon name="alert" size={18} /></span>
+				<span>
+					<b>Лише критичні</b>
+					<small>Лікарні й амбулаторії — їх не можна залишати без світла</small>
+				</span>
+			</span>
+			<input type="checkbox" role="switch" bind:checked={onlyCritical} />
+		</label>
+		<div class="fs-actions">
+			<button
+				type="button"
+				class="btn btn-secondary"
+				onclick={() => {
+					onlyCritical = false;
+					sort = 'best';
+				}}
+				disabled={sheetCount === 0}>Скинути</button
+			>
+			<button type="button" class="btn" onclick={closeSheet}>
+				Показати {num(filtered.length)}
+				{plural(filtered.length, 'будівлю', 'будівлі', 'будівель')}
+			</button>
+		</div>
+	</div>
+{/if}
 
 <style>
 	/* --- Герой --- */
@@ -652,6 +825,14 @@
 		padding: 0 0.1em;
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
+	}
+	.h1-demo {
+		font-size: 0.55em;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		color: var(--sun-ink);
+		vertical-align: 0.25em;
+		white-space: nowrap;
 	}
 	.hl.bad {
 		background: linear-gradient(transparent 58%, var(--deficit-soft) 58%);
@@ -1190,14 +1371,488 @@
 			margin-right: 1.5rem;
 		}
 	}
-	@media (max-width: 560px) {
-		.stats {
-			grid-template-columns: 1fr;
+	.only-ph,
+	.l-short,
+	.h1-short {
+		display: none;
+	}
+
+	/* ================= Телефон: як нативний застосунок ================= */
+	@media (max-width: 640px) {
+		/* Герой: одне коротке речення з двома числами */
+		.hero {
+			gap: 0.75rem;
+			margin-bottom: 0.9rem;
 		}
-		.sort,
-		.sort select {
+		.hero-text {
+			flex-basis: 100%;
+		}
+		.eyebrow-line {
+			font-size: 0.85rem;
+			margin-bottom: 0.3rem;
+		}
+		.eb-date,
+		.eyebrow-line .dot {
+			display: none;
+		}
+		h1 {
+			font-size: 1.3rem;
+			line-height: 1.3;
+			margin: 0;
+			text-wrap: pretty;
+		}
+		.h1-long,
+		.lead {
+			display: none;
+		}
+		.h1-short {
+			display: block;
+		}
+		.h1-sep {
+			display: none;
+		}
+		.h1-br {
+			display: block;
+			font-size: 0.82em;
+			font-weight: 650;
+		}
+		.hero-side {
+			flex: 1 1 100%;
+			min-width: 0;
+		}
+
+		/* Показники 2×2 */
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.625rem;
+			margin-bottom: 0.25rem;
+		}
+		.more-wrap {
+			margin-bottom: 1rem;
+		}
+
+		/* Заголовок розділу */
+		.b-head {
+			margin-bottom: 0.4rem;
+		}
+		.hide-ph {
+			display: none !important;
+		}
+		.only-ph {
+			display: inline-flex;
+		}
+
+		/* Липка панель: пошук + Фільтри + список/мапа, нижче — чипи типів */
+		.filters {
+			position: sticky;
+			top: var(--header-h, 0px);
+			z-index: 15;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+			margin: 0 calc(-1 * var(--gutter, 1rem)) 0.5rem;
+			padding: 0.5rem var(--gutter, 1rem) 0.4rem;
+			border: 0;
+			border-radius: 0;
+			background: rgba(243, 245, 249, 0.94);
+			-webkit-backdrop-filter: saturate(1.4) blur(10px);
+			backdrop-filter: saturate(1.4) blur(10px);
+			box-shadow: 0 1px 0 var(--line-soft, #e6ebf1);
+		}
+		.search {
+			flex: 1 1 0;
+			min-width: 0;
+			order: 1;
+		}
+		.search input {
+			min-height: 42px;
+			background: #fff;
+			font-size: 1rem; /* ≥16px — iOS не зумить при фокусі */
+		}
+		.f-btn {
+			order: 2;
+		}
+		.seg-ph {
+			order: 3;
+		}
+		.chips {
+			order: 4;
+			flex: 1 1 100%;
+			margin: 0 calc(-1 * var(--gutter, 1rem));
+			padding: 2px var(--gutter, 1rem) 2px;
+			width: auto;
+			scrollbar-width: none;
+			scroll-snap-type: x proximity;
+			overscroll-behavior-x: contain;
+			-webkit-mask-image: linear-gradient(90deg, transparent 0, #000 0.75rem, #000 calc(100% - 1.5rem), transparent);
+			mask-image: linear-gradient(90deg, transparent 0, #000 0.75rem, #000 calc(100% - 1.5rem), transparent);
+		}
+		.chips::-webkit-scrollbar {
+			display: none;
+		}
+		.chips .chip {
+			scroll-snap-align: start;
+			min-height: 36px;
+			padding: 0.25rem 0.75rem;
+			font-size: 0.875rem;
+		}
+		.found {
+			margin: 0 0 0.5rem;
+			font-size: 0.875rem;
+		}
+
+		/* Список будівель — нативний список у одній картці */
+		.cards {
+			grid-template-columns: 1fr;
+			gap: 0;
+			background: var(--surface);
+			border: 1px solid #e3e8ef;
+			border-radius: 16px;
+			box-shadow: var(--shadow);
+			overflow: hidden;
+		}
+		.cards > li + li .site,
+		.cards > li + li .sk-card {
+			border-top: 1px solid #edf1f5;
+		}
+		.site {
+			display: grid;
+			grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+			grid-template-areas:
+				'ic name badge'
+				'ic line badge';
+			align-items: center;
+			column-gap: 0.75rem;
+			row-gap: 0.2rem;
+			min-height: 4.25rem;
+			padding: 0.65rem 0.9rem 0.65rem 0.85rem;
+			border: 0;
+			border-radius: 0;
+			box-shadow: none;
+		}
+		.site:hover {
+			transform: none;
+			box-shadow: none;
+		}
+		.site:active {
+			transform: none;
+			background: #f1f5fa;
+		}
+		.site::after {
+			inset: 0.6rem auto 0.6rem 0;
+			width: 3px;
+			height: auto;
+			border-radius: 0 3px 3px 0;
+			transform: none;
+		}
+		.site.t-good::after,
+		.site.t-warn::after {
+			background: transparent;
+		}
+		.top,
+		.type {
+			display: contents;
+		}
+		.type-ic {
+			grid-area: ic;
+			width: 2.5rem;
+			height: 2.5rem;
+			border-radius: 12px;
+		}
+		.type-t,
+		.addr {
+			display: none;
+		}
+		.site :global(.ib) {
+			grid-area: badge;
+			align-self: center;
+			padding: 0.12rem 0.5rem 0.12rem 0.4rem;
+			font-size: 0.8125rem;
+		}
+		.site :global(.ib .w) {
+			display: none;
+		}
+		.name {
+			grid-area: name;
+			font-size: 0.975rem;
+			line-height: 1.28;
+			align-self: end;
+		}
+		.line,
+		.site .line {
+			grid-area: line;
+			align-self: start;
+			margin: 0;
+			padding: 0;
+			border: 0;
+			gap: 0.3rem;
+			font-size: 0.8125rem;
+			line-height: 1.3;
+		}
+		.line:has(.l-short) .l-long {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+		}
+		.l-short {
+			display: inline;
+		}
+		.l-ic,
+		.line.nodata .l-ic {
+			width: 1rem;
+			height: 1rem;
+			background: none !important;
+			border: 0;
+		}
+		.l-ic :global(svg) {
+			width: 15px;
+			height: 15px;
+		}
+		.sk-card {
+			min-height: 4.25rem;
+			border: 0;
+			border-radius: 0;
+			gap: 0.4rem;
+			padding: 0.7rem 0.9rem;
+		}
+		.sk-a,
+		.sk-d {
+			display: none !important;
+		}
+		.more {
+			margin-top: 0.9rem;
+		}
+		.more .btn {
 			width: 100%;
 		}
+
+		/* Мапа в розділі */
+		.map-wrap {
+			--home-map-h: 58dvh;
+		}
+		.map-box {
+			margin-inline: calc(-1 * var(--gutter, 1rem));
+			border-radius: 0;
+			border-left: 0;
+			border-right: 0;
+		}
+		.map-note {
+			font-size: 0.8125rem;
+		}
+		.nothing {
+			flex-direction: column;
+			padding: 1.1rem;
+		}
+	}
+
+	/* Кнопка «Фільтри» і перемикач список/мапа (лише телефон) */
+	.f-btn {
+		position: relative;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		width: 44px;
+		height: 44px;
+		border-radius: 12px;
+		border: 1px solid #cfd7e1;
+		background: #fff;
+		color: var(--text);
+		cursor: pointer;
+	}
+	.f-btn.on {
+		border-color: var(--navy);
+		color: var(--navy);
+	}
+	.f-n {
+		position: absolute;
+		top: -5px;
+		right: -5px;
+		min-width: 18px;
+		height: 18px;
+		padding: 0 4px;
+		border-radius: 9px;
+		background: var(--deficit-ink);
+		color: #fff;
+		font-size: 0.7rem;
+		font-weight: 700;
+		line-height: 18px;
+		text-align: center;
+	}
+	.seg-ph {
+		flex: none;
+		padding: 3px;
+		gap: 2px;
+		overflow: visible;
+	}
+	.seg.seg-ph a {
+		justify-content: center;
+		width: 40px;
+		height: 36px;
+		padding: 0;
+	}
+
+	/* Нижня шторка фільтрів */
+	.fs-back {
+		position: fixed;
+		inset: 0;
+		z-index: 9000;
+		background: rgba(10, 22, 40, 0.45);
+	}
+	.fs {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 9001;
+		max-height: 88dvh;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+		background: var(--surface);
+		border-radius: 20px 20px 0 0;
+		box-shadow: 0 -12px 40px -12px rgba(10, 22, 40, 0.45);
+		transition: transform 0.22s var(--ease-out, ease);
+		outline: none;
+	}
+	.fs.dragging {
+		transition: none;
+	}
+	.fs-grab {
+		touch-action: none;
+		padding-top: 0.5rem;
+		position: sticky;
+		top: 0;
+		background: var(--surface);
+		z-index: 1;
+	}
+	.fs-handle {
+		display: block;
+		width: 40px;
+		height: 5px;
+		margin: 0 auto 0.4rem;
+		border-radius: 3px;
+		background: var(--line-strong, #9aa6b4);
+	}
+	.fs-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.fs-top h2 {
+		margin: 0;
+		font-size: 1.15rem;
+	}
+	.fs-x {
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border: 0;
+		border-radius: 50%;
+		background: var(--neutral-soft, #eef1f5);
+		color: var(--text);
+		cursor: pointer;
+	}
+	.fs-group {
+		border: 0;
+		margin: 0.5rem 0 0;
+		padding: 0;
+	}
+	.fs-group legend {
+		padding: 0;
+		margin-bottom: 0.25rem;
+		font-size: 0.78rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.fs-opt {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-height: 48px;
+		border-bottom: 1px solid #edf1f5;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.fs-opt input {
+		width: 1.25rem;
+		height: 1.25rem;
+		accent-color: var(--navy);
+		margin: 0;
+	}
+	.fs-switch {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-top: 0.6rem;
+		padding: 0.7rem 0.8rem;
+		border-radius: 14px;
+		background: var(--deficit-soft, #fdeee8);
+		cursor: pointer;
+	}
+	.fs-sw-t {
+		display: flex;
+		gap: 0.6rem;
+		align-items: flex-start;
+	}
+	.fs-sw-t b {
+		display: block;
+		color: var(--deficit-ink);
+	}
+	.fs-sw-t small {
+		display: block;
+		font-size: 0.8125rem;
+		color: var(--text-2, var(--text));
+		line-height: 1.35;
+	}
+	.fs-sw-ic {
+		color: var(--deficit-ink);
+		margin-top: 1px;
+	}
+	.fs-switch input {
+		flex: none;
+		appearance: none;
+		-webkit-appearance: none;
+		position: relative;
+		width: 48px;
+		height: 28px;
+		margin: 0;
+		border-radius: 14px;
+		background: #b8c2ce;
+		cursor: pointer;
+		transition: background 0.2s;
+	}
+	.fs-switch input::after {
+		content: '';
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		background: #fff;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+		transition: transform 0.2s var(--ease-out, ease);
+	}
+	.fs-switch input:checked {
+		background: var(--deficit-ink);
+	}
+	.fs-switch input:checked::after {
+		transform: translateX(20px);
+	}
+	.fs-actions {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.6rem;
+		margin-top: 1rem;
+	}
+	.fs-actions .btn {
+		min-height: 48px;
+		justify-content: center;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.site,

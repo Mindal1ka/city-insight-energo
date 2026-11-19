@@ -49,6 +49,7 @@
 		<span><i class="sw self"></i> Генерація, використана самою будівлею</span>
 		<span><i class="sw surplus"></i> Надлишок генерації (пропадає)</span>
 	</div>
+	<div class="sc-scroll">
 	<svg viewBox="0 0 {W} {H}" role="img" aria-labelledby="{uid}-t {uid}-d">
 		<title id="{uid}-t">Помісячна генерація СЕС і споживання електроенергії будівлею, кВт·год</title>
 		<desc id="{uid}-d">
@@ -73,7 +74,7 @@
 		<text x="12" y={PAD.t + plotH / 2} transform="rotate(-90 12 {PAD.t + plotH / 2})" text-anchor="middle" class="axis">кВт·год</text>
 		{#each sorted as m, i (m.month)}
 			{@const cx = PAD.l + slot * i + slot / 2}
-			<g style:--d="{settled ? 0 : i * 35}ms">
+			<g style:--d="{settled ? 0 : i * 20}ms">
 				<title>{MONTHS_FULL[m.month - 1]}: споживання {num(m.cons_kwh)} кВт·год; генерація {num(m.gen_kwh)} кВт·год (власне {num(m.self_kwh)}, надлишок {num(m.surplus_kwh)})</title>
 				<rect class="bar" x={cx - bw - 1} width={bw} style:y="{y(m.cons_kwh)}px" style:height="{h(m.cons_kwh)}px" fill="var(--sol-cons)" />
 				<rect class="bar" x={cx + 1} width={bw} style:y="{y(m.self_kwh)}px" style:height="{h(m.self_kwh)}px" fill="var(--sol-self)" />
@@ -83,6 +84,7 @@
 		{/each}
 		<line x1={PAD.l} x2={W - PAD.r} y1={yt(0)} y2={yt(0)} stroke="#6b7684" />
 	</svg>
+	</div>
 	<figcaption class="muted small">
 		Ліва колонка кожного місяця — споживання, права — генерація станції: суцільна частина
 		використовується будівлею, заштрихована — надлишок, який зараз не можна продати.
@@ -103,6 +105,28 @@
 			transition:
 				y 0.45s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms),
 				height 0.45s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms);
+		}
+	}
+	.sc-scroll {
+		max-width: 100%;
+	}
+	/* Телефон: графік у справжньому розмірі (підписи читабельні), гортається пальцем усередині рамки */
+	@media (max-width: 640px) {
+		.sc-scroll {
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			-webkit-overflow-scrolling: touch;
+			margin-inline: -0.25rem;
+			padding: 0 0.25rem 0.25rem;
+			scrollbar-width: thin;
+		}
+		.sc-scroll svg {
+			width: 600px;
+			max-width: none;
+		}
+		.legend {
+			gap: 0.3rem 0.9rem;
+			font-size: 0.8125rem;
 		}
 	}
 	.axis {

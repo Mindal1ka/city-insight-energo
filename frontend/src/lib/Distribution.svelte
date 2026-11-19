@@ -58,9 +58,9 @@
 
 <div class="dist">
 	<!-- Баланс розподілу -->
-	<section class="panel balance {!hasSes ? 'none' : d.enough ? 'ok' : 'bad'}" class:seen aria-labelledby="bal-h-{scope}" {@attach onView}>
+	<section class="panel balance {!hasSes || !d.enough ? 'none' : 'ok'}" class:seen aria-labelledby="bal-h-{scope}" {@attach onView}>
 		<div class="bal-main">
-			<div class="sign" aria-hidden="true">{!hasSes ? '↓' : d.enough ? '+' : '−'}</div>
+			<div class="sign" aria-hidden="true">{!hasSes || !d.enough ? '↓' : '+'}</div>
 			<div>
 				<p class="eyebrow"><Term key="надлишок">Баланс</Term> до кінця дня</p>
 				<h2 id="bal-h-{scope}" class="bal-title">
@@ -69,7 +69,7 @@
 					{:else if d.enough}
 						Енергії вистачить
 					{:else}
-						Енергії не вистачить
+						Решту докупимо з мережі
 					{/if}
 				</h2>
 				<p class="bal-num">
@@ -211,9 +211,6 @@
 	.ok::before {
 		background: var(--surplus);
 	}
-	.bad::before {
-		background: var(--deficit);
-	}
 	.none::before {
 		background: var(--navy-3, #1f4f84);
 	}
@@ -249,10 +246,6 @@
 		background: radial-gradient(circle at 30% 25%, #2e9a4f, var(--surplus) 70%);
 		box-shadow: 0 0 0 10px var(--surplus-soft);
 	}
-	.bad .sign {
-		background: radial-gradient(circle at 30% 25%, #e0602a, var(--deficit) 70%);
-		box-shadow: 0 0 0 10px var(--deficit-soft);
-	}
 	.eyebrow {
 		margin: 0;
 	}
@@ -263,10 +256,6 @@
 	.ok .bal-title,
 	.ok .bal-num {
 		color: var(--surplus-ink);
-	}
-	.bad .bal-title,
-	.bad .bal-num {
-		color: var(--deficit-ink);
 	}
 	.bal-num {
 		margin: 0;
@@ -518,6 +507,37 @@
 		}
 		.bal-main {
 			gap: 1rem;
+		}
+	}
+	/* Телефон: знак — маленький кружок угорі, текст на всю ширину картки */
+	@media (max-width: 640px) {
+		.bal-main {
+			align-items: flex-start;
+			gap: 0.8rem;
+		}
+		.sign,
+		.none .sign {
+			width: 2.75rem;
+			height: 2.75rem;
+			font-size: 1.9rem;
+			padding-bottom: 0.15rem;
+			margin-top: 0.15rem;
+		}
+		.ok .sign {
+			box-shadow: 0 0 0 5px var(--surplus-soft);
+		}
+		.none .sign {
+			box-shadow: 0 0 0 5px #e6eef8;
+		}
+		.bal-title {
+			font-size: 1.25rem;
+			line-height: 1.25;
+		}
+		.bal-num .big-num {
+			font-size: 2rem;
+		}
+		.bal-text {
+			font-size: 0.9375rem;
 		}
 	}
 </style>
