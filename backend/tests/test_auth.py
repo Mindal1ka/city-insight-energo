@@ -203,3 +203,22 @@ def test_upload_roles():
     for role in ("energy_manager", "data_admin"):
         # пройшли перевірку ролі → валідація файлу дає 400 (не XLSX)
         assert c.post("/api/upload", files=files, headers=_hdr(role)).status_code == 400
+
+
+def test_login_by_account_and_no_guest(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import auth
+    from app.main import app
+
+    monkeypatch.setenv("REQUIRE_LOGIN", "1")
+    monkeypatch.setattr(auth, "demo_password", lambda: "pw")
+    c = TestClient(app)
+    assert c.get("/api/ses").status_code == 401
+    assert c.post("/api/auth/login", json={"login": "energo", "password": "bad"}).status_code == 401
+    assert c.post("/api/auth/login", json={"login": "nobody", "password": "pw"}).status_code == 401
+    r = c.post("/api/auth/login", json={"login": "energo", "password": "pw"})
+    assert r.status_code == 200 and r.json()["user"]["role"] == "energy_manager"
+    h = {"Authorization": "Bearer " + r.json()["token"]}
+    assert c.get("/api/zones", headers=h).status_code == 200
+    assert c.get("/api/blackout", headers=h).status_code == 200

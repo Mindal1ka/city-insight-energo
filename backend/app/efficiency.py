@@ -90,7 +90,8 @@ def monthly(b, ses: dict | None, year: int = 2025) -> list[dict]:
         days = calendar.monthrange(year, m + 1)[1]
         # акумулятор переносить денний надлишок на вечір: не більше робочої ємності (без резерву) щодня
         shifted = min(gen - direct, bat * (1 - BATTERY_RESERVE) * days, cons - day) if bat else 0.0
-        out.append({"month": m + 1, **_balance(gen, cons, direct + max(0.0, shifted))})
+        out.append({"month": m + 1, **_balance(gen, cons, direct + max(0.0, shifted)),
+                    "battery_kwh": max(0.0, shifted)})
     return out
 
 

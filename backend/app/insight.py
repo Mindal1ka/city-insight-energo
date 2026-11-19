@@ -173,28 +173,41 @@ def kw_per_year() -> float:
 
 
 def sizing(b, ses: dict | None, ev: dict, tariff: float) -> dict:
-    """Скільки кВт доставити до K = 1 за рік (обмеження — дах) і що це дасть."""
+    """Скільки доставити — лише з кВт·год (без м²).
+
+    Панелі: потужність, за якої річна генерація = річному споживанню (K = 1).
+    Акумулятор: вечірня частка добового споживання (1 − DAYTIME_SHARE) × середня доба.
+    Ефект: та сама помісячна модель (efficiency.monthly) для станції «після», різниця власного споживання × тариф.
+    """
     cons = ev["energy"]["year"]["cons_kwh"]
-    gen = ev["energy"]["year"]["gen_kwh"]
-    cur = (ses or {}).get("total_kw") or 0.0 if ev["has_ses"] else 0.0
     if not cons:
-        return {"need": False, "add_kw": 0, "reason": "немає даних споживання"}
-    est = solar.estimate(cons, b.heated_area or 0.0, b.floors, b.category_short, tariff=tariff)
-    roof_left = max(0.0, est.kw_max_roof - cur)
-    to_k1 = max(0.0, cons / kw_per_year() - cur)
-    add = min(to_k1, roof_left)
-    add = math.floor(add * 2) / 2  # крок 0,5 кВт
-    need = ev["has_ses"] and (ev["k"]["year"] or 0) < eff.LOW and add >= solar.MIN_KW
-    if not ev["has_ses"]:
-        add = est.kw_recommended  # нова станція — під власне споживання, без надлишку
-        need = add >= solar.MIN_KW
-    gain = add * kw_per_year()
-    capex = (solar.CAPEX_FIXED_UAH if not ev["has_ses"] else 0) + add * solar.CAPEX_UAH_PER_KW if add else 0.0
-    saved = min(gain, max(0.0, cons - ev["energy"]["year"]["self_kwh"])) * tariff
-    return {"need": bool(need), "current_kw": cur, "add_kw": add if need else 0.0, "roof_max_kw": est.kw_max_roof,
-            "to_k1_kw": to_k1, "limited_by": "дах" if to_k1 > roof_left else "споживання",
-            "deficit_kwh_year": max(0.0, cons - gen), "gain_kwh_year": gain if need else 0.0,
-            "capex_uah": capex if need else 0.0, "saved_uah_year": saved if need else 0.0,
+        return {"need": False, "add_kw": 0.0, "reason": "немає даних споживання"}
+    has = ev["has_ses"]
+    cur_kw = ((ses or {}).get("total_kw") or 0.0) if has else 0.0
+    cur_bat = ((ses or {}).get("battery_kwh") or 0.0) if has else 0.0
+    need_kw = cons / kw_per_year()
+    need_bat = (1 - solar.DAYTIME_SHARE) * cons / 365
+    add_kw = math.floor(max(0.0, need_kw - cur_kw) * 2) / 2
+    add_bat = math.floor(max(0.0, need_bat - cur_bat) / 2.5) * 2.5  # модулі по 2,5 кВт·год
+    need = (has and (ev["k"]["year"] or 0) < eff.LOW and add_kw >= solar.MIN_KW) or (not has and add_kw >= solar.MIN_KW)
+    if not need:
+        add_kw = add_bat = 0.0
+    after = eff.monthly(b, {"total_kw": cur_kw + add_kw, "battery_kwh": cur_bat + add_bat})
+    self_after = sum(m["self_kwh"] for m in after)
+    gen_after = sum(m["gen_kwh"] for m in after)
+    saved = max(0.0, self_after - ev["energy"]["year"]["self_kwh"]) * tariff
+    capex = 0.0
+    if need:
+        from .sites import BATTERY_UAH_PER_KWH, INSTALL_FIXED_UAH, INSTALL_SHARE, INVERTER_UAH_PER_KW, PANEL_UAH_PER_450W
+        eq = add_kw * 1000 / 450 * PANEL_UAH_PER_450W + add_kw * INVERTER_UAH_PER_KW + add_bat * BATTERY_UAH_PER_KWH
+        capex = eq * (1 + INSTALL_SHARE) + (INSTALL_FIXED_UAH if not has else 0.0)
+    return {"need": bool(need), "current_kw": cur_kw, "current_battery_kwh": cur_bat,
+            "need_kw": need_kw, "need_battery_kwh": need_bat,
+            "add_kw": add_kw, "add_battery_kwh": add_bat,
+            "cons_kwh_month_avg": cons / 12, "deficit_kwh_year": max(0.0, cons - ev["energy"]["year"]["gen_kwh"]),
+            "gen_kwh_year_after": gen_after, "self_kwh_year_after": self_after,
+            "k_after": gen_after / cons if cons else None,
+            "capex_uah": capex, "saved_uah_year": saved,
             "payback_years": capex / saved if need and saved > 0 else None}
 
 
@@ -284,6 +297,15 @@ def insight_item(bid: int, day: str | None = None, tariff: float = Query(eff.TAR
     sens = can_see_sensitive(user, b.category_short, b.id)
     out = {"demo": True, "id": b.id, "department": department_of(b), "day": d.isoformat(),
            "monthly_kwh": [round(m["cons_kwh"]) for m in ev["monthly"]],
+           # помісячно: спожито, згенеровано, через акумулятор, надлишок, з мережі, заощаджено
+           "months": [{"month": m["month"], "cons_kwh": round(m["cons_kwh"]),
+                       "gen_kwh": round(m["gen_kwh"]) if lvl != PUBLIC else None,
+                       "self_kwh": round(m["self_kwh"]) if lvl != PUBLIC else None,
+                       "battery_kwh": round(m.get("battery_kwh", 0)) if sens else None,
+                       "surplus_kwh": round(m["surplus_kwh"]) if lvl != PUBLIC else None,
+                       "grid_kwh": round(m["grid_kwh"]) if lvl != PUBLIC else None,
+                       "saved_uah": round(m["self_kwh"] * tariff) if fin else None} for m in ev["monthly"]],
+           "battery_capacity_kwh": ((ses or {}).get("battery_kwh") or 0) if sens and ev["has_ses"] else None,
            "budget": budget_out(budget(b, ev, d, tariff, _read_limits())) if fin else None,
            "sizing": sizing_out(sizing(b, ses, ev, tariff)) if lvl != PUBLIC else None,
            "live": live_out(live_state(b, ses)) if lvl != PUBLIC else None,
@@ -638,3 +660,88 @@ def appeals_update(aid: int, body: dict = Body(...), user: User = Depends(curren
                 _save_appeals(items)
                 return a
     raise HTTPException(404, "Звернення не знайдено")
+
+
+# ---------------- GET /api/zones (зони мапи) ----------------
+
+ZONE_RADIUS_KM = 0.35  # сусіди в радіусі 350 м від «якоря» (школа / об'єкт зі СЕС)
+
+
+def _zones(store, has_ses: dict[int, bool]) -> list[list]:
+    """Жадібно: якір (спершу зі СЕС, потім заклади освіти, потім за споживанням) + вільні сусіди в радіусі.
+
+    Лише будівлі з точними координатами (без приблизних — до вулиці / села)."""
+    pts = []
+    for b in store.buildings:
+        la, lo, approx = _coords(b)
+        if la is not None and lo is not None and not approx:
+            pts.append((b, la, lo))
+    pts.sort(key=lambda p: (not has_ses.get(p[0].id), p[0].category_short not in ("Заклади освіти", "Дошкільні заклади"),
+                            -eff.elec_2025(p[0])))
+    kx = 111.32 * math.cos(49.59 * math.pi / 180)
+    used: set[int] = set()
+    groups = []
+    for a in pts:
+        if a[0].id in used:
+            continue
+        g = [a] + [p for p in pts if p[0].id not in used and p[0].id != a[0].id
+                   and ((p[2] - a[2]) * kx) ** 2 + ((p[1] - a[1]) * 110.57) ** 2 <= ZONE_RADIUS_KM ** 2]
+        if len(g) >= 2:
+            used.update(p[0].id for p in g)
+            groups.append(g)
+    return groups
+
+
+@router.get("/api/zones")
+def zones(period: Literal["day", "month", "year"] = "month", day: str | None = None,
+          tariff: float = Query(eff.TARIFF_UAH_KWH, gt=0, le=100), user: User = Depends(current_user)):
+    """Зони: школа й сусідні комунальні будівлі. Баланс зони і скільки надлишку можна віддати сусідам."""
+    store, sites = _ctx()
+    d = _day(day)
+    evmap = {b.id: (ses, ev) for b, ses, ev in _evaluations(store, sites, d, tariff, eff.SURPLUS_PRICE_UAH_KWH)}
+    out = []
+    for g in _zones(store, {bid: v[1]["has_ses"] for bid, v in evmap.items()}):
+        mem, tot = [], {"cons_kwh": 0.0, "gen_kwh": 0.0, "surplus_kwh": 0.0, "grid_kwh": 0.0, "self_kwh": 0.0}
+        for b, la, lo in g:
+            ses, ev = evmap[b.id]
+            en = ev["energy"][period]
+            for k in tot:
+                tot[k] += en[k]
+            role = "donor" if en["surplus_kwh"] > 1 else "taker" if en["grid_kwh"] > 1 else "neutral"
+            lvl = access_level(user, b)
+            mem.append({"id": b.id, "name": b.name, "category_short": b.category_short, "lat": la, "lon": lo,
+                        "department": department_of(b), "role": role if lvl != PUBLIC else None,
+                        "has_ses": ev["has_ses"] if lvl != PUBLIC else None,
+                        "k_class": ev["k_class"][period] if lvl != PUBLIC else None,
+                        "cons_kwh": round(en["cons_kwh"]),
+                        "gen_kwh": round(en["gen_kwh"]) if lvl != PUBLIC else None,
+                        "surplus_kwh": round(en["surplus_kwh"]) if lvl != PUBLIC else None,
+                        "grid_kwh": round(en["grid_kwh"]) if lvl != PUBLIC else None})
+        if not tot["gen_kwh"] and len(mem) < 3:
+            continue  # без жодної станції і малих — не показуємо як зону
+        anchor = mem[0]
+        clat = sum(m["lat"] for m in mem) / len(mem)
+        clon = sum(m["lon"] for m in mem) / len(mem)
+        kx = 111.32 * math.cos(clat * math.pi / 180)
+        rad = max(math.hypot((m["lon"] - clon) * kx, (m["lat"] - clat) * 110.57) for m in mem) + 0.08
+        share = min(tot["surplus_kwh"], tot["grid_kwh"])
+        k = tot["gen_kwh"] / tot["cons_kwh"] if tot["cons_kwh"] else None
+        status = ("surplus" if k and k > eff.HIGH else "balanced" if k and k >= eff.LOW
+                  else "deficit" if tot["gen_kwh"] else "no_ses")
+        out.append({"id": anchor["id"], "name": anchor["name"], "lat": round(clat, 6), "lon": round(clon, 6),
+                    "radius_m": round(rad * 1000), "members": mem, "count": len(mem),
+                    "with_ses": sum(1 for b, _, _ in g if evmap[b.id][1]["has_ses"]),
+                    "status": status, "k": eff.r2(k),
+                    **{k_: round(v) for k_, v in tot.items()},
+                    "shareable_kwh": round(share), "shareable_uah": round(share * tariff)})
+    out.sort(key=lambda z: -z["shareable_kwh"])
+    public = user.role == "public"
+    if public:
+        for z in out:
+            z["status"] = z["k"] = None
+            z["gen_kwh"] = z["surplus_kwh"] = z["shareable_kwh"] = z["shareable_uah"] = z["with_ses"] = None
+    return {"demo": True, "period": period, "day": d.isoformat(), "radius_m": round(ZONE_RADIUS_KM * 1000),
+            "totals": {"zones": len(out), "buildings": sum(z["count"] for z in out),
+                       "shareable_kwh": None if public else sum(z["shareable_kwh"] for z in out),
+                       "with_share": None if public else sum(1 for z in out if z["shareable_kwh"] > 0)},
+            "items": out}

@@ -4,6 +4,10 @@
 для них підставляємо енергоменеджера через dependency_overrides. Нові тести перевіряють доступ самі.
 """
 
+import os
+
+os.environ.setdefault("REQUIRE_LOGIN", "0")  # тести доступу ролей перевіряють залежності, а не загальний бар'єр
+
 import pytest
 
 from app.auth import User, current_user

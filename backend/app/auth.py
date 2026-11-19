@@ -256,18 +256,52 @@ def can_edit_ses(user: User, building_id: int | None) -> bool:
 # --- вхід ---
 
 class LoginIn(BaseModel):
-    full_name: str
-    position: str
-    role: str
+    """Вхід: логін + пароль (основний), або старий формат ПІБ/посада/роль + пароль."""
+
+    login: str | None = None
+    full_name: str = ""
+    position: str = ""
+    role: str = ""
     building_id: int | None = None
     department: str | None = None
     password: str
 
 
+# Демо-облікові записи: логін → роль (пароль спільний DEMO_PASSWORD).
+# Керівник закладу: логін «zaklad-<id будівлі>».
+ACCOUNTS: dict[str, dict] = {
+    "energo": {"role": "energy_manager", "full_name": "Енергоменеджер міста"},
+    "finance": {"role": "finance", "full_name": "Фінансове управління"},
+    "osvita": {"role": "department", "department": "освіта", "full_name": "Управління освіти"},
+    "zdorovia": {"role": "department", "department": "здоров'я", "full_name": "Управління охорони здоров'я"},
+    "umuni": {"role": "data_admin", "full_name": "Адміністратор даних UMUNI"},
+}
+
+
+def _account(login: str, building_ids: Container[int]) -> User:
+    lg = login.strip().lower()
+    if lg.startswith("zaklad-"):
+        try:
+            bid = int(lg.removeprefix("zaklad-"))
+        except ValueError:
+            bid = -1
+        if bid not in building_ids:
+            raise HTTPException(401, "Невірний логін або пароль")
+        return User(full_name=f"Керівник закладу {bid}", position=ROLES["facility_head"]["name"],
+                    role="facility_head", role_name=ROLES["facility_head"]["name"], building_id=bid)
+    a = ACCOUNTS.get(lg)
+    if a is None:
+        raise HTTPException(401, "Невірний логін або пароль")
+    return User(full_name=a["full_name"], position=ROLES[a["role"]]["name"], role=a["role"],
+                role_name=ROLES[a["role"]]["name"], department=a.get("department"))
+
+
 def authenticate(req: LoginIn, building_ids: Container[int]) -> User:
     """Перевіряє пароль і поля входу; повертає User або кидає HTTPException (401/422)."""
     if not check_password(req.password):
-        raise HTTPException(401, "Невірний пароль")
+        raise HTTPException(401, "Невірний логін або пароль" if req.login else "Невірний пароль")
+    if req.login:
+        return _account(req.login, building_ids)
     full_name, position = req.full_name.strip(), req.position.strip()
     if not full_name or len(full_name) > 200:
         raise HTTPException(422, "Вкажіть ПІБ")

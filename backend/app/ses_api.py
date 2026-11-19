@@ -151,8 +151,7 @@ def ses_list(period: Literal["day", "month", "year"] = "year", day: str | None =
               "payback_years": eff.r1(ev["finance"]["payback_years"]),
               "grid_cost_uah_year": eff.r0(ev["finance"]["grid_cost_uah"]["year"]) if ev["has_data"] else None,
               "access": lvl, "department": _dept(b),
-              "cons_kwh_month_avg": round(ev["energy"]["year"]["cons_kwh"] / 12) if ev["has_data"] else None,
-              "eff_index": _eidx(store).get(b.id)}
+              "cons_kwh_month_avg": round(ev["energy"]["year"]["cons_kwh"] / 12) if ev["has_data"] else None}
         if lvl == PUBLIC:
             for k in ("has_ses", "k", "k_class", "gen_kwh", "ses_kw", "battery_kwh", "capex_uah",
                       "saved_uah_year", "payback_years", "grid_cost_uah_year"):

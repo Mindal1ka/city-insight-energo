@@ -110,8 +110,6 @@ export interface SesItem {
 	department?: string;
 	/** v2: середнє споживання е/е за місяць, кВт·год (2025 ÷ 12) */
 	cons_kwh_month_avg?: number | null;
-	/** v2: індекс ефективності споживання: кВт·год/м² ÷ медіана категорії (1 — типово, >1 — гірше) */
-	eff_index?: number | null;
 }
 
 export interface SesList {

@@ -25,16 +25,23 @@ export interface Budget {
 	balance_uah: { year: number; month: number };
 }
 
+/** «Скільки доставити» — лише з кВт·год (без м²): панелі під K = 1 за рік, акумулятор під вечірню частку доби */
 export interface Sizing {
 	need: boolean;
 	current_kw?: number;
-	/** Скільки кВт доставити (0 — не потрібно) */
+	current_battery_kwh?: number;
+	/** Потужність панелей, за якої річна генерація = річному споживанню */
+	need_kw?: number;
+	/** Ємність акумулятора під вечірнє споживання середньої доби */
+	need_battery_kwh?: number;
+	/** Скільки доставити (0 — не потрібно) */
 	add_kw: number;
-	roof_max_kw?: number;
-	to_k1_kw?: number;
-	limited_by?: 'дах' | 'споживання';
+	add_battery_kwh?: number;
+	cons_kwh_month_avg?: number;
 	deficit_kwh_year?: number;
-	gain_kwh_year?: number;
+	gen_kwh_year_after?: number;
+	self_kwh_year_after?: number;
+	k_after?: number | null;
 	capex_uah?: number;
 	saved_uah_year?: number;
 	payback_years?: number | null;
@@ -85,6 +92,19 @@ export interface Distribution {
 	hourly: DistHour[];
 }
 
+export interface MonthRow {
+	month: number;
+	cons_kwh: number;
+	gen_kwh: number | null;
+	/** Власне споживання сонячної е/е (разом із тим, що пройшло через акумулятор) */
+	self_kwh: number | null;
+	/** Перенесено акумулятором з дня на вечір */
+	battery_kwh: number | null;
+	surplus_kwh: number | null;
+	grid_kwh: number | null;
+	saved_uah: number | null;
+}
+
 export interface Insight {
 	demo: boolean;
 	id: number;
@@ -92,6 +112,10 @@ export interface Insight {
 	day: string;
 	/** Споживання е/е по місяцях (січ…гру), кВт·год */
 	monthly_kwh: number[];
+	/** Помісячно (січ…гру). null-поля — немає доступу */
+	months: MonthRow[];
+	/** Ємність акумулятора станції, кВт·год (null — немає доступу / немає СЕС) */
+	battery_capacity_kwh: number | null;
 	/** null — немає фінансового доступу */
 	budget: Budget | null;
 	/** null — публічний режим */
@@ -325,3 +349,119 @@ export const updateAppeal = (id: number, status: AppealStatus, answer?: string) 
 export function seasonOf(month: number): 'зима' | 'весна' | 'літо' | 'осінь' {
 	return month <= 2 || month === 12 ? 'зима' : month <= 5 ? 'весна' : month <= 8 ? 'літо' : 'осінь';
 }
+
+// ---------- зони мапи ----------
+
+export interface ZoneMember {
+	id: number;
+	name: string;
+	category_short: string;
+	lat: number;
+	lon: number;
+	department: string;
+	/** donor — є надлишок, taker — бере з мережі */
+	role: 'donor' | 'taker' | 'neutral' | null;
+	has_ses: boolean | null;
+	k_class: string | null;
+	cons_kwh: number;
+	gen_kwh: number | null;
+	surplus_kwh: number | null;
+	grid_kwh: number | null;
+}
+
+export interface Zone {
+	/** id будівлі-якоря (школа / об'єкт зі СЕС) */
+	id: number;
+	name: string;
+	lat: number;
+	lon: number;
+	radius_m: number;
+	members: ZoneMember[];
+	count: number;
+	with_ses: number | null;
+	status: 'surplus' | 'balanced' | 'deficit' | 'no_ses' | null;
+	k: number | null;
+	cons_kwh: number;
+	gen_kwh: number | null;
+	surplus_kwh: number | null;
+	grid_kwh: number;
+	self_kwh: number;
+	/** Скільки надлишку можна віддати сусідам у зоні = min(Σ надлишок, Σ з мережі) */
+	shareable_kwh: number | null;
+	shareable_uah: number | null;
+}
+
+export interface Zones {
+	demo: boolean;
+	period: 'day' | 'month' | 'year';
+	day: string;
+	radius_m: number;
+	totals: { zones: number; buildings: number; shareable_kwh: number | null; with_share: number | null };
+	items: Zone[];
+}
+
+export const fetchZones = (period: 'day' | 'month' | 'year' = 'month', day?: string) =>
+	req<Zones>('/api/zones' + qs({ period, day }));
+
+// ---------- генератори і блекаут (лише ролі з повним доступом; інакше 403) ----------
+
+export interface Generator {
+	generator_kw: number;
+	fuel: string;
+	tank_l: number;
+	source: 'МОК' | 'введено';
+}
+
+export interface Blackout {
+	id: number;
+	source: 'МОК';
+	load_kw_avg: number;
+	battery_kwh_now: number | null;
+	battery_capacity_kwh: number | null;
+	/** Години автономії: лише акумулятор */
+	hours_battery: number;
+	/** Акумулятор + сонце */
+	hours_battery_sun: number;
+	/** Акумулятор + сонце + генератор (через вхід генератора інвертора); null — генератора немає */
+	hours_with_generator: number | null;
+	/** Горизонт моделі, год (48 = «протримається»). */
+	horizon_h: number;
+	generator: Generator | null;
+	generator_charges_battery: boolean;
+	generator_full_charge_h: number | null;
+	generator_cost_uah_kwh: number | null;
+	fuel_l_per_day: number | null;
+	fuel_used_l: number | null;
+	assumptions: Record<string, number>;
+}
+
+export const fetchBlackout = (id: number) => req<Blackout>(`/api/blackout/${id}`);
+
+export const updateGenerator = (id: number, body: { generator_kw: number; tank_l: number; fuel?: string }) =>
+	req<Blackout>(`/api/generator/${id}`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
+	});
+
+export interface BlackoutRow {
+	id: number;
+	name: string;
+	department: string;
+	has_ses: boolean;
+	battery_kwh: number | null;
+	generator_kw: number | null;
+	generator_source: string | null;
+	hours_battery_sun: number;
+	hours_with_generator: number | null;
+	load_kw_avg: number;
+}
+
+export const fetchBlackoutAll = () =>
+	req<{
+		source: 'МОК';
+		updated_at: string;
+		horizon_h: number;
+		totals: { objects: number; with_generator: number; with_battery: number; hold_24h: number; under_4h: number };
+		items: BlackoutRow[];
+	}>('/api/blackout');

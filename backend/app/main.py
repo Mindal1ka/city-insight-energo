@@ -21,8 +21,27 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 FRONT = Path(os.getenv("FRONTEND_DIR", ROOT.parent / "frontend" / "build"))
 
-app = FastAPI(title="City Insight Map · Енергія", version="0.1.0")
+app = FastAPI(title="Insight Tool · Полтавська громада", version="0.2.0")
 store = Store(DATA_DIR)
+
+# Гостьового режиму немає: усе /api/* — лише з токеном входу (крім самого входу).
+# REQUIRE_LOGIN=0 вимикає (тести, написані до появи ролей).
+OPEN_API = {"/api/auth/login", "/api/auth/roles"}
+
+
+@app.middleware("http")
+async def _require_login(request, call_next):
+    path = request.url.path
+    if (os.getenv("REQUIRE_LOGIN", "1") != "0" and path.startswith("/api/") and path not in OPEN_API
+            and request.method != "OPTIONS"):
+        from fastapi.responses import JSONResponse
+
+        from .auth import _bearer, read_token
+
+        tok = _bearer(request)
+        if not tok or read_token(tok) is None:
+            return JSONResponse({"detail": "Потрібен вхід"}, status_code=401)
+    return await call_next(request)
 
 
 @app.get("/api/summary")
@@ -166,7 +185,7 @@ def site(bid: int, day: str | None = None, hour: int | None = None, user: User =
 # --- енергонезалежність і прогноз сонця (підключаються, щойно модулі існують) ---
 import importlib  # noqa: E402
 
-for _mod in ("auth_api", "ses_api", "insight", "independence_api", "forecast_api", "map_api"):
+for _mod in ("auth_api", "ses_api", "insight", "blackout", "independence_api", "forecast_api", "map_api"):
     try:
         app.include_router(importlib.import_module(f".{_mod}", __package__).router)
     except ModuleNotFoundError as _e:
