@@ -1,0 +1,81 @@
+"""API енергонезалежності: /api/independence, /api/independence/{id}, /api/sites/{id}/outage (ДЕМО-дані станцій)."""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+
+from fastapi import APIRouter, HTTPException, Query
+
+from . import independence as ind
+from .sites import KYIV
+
+router = APIRouter(tags=["Енергонезалежність"])
+
+
+def _ctx():
+    from .main import sites, store  # лінивий імпорт, щоб не було циклу з main.py
+
+    return store, sites
+
+
+def _moment(day: str | None, hour: int | None) -> datetime:
+    """?day=YYYY-MM-DD&hour=H, як у /api/sites; за замовчуванням — зараз (Київ)."""
+    now = datetime.now(KYIV)
+    try:
+        d = date.fromisoformat(day) if day else now.date()
+    except ValueError:
+        raise HTTPException(400, "Невірна дата (формат РРРР-ММ-ДД)")
+    h = now.hour if hour is None else max(0, min(23, int(hour)))
+    return datetime(d.year, d.month, d.day, h, 0, tzinfo=KYIV)
+
+
+def _stations(store, sites) -> dict[int, dict]:
+    """Реєстр СЕС (sites.py) + ДЕМО-акумулятори без СЕС."""
+    reg = dict(sites.registry)
+    reg.update(ind.battery_only_registry(store.buildings, sites.registry))
+    return reg
+
+
+def _find(store, bid: int):
+    for b in store.buildings:
+        if b.id == bid:
+            return b
+    raise HTTPException(404, "Об'єкт не знайдено")
+
+
+def _sort_key(e: dict):
+    # спершу критичні й заклади освіти, усередині — найменш захищені
+    return (e["priority_rank"], e["index"], e["name"])
+
+
+@router.get("/api/independence")
+def independence_list(day: str | None = None, hour: int | None = None):
+    store, sites = _ctx()
+    now = _moment(day, hour)
+    reg = _stations(store, sites)
+    evs = [ind.evaluate(b, reg.get(b.id), now) for b in store.buildings]
+    evs.sort(key=_sort_key)
+    return {"demo": True, "now": now.isoformat(timespec="minutes"),
+            "community": ind.community(evs), "categories": ind.categories(evs),
+            "items": [ind.public(e) for e in evs], "formula": ind.formula(), "notes": ind.NOTES}
+
+
+@router.get("/api/independence/{bid}")
+def independence_item(bid: int, day: str | None = None, hour: int | None = None):
+    store, sites = _ctx()
+    now = _moment(day, hour)
+    b = _find(store, bid)
+    ev = ind.evaluate(b, _stations(store, sites).get(b.id), now)
+    return {"demo": True, "now": now.isoformat(timespec="minutes"), "item": ind.public(ev),
+            "explain": ind.explain(ev, now), "improve": ind.improve(ev), "formula": ind.formula(),
+            "notes": ind.NOTES}
+
+
+@router.get("/api/sites/{bid}/outage")
+def outage(bid: int, day: str | None = None, start_hour: int | None = None,
+           hours: int = Query(4, ge=1, le=72), soc: float | None = Query(None, ge=0, le=100)):
+    store, sites = _ctx()
+    now = _moment(day, start_hour)
+    b = _find(store, bid)
+    return ind.simulate_outage(b, _stations(store, sites).get(b.id), now.date(), now.hour, hours, soc)
+

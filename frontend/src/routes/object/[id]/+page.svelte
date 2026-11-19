@@ -12,6 +12,11 @@
 	import HourlyChart from '#lib/HourlyChart.svelte';
 	import Meter from '#lib/Meter.svelte';
 	import Distribution from '#lib/Distribution.svelte';
+	import IndependenceCard from '#lib/IndependenceCard.svelte';
+	import OutageSimulator from '#lib/OutageSimulator.svelte';
+	import ForecastCard from '#lib/ForecastCard.svelte';
+	import { independenceApi, type IndependenceDetail } from '#lib/api-independence.ts';
+	import { VIEWS } from '#lib/api.ts';
 
 	const id = $derived(page.params.id ?? '');
 	const view = $derived(viewFrom(page.url));
@@ -43,6 +48,28 @@
 	$effect(() => {
 		load(id, view);
 	});
+
+	// Енергонезалежність закладу — окремий запит; якщо не вдався, решта сторінки працює
+	let ind = $state<IndependenceDetail | null>(null);
+	let indError = $state<string | null>(null);
+	let iseq = 0;
+	async function loadInd(bid: string, v: typeof view) {
+		const my = ++iseq;
+		indError = null;
+		try {
+			const d = await independenceApi.one(bid, v);
+			if (my === iseq) ind = d;
+		} catch (e) {
+			if (my === iseq) {
+				ind = null;
+				indError = errMessage(e);
+			}
+		}
+	}
+	$effect(() => {
+		loadInd(id, view);
+	});
+	const outageDay = $derived(VIEWS[view].day ?? null);
 
 	const b = $derived(s?.building);
 	const ses = $derived(s?.ses ?? null);
@@ -88,7 +115,7 @@
 				<h1 id="obj-h">{b.name}</h1>
 				<p class="place"><Icon name="pin" size={18} /> {place}</p>
 				<ul class="facts">
-					<li><span>Опалювана площа</span><b class="tnum">{b.heated_area ? `${num(b.heated_area)} м²` : '—'}</b></li>
+					<li><span>Площа будівлі</span><b class="tnum">{b.heated_area ? `${num(b.heated_area)} м²` : '—'}</b></li>
 					<li><span>Поверхів</span><b class="tnum">{b.floors ?? '—'}</b></li>
 					<li><span>Електроенергія 2025</span><b class="tnum">{b.elec_kwh_2025 ? `${num(b.elec_kwh_2025)} кВт·год` : 'немає даних'}</b></li>
 					<li class="src"><span class="real">дані UMUNI · реальні</span></li>
@@ -118,6 +145,12 @@
 
 		{#if tab === 'overview'}
 			<div class="fade-in stack">
+				{#if ind}
+					<IndependenceCard d={ind} solarHref="/solar/{b.id}" />
+				{:else if indError}
+					<div class="notice notice-warn"><p>Індекс енергонезалежності зараз недоступний: {indError}</p></div>
+				{/if}
+
 				{#if !ses}
 					<a class="cta" href="/solar/{b.id}">
 						<span class="cta-ic" aria-hidden="true"><Icon name="sun" size={30} /></span>
@@ -200,6 +233,7 @@
 				{/if}
 
 				<div class="two">
+					<ForecastCard kw={ses?.total_kw ?? null} />
 					<!-- Станція -->
 					{#if ses}
 						<section class="panel" aria-labelledby="ses-h">
@@ -293,7 +327,10 @@
 			</div>
 		{:else}
 			<div class="fade-in">
-				<Distribution d={s.distribution} hasSes={!!ses} solarHref="/solar/{b.id}" />
+				<div class="stack">
+					<OutageSimulator siteId={b.id} day={outageDay} startDefault={m && m.hour < 23 ? m.hour + 1 : 18} />
+					<Distribution d={s.distribution} hasSes={!!ses} solarHref="/solar/{b.id}" />
+				</div>
 			</div>
 		{/if}
 	</div>

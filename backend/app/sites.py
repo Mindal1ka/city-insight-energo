@@ -51,9 +51,10 @@ DAY_PROFILES = {
 WEEKEND_FACTOR = {"Заклади освіти": 0.35, "Дошкільні заклади": 0.35, "Громадські будівлі": 0.45,
                   "Спортивні споруди": 0.8, "Охорона здоров'я": 0.95, "Житлові будинки": 1.0}
 
-INVERTERS = [("Deye SUN-10K-SG04LP3", 10), ("Deye SUN-12K-SG04LP3", 12), ("Deye SUN-20K-SG01HP3", 20),
+INVERTERS = [("Deye SUN-5K-SG04LP3", 5), ("Deye SUN-8K-SG04LP3", 8), ("Deye SUN-10K-SG04LP3", 10), ("Deye SUN-12K-SG04LP3", 12), ("Deye SUN-20K-SG01HP3", 20),
              ("Deye SUN-30K-SG01HP3", 30), ("Deye SUN-50K-SG01HP3", 50), ("Growatt MOD 15KTL3-XH", 15),
              ("LuxPower LXP-LB-EU 12K", 12)]
+DEMO_MAX_COVERAGE = 0.30  # стеля частки власної генерації для демо-станцій
 SES_CATEGORIES = {"Заклади освіти", "Дошкільні заклади", "Охорона здоров'я", "Громадські будівлі"}
 
 
@@ -96,10 +97,12 @@ def load_registry(buildings) -> dict[int, dict]:
         rng = random.Random(f"ses-{b.id}")
         if rng.random() > 0.3:  # приблизно третина великих споживачів має станцію
             continue
-        model, inv_kw = min(INVERTERS, key=lambda m: abs(m[1] - max(8.0, y.elec_kwh / 6000)))
+        # як на практиці (інтерв'ю з енергоменеджером): станція покриває ~15–30 % власного споживання
+        cap_kw = y.elec_kwh * DEMO_MAX_COVERAGE / sum(solar.pvgis_monthly())
+        model, inv_kw = min(INVERTERS, key=lambda m: abs(m[1] - max(5.0, cap_kw * 0.8)))
         panel_w = rng.choice([410, 450, 550, 590])
-        total_kw = inv_kw * rng.uniform(1.0, 1.25)
-        n = max(10, round(total_kw * 1000 / panel_w))
+        total_kw = min(inv_kw * rng.uniform(1.0, 1.25), max(3.0, cap_kw))
+        n = max(6, round(total_kw * 1000 / panel_w))
         bat_kwh = rng.choice([10.0, 15.36, 20.48, 30.72, 40.96]) if inv_kw <= 20 else rng.choice([40.96, 61.44, 81.92])
         bat_kw = min(bat_kwh / 2, inv_kw)
         connected = rng.choice([30, 50, 75, 100, 150, 200])

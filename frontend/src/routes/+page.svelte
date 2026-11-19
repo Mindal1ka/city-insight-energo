@@ -11,6 +11,8 @@
 	import ViewSwitch from '#lib/ViewSwitch.svelte';
 	import Icon from '#lib/Icon.svelte';
 	import CommunityDistribution from '#lib/CommunityDistribution.svelte';
+	import IndexBadge from '#lib/IndexBadge.svelte';
+	import { independenceApi, duration, type IndependenceList, type IndependenceItem } from '#lib/api-independence.ts';
 
 	const view = $derived(viewFrom(page.url));
 	const tab = $derived(page.url.searchParams.get('tab') === 'distribution' ? 'distribution' : 'list');
@@ -37,11 +39,31 @@
 		load(view);
 	});
 
+	// Індекс енергонезалежності — окремий запит; без нього список працює як раніше
+	let ind = $state<IndependenceList | null>(null);
+	let iseq = 0;
+	async function loadInd(v = view) {
+		const my = ++iseq;
+		try {
+			const d = await independenceApi.list(v);
+			if (my === iseq) ind = d;
+		} catch {
+			if (my === iseq) ind = null;
+		}
+	}
+	$effect(() => {
+		loadInd(view);
+	});
+	const indById = $derived(new Map<number, IndependenceItem>((ind?.items ?? []).map((i) => [i.id, i])));
+	const ic = $derived(ind?.community ?? null);
+	const critNoReserve = $derived((ind?.items ?? []).filter((i) => i.critical && !(i.battery_kwh ?? 0)).length);
+
 	// Фільтри (живуть у стані сторінки)
 	let query = $state('');
 	let category = $state<string>('');
 	let onlySes = $state(false);
-	let sort = $state<'ses' | 'name' | 'balance'>('ses');
+	let onlyCritical = $state(false);
+	let sort = $state<'ses' | 'name' | 'balance' | 'weak'>('ses');
 	let limit = $state(60);
 
 	const categories = $derived.by(() => {
@@ -58,10 +80,18 @@
 			(i) =>
 				(!category || i.category_short === category) &&
 				(!onlySes || i.has_ses) &&
+				(!onlyCritical || (indById.get(i.id)?.critical ?? i.category_short.startsWith('Охорона'))) &&
 				(!q || norm(`${i.name} ${i.address} ${i.city}`).includes(q))
 		);
 		const byName = (a: SiteItem, b: SiteItem) => a.name.localeCompare(b.name, 'uk');
 		if (sort === 'name') list = list.sort(byName);
+		else if (sort === 'weak')
+			list = list.sort(
+				(a, b) =>
+					(indById.get(a.id)?.index ?? 0) - (indById.get(b.id)?.index ?? 0) ||
+					Number(indById.get(b.id)?.critical ?? false) - Number(indById.get(a.id)?.critical ?? false) ||
+					byName(a, b)
+			);
 		else if (sort === 'balance')
 			list = list.sort(
 				(a, b) => (a.balance_kwh_today ?? Infinity) - (b.balance_kwh_today ?? Infinity) || byName(a, b)
@@ -76,6 +106,7 @@
 		void query;
 		void category;
 		void onlySes;
+		void onlyCritical;
 		void sort;
 		limit = 60;
 	});
@@ -98,6 +129,7 @@
 		query = '';
 		category = '';
 		onlySes = false;
+		onlyCritical = false;
 	}
 </script>
 
@@ -115,6 +147,20 @@
 </div>
 
 <Status loading={loading && !data} {error} retry={() => load()} />
+
+{#if ic}
+	<a class="ind-banner" href={withView('/independence', view)}>
+		<span class="ib-main">
+			<span class="ib-l">Енергонезалежність громади зараз</span>
+			<span class="ib-v"><b class="tnum">{num(ic.self_sufficiency_pct, 1)} %</b> електроенергії дає власне сонце</span>
+		</span>
+		<span class="ib-fact"><b class="tnum">{duration(ic.autonomy_hours_median)}</b> типовий заклад протримається без світла</span>
+		<span class="ib-fact" class:warn={critNoReserve > 0}>
+			<b class="tnum">{ic.critical_with_battery} з {ic.critical_sites_total}</b> критичних закладів мають резерв
+		</span>
+		<span class="ib-go">Що робити <Icon name="arrow-right" size={18} /></span>
+	</a>
+{/if}
 
 {#if data}
 	<section class="totals" class:stale={loading} aria-label="Підсумки по громаді">
@@ -171,10 +217,16 @@
 					<span class="track" aria-hidden="true"><span class="knob"></span></span>
 					<span>лише з СЕС</span>
 				</label>
+				<label class="switch">
+					<input type="checkbox" role="switch" bind:checked={onlyCritical} />
+					<span class="track" aria-hidden="true"><span class="knob"></span></span>
+					<span>критичні заклади</span>
+				</label>
 				<div class="sort">
 					<label for="sort">Сортувати</label>
 					<select id="sort" bind:value={sort}>
 						<option value="ses">спершу з СЕС</option>
+						<option value="weak">найменш захищені спершу</option>
 						<option value="balance">за балансом (дефіцит угорі)</option>
 						<option value="name">за назвою</option>
 					</select>
@@ -195,7 +247,7 @@
 		<p class="found" role="status" aria-live="polite">
 			Знайдено <strong>{num(filtered.length)}</strong>
 			{#if filtered.length !== data.items.length}з {num(data.items.length)}{/if}
-			{#if query || category || onlySes}
+			{#if query || category || onlySes || onlyCritical}
 				· <button type="button" class="linkish" onclick={reset}>скинути фільтри</button>
 			{/if}
 		</p>
@@ -206,13 +258,20 @@
 					<li>
 						<a class="site {it.status}" href={withView(`/object/${it.id}`, view)}>
 							<span class="top">
-								<span class="cat">{it.category_short}</span>
+								<span class="cat">{it.category_short}{#if indById.get(it.id)?.critical}<span class="crit-t"> · критичний</span>{/if}</span>
 								{#if it.has_ses}
 									<span class="ses"><Icon name="sun" size={15} stroke={2} /> СЕС {num(it.ses_kw, 1)} кВт</span>
 								{/if}
 							</span>
 							<span class="name" title={it.name}>{it.name}</span>
 							<span class="addr"><Icon name="pin" size={15} />{it.city && !it.address.includes(it.city) ? `${it.city}, ` : ''}{it.address}</span>
+							{#if indById.get(it.id)}
+								{@const x = indById.get(it.id)!}
+								<span class="indep">
+									<IndexBadge index={x.index} cls={x.index_class} size="sm" />
+									<span class="aut tnum">{(x.battery_kwh ?? 0) > 0 ? `без світла ${duration(x.autonomy_hours)}` : 'без резерву'}</span>
+								</span>
+							{/if}
 							<span class="bottom">
 								<StatusTag status={it.status} kwh={it.balance_kwh_today} size="sm" />
 								{#if it.generated_today_kwh !== null}
@@ -621,6 +680,81 @@
 		gap: 0.25rem;
 		font-size: 0.8125rem;
 		color: var(--muted);
+	}
+	.ind-banner {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem 2rem;
+		margin: 0 0 1.25rem;
+		padding: 1rem 1.4rem;
+		border-radius: var(--radius-lg);
+		color: #fff;
+		text-decoration: none;
+		background:
+			radial-gradient(500px 200px at 0% 0%, rgba(245, 165, 36, 0.3), transparent 70%),
+			linear-gradient(135deg, #0f2f52, #163d68);
+		box-shadow: var(--shadow-md);
+	}
+	.ind-banner:hover {
+		color: #fff;
+		box-shadow: var(--shadow-lg);
+	}
+	.ib-main {
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 20rem;
+	}
+	.ib-l {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: #ffd894;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.ib-v {
+		font-size: 1.2rem;
+	}
+	.ib-v b {
+		font-size: 1.9rem;
+		margin-right: 0.2rem;
+	}
+	.ib-fact {
+		display: flex;
+		flex-direction: column;
+		font-size: 0.875rem;
+		color: #c9d6e6;
+		max-width: 15rem;
+	}
+	.ib-fact b {
+		font-size: 1.25rem;
+		color: #fff;
+	}
+	.ib-fact.warn b {
+		color: #ffb48f;
+	}
+	.ib-go {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.55rem 1rem;
+		border-radius: 10px;
+		background: var(--sun);
+		color: #2b1a00;
+		font-weight: 700;
+	}
+	.indep {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.6rem;
+	}
+	.aut {
+		font-size: 0.8125rem;
+		color: #3d4857;
+	}
+	.crit-t {
+		color: #8f1414;
 	}
 	.more {
 		text-align: center;

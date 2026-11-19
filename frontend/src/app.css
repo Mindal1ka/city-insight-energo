@@ -67,7 +67,11 @@ html {
 	-webkit-text-size-adjust: 100%;
 }
 
-@media (min-width: 1600px) {
+html {
+	font-size: 16px;
+}
+/* Проєктор і великі екрани: базовий шрифт 17 px */
+@media (min-width: 1440px) {
 	html {
 		font-size: 17px;
 	}
@@ -78,8 +82,10 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font);
-	font-size: 16px;
+	font-size: 1rem;
 	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
 }
 
 h1,
@@ -218,6 +224,7 @@ td {
 }
 thead th {
 	background: #eef2f6;
+	box-shadow: inset 0 -1px 0 var(--line);
 	font-weight: 600;
 	font-size: 0.875rem;
 	color: #2b3645;
@@ -240,6 +247,20 @@ td.num {
 	font-weight: 400;
 	color: var(--muted);
 	white-space: nowrap;
+}
+
+/* Довгі таблиці: власна прокрутка, щоб заголовок колонок лишався видимим */
+.table-wrap.tall {
+	max-height: min(72vh, 920px);
+	overflow: auto;
+}
+.table-wrap.tall thead th {
+	top: 0;
+}
+td.empty-cell {
+	padding: 2rem 1rem;
+	text-align: center;
+	color: var(--muted);
 }
 
 /* --- Кнопки й поля --- */
@@ -509,5 +530,111 @@ td.name {
 			opacity: 0;
 			transform: translateY(6px);
 		}
+	}
+}
+
+/* --- Каркаси завантаження (Skeleton.svelte) --- */
+.skeleton {
+	position: relative;
+	overflow: hidden;
+	background: #e7ecf2;
+	border-radius: 6px;
+}
+@media (prefers-reduced-motion: no-preference) {
+	.skeleton::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		transform: translateX(-100%);
+		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+		animation: sk-shimmer 1.3s ease-in-out infinite;
+	}
+	@keyframes sk-shimmer {
+		to {
+			transform: translateX(100%);
+		}
+	}
+}
+
+/* --- Порожній стан --- */
+.empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 2.5rem 1.5rem;
+	text-align: center;
+	background: var(--surface);
+	border: 1px dashed var(--line-strong);
+	border-radius: var(--radius-lg);
+	color: var(--muted);
+}
+.empty p {
+	margin: 0;
+	max-width: 52ch;
+}
+.empty strong {
+	color: var(--text);
+}
+
+/* --- Поля: видимий фокус і наведення --- */
+input[type='text'],
+input[type='search'],
+input[type='number'],
+select {
+	transition: border-color 0.12s;
+}
+input[type='text']:hover,
+input[type='search']:hover,
+input[type='number']:hover,
+select:hover {
+	border-color: var(--text);
+}
+input[type='checkbox'],
+input[type='radio'] {
+	accent-color: var(--accent);
+}
+kbd {
+	font-family: inherit;
+}
+::selection {
+	background: #ffe2a3;
+	color: var(--text);
+}
+
+/* --- Друк: акуратний звіт --- */
+@media print {
+	@page {
+		margin: 14mm 12mm;
+	}
+	html {
+		font-size: 11pt;
+	}
+	main {
+		padding-top: 0 !important;
+	}
+	tr,
+	li {
+		break-inside: avoid;
+	}
+	h1,
+	h2,
+	h3 {
+		break-after: avoid;
+	}
+	.table-wrap.tall {
+		max-height: none;
+		overflow: visible;
+	}
+	details {
+		display: block;
+	}
+	details > summary {
+		list-style: none;
+	}
+	.skeleton,
+	.btn,
+	.seg {
+		display: none !important;
 	}
 }

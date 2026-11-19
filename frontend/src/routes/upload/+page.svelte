@@ -2,6 +2,7 @@
 	// Сторінка «Оновити дані»: завантаження нового XLSX з UMUNI, після чого все перераховується автоматично
 	import { api, errMessage, type UploadResult } from '#lib/api.ts';
 	import { num, pct, dateTime } from '#lib/format.ts';
+	import Term from '#lib/Term.svelte';
 
 	let file = $state<File | null>(null);
 	let busy = $state(false);
@@ -50,8 +51,8 @@
 	<div>
 		<h1>Оновити дані</h1>
 		<p class="lead">
-			Завантажте свіже вивантаження з UMUNI — і рейтинг, класи, дефекти даних та розрахунок СЕС
-			перерахуються автоматично. Розробник для цього не потрібен.
+			Завантажте свіже вивантаження з <Term key="UMUNI" /> — і споживання, рейтинг, дефекти даних та
+			розрахунок <Term key="СЕС" plain /> перерахуються автоматично. Розробник для цього не потрібен.
 		</p>
 	</div>
 </div>
@@ -90,7 +91,7 @@
 						{/each}
 						<li>Дефектів даних: <strong>{num(result.summary.defects)}</strong> на {num(result.summary.defect_buildings)} будівлях</li>
 					</ul>
-					<p><a href="/overview">Переглянути огляд</a> · <a href="/rating">Рейтинг</a> · <a href="/defects">Якість даних</a></p>
+					<p><a href="/overview">Споживання електроенергії</a> · <a href="/rating">Рейтинг</a> · <a href="/defects">Якість даних</a></p>
 				</div>
 			{/if}
 		</div>
@@ -118,8 +119,11 @@
 		font: inherit;
 		padding: 0.5rem;
 		border: 1px dashed var(--line-strong);
-		border-radius: 6px;
+		border-radius: 10px;
 		background: #fafbfc;
+		width: 100%;
+		min-height: 3.5rem;
+		cursor: pointer;
 	}
 	.result {
 		margin-top: 1rem;
