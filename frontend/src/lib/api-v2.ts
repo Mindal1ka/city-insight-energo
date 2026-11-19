@@ -15,7 +15,8 @@ export const DEPARTMENTS = [
 ] as const;
 
 export interface Budget {
-	source: 'МОК' | 'введено';
+	/** openbudget.gov.ua — реальний план програми 2026, розподілений пропорційно кВт·год; МОК — оцінка */
+	source: 'МОК' | 'введено' | 'openbudget.gov.ua';
 	limit_uah: { year: number; month: number; day: number };
 	paid_uah: { year: number; month: number; day: number };
 	/** Скільки коштувала б е/е без СЕС за рік */
@@ -116,6 +117,8 @@ export interface Insight {
 	months: MonthRow[];
 	/** Ємність акумулятора станції, кВт·год (null — немає доступу / немає СЕС) */
 	battery_capacity_kwh: number | null;
+	/** Оцінка 2026 з реальних даних UMUNI і тренд до 2025 */
+	y2026: Y2026;
 	/** null — немає фінансового доступу */
 	budget: Budget | null;
 	/** null — публічний режим */
@@ -465,3 +468,64 @@ export const fetchBlackoutAll = () =>
 		totals: { objects: number; with_generator: number; with_battery: number; hold_24h: number; under_4h: number };
 		items: BlackoutRow[];
 	}>('/api/blackout');
+
+// ---------- реальні дані: оцінка 2026 з UMUNI і бюджет openbudget ----------
+
+/** Оцінка 2026 з реальних даних UMUNI (з 1 січня до дати вивантаження) і тренд до 2025 */
+export interface Y2026 {
+	kwh_2025: number | null;
+	kwh_2026_to_date: number | null;
+	/** Дата вивантаження 2026 (ISO) */
+	to_date: string | null;
+	kwh_2026_est: number | null;
+	/** % до 2025 (null — немає даних) */
+	trend_pct: number | null;
+	quality: 'ок' | 'ймовірна помилка даних' | 'немає даних' | 'немає даних 2026' | 'немає 2025';
+	months_2026: { month: number; kwh: number; kind: 'оцінка факту' | 'прогноз' }[] | null;
+}
+
+export interface Trend {
+	to_date: string | null;
+	objects: number;
+	kwh_2025: number;
+	kwh_2026_est: number;
+	trend_pct: number | null;
+	growing: number;
+	falling: number;
+	suspicious: number;
+	top_growth: { id: number; name: string; trend_pct: number; kwh_2025: number; kwh_2026_est: number }[];
+}
+
+export const fetchTrend = () => req<Trend>('/api/trend');
+
+export interface BudgetProgram {
+	/** Код програми ТПКВКМБ (1021 — школи, 1010 — садки, …) */
+	program: string;
+	name: string;
+	/** Будівель UMUNI, віднесених до програми */
+	buildings: number;
+	kwh_2025: number | null;
+	plan_2025: number | null;
+	fact_2025: number | null;
+	plan_2026: number | null;
+	/** Касове виконання 2026 наростаючим до fact_2026_month */
+	fact_2026: number | null;
+	fact_2026_month: number | null;
+	/** Фактична ціна 2025 = факт ÷ кВт·год UMUNI групи */
+	price_2025: number | null;
+	/** Ліміт програми розподілено на будівлі (будівлі UMUNI покривають програму) */
+	allocated: boolean;
+	monthly_2025: (number | null)[] | null;
+	monthly_2026: (number | null)[] | null;
+}
+
+export interface BudgetReal {
+	source: 'openbudget.gov.ua';
+	budget_code: string;
+	kekv: string;
+	updated_month_2026: number | null;
+	totals: { plan_2025: number; fact_2025: number; plan_2026: number; fact_2026: number; price_2025: number | null };
+	items: BudgetProgram[];
+}
+
+export const fetchBudgetReal = () => req<BudgetReal>('/api/budget-real');

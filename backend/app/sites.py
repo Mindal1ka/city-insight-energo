@@ -79,13 +79,13 @@ SES_MIN_KWH = 8000  # станції лише в будівлях із річн�
 SES_SHARE = 0.4  # ≈ 40 % таких будівель мають станцію (детерміновано за id)
 PV_DERATE = 0.92  # втрати й деградація понад PVGIS (той самий множник, що й у detail())
 # суміш цільових річних K = генерація ÷ споживання: (частка, від, до)
-K_MIX = ((0.35, 0.35, 0.8), (0.40, 0.8, 1.2), (0.25, 1.2, 1.6))
+K_MIX = ((0.50, 0.3, 0.8), (0.38, 0.8, 1.2), (0.12, 1.2, 1.5))  # місто ставить СЕС під власне споживання; надлишок — рідко
 
-# --- ДЕМО-ціни (орієнтовні ринкові, 2025) ---
-PANEL_UAH_PER_450W = 4500.0  # панель 450 Вт; інші потужності — пропорційно
-INVERTER_UAH_PER_KW = 3500.0
-BATTERY_UAH_PER_KWH = 16000.0
-INSTALL_SHARE, INSTALL_FIXED_UAH = 0.15, 20000.0  # монтаж ≈ 15 % обладнання + 20 000 грн
+# --- Ціни 2026 (роздріб Україна, листопад 2026; гібрид під ключ виходить ≈ 31–37 тис. грн/кВт, як у тендерах шкіл) ---
+PANEL_UAH_PER_450W = 3825.0  # 8,5 грн/Вт (Jinko 590 Вт N-type 4,5–5,7 тис. грн); інші потужності — пропорційно
+INVERTER_UAH_PER_KW = 7000.0  # гібрид Deye/LuxPower 10–30 кВт (великі 4,5–5 тис., малі 10–12 тис.)
+BATTERY_UAH_PER_KWH = 9500.0  # LiFePO4 Deye/Pylontech 7,8–12 тис. грн/кВт·год
+INSTALL_SHARE, INSTALL_FIXED_UAH = 0.20, 30000.0  # монтаж ≈ 20 % обладнання + 30 000 грн (проєкт, щит, підключення)
 
 # Колонки CSV реєстру (data/ses_registry.csv) — ключ у коді → заголовок українською
 CSV_COLUMNS = {
@@ -168,7 +168,7 @@ def demo_station(b, elec_kwh: float, rng: random.Random) -> dict:
     total_kw = round(n * panel_w / 1000, 2)
     fam = rng.choices(list(INVERTER_WEIGHTS), weights=list(INVERTER_WEIGHTS.values()))[0]
     model, inv_kw = _pick_inverter(fam, total_kw / DC_AC_RATIO_MAX)
-    bat_n = rng.choices(range(7), weights=[30, 12, 18, 12, 14, 6, 8])[0]  # ≈30 % без акумулятора
+    bat_n = rng.choices(range(7), weights=[15, 12, 20, 14, 18, 9, 12])[0]  # ≈15 % без акумулятора (школи-укриття — гібрид)
     module = rng.choice(BATTERY_MODULES_KWH) if bat_n else None
     bat_kwh = round(bat_n * module, 2) if bat_n else 0.0
     bat_kw = round(min(bat_kwh * BATTERY_C_RATE, inv_kw), 1) if bat_n else 0.0

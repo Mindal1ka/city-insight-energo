@@ -26,8 +26,8 @@ from .sites import BATTERY_RESERVE, simulate_day
 router = APIRouter(tags=["v2: генератори, блекаут"])
 
 GEN_FILE = DATA / "generators.csv"
-FUEL_L_PER_KWH = 0.33  # дизель-генератор при ~70 % навантаження, л/кВт·год (ПРИПУЩЕННЯ)
-FUEL_PRICE_UAH_L = 58.0  # дизель, грн/л (ПРИПУЩЕННЯ, 11.2026)
+FUEL_L_PER_KWH = 0.30  # дизель-генератор 100 кВА при 75 % навантаження: 0,21–0,33 л/кВт·год
+FUEL_PRICE_UAH_L = 101.0  # дизель, грн/л — середня по Україні 17.11.2026 (А-95)
 HORIZON_H = 48
 BLACKOUT_FLOOR = 0.05  # при блекауті резерв акумулятора (BATTERY_RESERVE) якраз і витрачається — до 5 %
 GEN_SIZES = (5, 8, 10, 15, 20, 30, 45, 60, 80, 100, 150, 200)
@@ -66,11 +66,15 @@ def blackout(b, ses: dict | None, gen: dict | None, now: datetime | None = None)
     """Повний блекаут від поточної години: скільки годин (до 48) протримається об'єкт."""
     now = now or _now()
     st = ses if eff.has_station(ses) else None
+    bat_only = (ses or {}).get("battery_kwh") or 0.0 if not st else 0.0  # акумулятор без панелей (резерв)
     today = now.date()
     rows = simulate_day(b, st, today) + simulate_day(b, st, date.fromordinal(today.toordinal() + 1))
     h0 = now.hour
-    cap = (st or {}).get("battery_kwh") or 0.0
-    soc = (rows[h0 - 1]["soc_kwh"] if h0 else cap * 0.6) if cap else 0.0
+    cap = (st or {}).get("battery_kwh") or bat_only
+    if st:
+        soc = (rows[h0 - 1]["soc_kwh"] if h0 else cap * 0.6) if cap else 0.0
+    else:
+        soc = cap * 0.9  # резервний акумулятор тримають зарядженим від мережі
     room = cap * (1 - BLACKOUT_FLOOR)  # ємність, доступна при блекауті
     load_avg = sum(r["cons_kwh"] for r in rows[:24]) / 24
 
@@ -148,11 +152,12 @@ def blackout_all(user: User = Depends(current_user)):
     for b in store.buildings:
         ses = sites.registry.get(b.id)
         g = generator_of(b, gens)
-        if (not eff.has_station(ses) and not g) or not eff.elec_2025(b):
+        if (not eff.has_station(ses) and not (ses or {}).get("battery_kwh") and not g) or not eff.elec_2025(b):
             continue
         bo = blackout(b, ses, g, now)
         items.append({"id": b.id, "name": b.name, "department": department_of(b),
                       "has_ses": eff.has_station(ses), "battery_kwh": bo["battery_capacity_kwh"],
+                      "source": (ses or {}).get("source"),
                       "generator_kw": g["generator_kw"] if g else None,
                       "generator_source": g["source"] if g else None,
                       "hours_battery_sun": _r(bo["hours_battery_sun"], 1),

@@ -25,7 +25,8 @@ def test_profiles_sum_to_one_and_schools_dip_in_summer():
 
 def test_hospital_by_hand():
     # лікарня: 120 000 кВт·год/рік, 3000 м², 3 поверхи
-    r = solar.estimate(120000, 3000, 3, "Охорона здоров'я", tariff=8, capex_per_kw=30000, capex_fixed=60000)
+    r = solar.estimate(120000, 3000, 3, "Охорона здоров'я", tariff=8, capex_per_kw=30000, capex_fixed=60000,
+                       daytime_share=0.6)
     assert r.roof_area_m2 == pytest.approx(1000)
     assert r.kw_max_roof == pytest.approx(83.3)  # 1000 × 0,5 / 6 = 83,33 → вниз до 0,1
     # обмежує найсонячніший місяць: 10 000 × 0,6 / E_max
@@ -97,7 +98,7 @@ def test_api_list_and_detail(client):
 
 def test_api_overrides_and_filter(client):
     a = client.get("/api/solar").json()["items"]
-    b = client.get("/api/solar?tariff=16&capex=30000&category=Заклади освіти").json()["items"]
+    b = client.get("/api/solar?tariff=24&capex=30000&category=Заклади освіти").json()["items"]
     assert b and all(i["category_short"] == "Заклади освіти" for i in b)
     a_by = {i["id"]: i for i in a}
     assert b[0]["payback_years"] < a_by[b[0]["id"]]["payback_years"]  # дорожчий тариф — швидша окупність

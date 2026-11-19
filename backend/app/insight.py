@@ -124,8 +124,14 @@ def _write_limits(lim: dict[int, float]) -> None:
 
 
 def limit_year(b, tariff: float, overrides: dict[int, float]) -> tuple[float, str]:
+    """Ліміт на рік: введений вручну → реальний план програми 2026 (openbudget) → МОК (лікарні тощо)."""
     if b.id in overrides:
         return overrides[b.id], "введено"
+    from . import budget_real
+    from .main import store
+    real = budget_real.limit_year(b, store)
+    if real:
+        return real, budget_real.SOURCE
     f = random.Random(f"limit-{b.id}").uniform(*LIMIT_FACTOR)
     return eff.elec_2025(b) * tariff * f, MOCK
 
@@ -755,3 +761,11 @@ def trend(user: User = Depends(current_user)):
     """2025 (факт) проти оцінки 2026 (з реальних даних до дати вивантаження) по громаді."""
     store, _ = _ctx()
     return calib.city(store)
+
+
+@router.get("/api/budget-real")
+def budget_real_summary(user: User = Depends(current_user)):
+    """Реальний бюджет на е/е (КЕКВ 2273) за програмами: план/факт 2025–2026, фактична ціна кВт·год."""
+    from . import budget_real
+    store, _ = _ctx()
+    return budget_real.summary(store)
