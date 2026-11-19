@@ -132,6 +132,16 @@ def site(bid: int, day: str | None = None, hour: int | None = None):
     raise HTTPException(404, "Об'єкт не знайдено")
 
 
+# --- енергонезалежність і прогноз сонця (підключаються, щойно модулі існують) ---
+import importlib  # noqa: E402
+
+for _mod in ("independence_api", "forecast_api"):
+    try:
+        app.include_router(importlib.import_module(f".{_mod}", __package__).router)
+    except ModuleNotFoundError as _e:
+        if _e.name != f"{__package__}.{_mod}":
+            raise
+
 # --- модуль СЕС (до SPA-маршруту, інакше catch-all перехопить /api/solar) ---
 from .solar_api import router as solar_router  # noqa: E402
 
