@@ -2,7 +2,9 @@
 	// «Огляд громади»: ефективність міста на одному екрані — 4 головні показники, один графік, три короткі списки дій.
 	import { errMessage } from '#lib/api.ts';
 	import { fetchSes, uah, kwh, type SesList, type SesItem } from '#lib/api-ses.ts';
-	import { fetchDepartments, fetchNetwork, fetchZones, type Departments, type Network, type Zones } from '#lib/api-v2.ts';
+	import { fetchDepartments, fetchNetwork, fetchZones, fetchTrend, fetchBudgetReal, type Departments, type Network, type Zones, type Trend, type BudgetReal } from '#lib/api-v2.ts';
+	import { num, MONTHS_FULL } from '#lib/format.ts';
+	import SourceTag from '#lib/SourceTag.svelte';
 	import { moneyShort } from '#lib/dash/DashData.ts';
 	import StatCard from '#lib/StatCard.svelte';
 	import Status from '#lib/Status.svelte';
@@ -14,6 +16,8 @@
 	let dept = $state<Departments | null>(null);
 	let net = $state<Network | null>(null);
 	let zones = $state<Zones | null>(null);
+	let trend = $state<Trend | null>(null);
+	let bud = $state<BudgetReal | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 
@@ -22,12 +26,14 @@
 		error = null;
 		try {
 			// Основні дані обов'язкові; решта (залежить від ролі) — якщо є
-			const [s, d, n, z] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchNetwork('year'), fetchZones('month', `${new Date().getFullYear()}-07-15`)]);
+			const [s, d, n, z, tr, br] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchNetwork('year'), fetchZones('month', `${new Date().getFullYear()}-07-15`), fetchTrend(), fetchBudgetReal()]);
 			if (s.status === 'rejected') throw s.reason;
 			ses = s.value;
 			dept = d.status === 'fulfilled' ? d.value : null;
 			net = n.status === 'fulfilled' ? n.value : null;
 			zones = z.status === 'fulfilled' ? z.value : null;
+			trend = tr.status === 'fulfilled' ? tr.value : null;
+			bud = br.status === 'fulfilled' ? br.value : null;
 		} catch (e) {
 			error = errMessage(e);
 		} finally {
@@ -52,6 +58,12 @@
 	const usedPct = $derived(dept?.totals.used_pct_year ?? null);
 	const overLimit = $derived(dept?.totals.over_limit ?? null);
 	const limitTone = $derived(overLimit ? 'warn' : 'good');
+
+	const trendPct = $derived(trend?.trend_pct ?? null);
+	const bt = $derived(bud?.totals ?? null);
+	const budMonth = $derived(bud?.updated_month_2026 ?? null);
+	const budPct = $derived(bt && bt.plan_2026 > 0 ? Math.min(100, (bt.fact_2026 / bt.plan_2026) * 100) : 0);
+	const mln = (v: number) => num(v / 1e6, 1);
 
 	const monthly = $derived.by(() => {
 		const m = ses?.monthly;
@@ -125,7 +137,7 @@
 					href="/network"
 				/>
 				<StatCard
-					label="Ліміти"
+					label="Ліміти (школи, садки та ін.)"
 					value={usedPct}
 					decimals={0}
 					unit="% використано{overLimit == null ? '' : ' · понад ліміт: ' + overLimit}"
@@ -135,6 +147,28 @@
 				/>
 			</div>
 		</section>
+
+		{#if trend || bt}
+			<section class="real" aria-label="Реальні дані">
+				{#if trend && trend.kwh_2026_est}
+					<div class="card rc">
+						<div class="rc-h"><span>Споживання 2026</span><SourceTag kind="umuni" /></div>
+						<div class="rc-v"><b>{mln(trend.kwh_2026_est)}</b> млн кВт·год
+							{#if trendPct != null}<span class="tr" class:down={trendPct < 0} class:up={trendPct > 0}>{trendPct > 0 ? '+' : ''}{num(trendPct, 1)}% до 2025</span>{/if}
+						</div>
+						<p class="rc-n">оцінка з даних UMUNI до {trend.to_date ? new Date(trend.to_date).toLocaleDateString('uk-UA') : '—'} · ↑ {trend.growing} · ↓ {trend.falling} об’єктів</p>
+					</div>
+				{/if}
+				{#if bt}
+					<a class="card rc" href="/finance">
+						<div class="rc-h"><span>Бюджет на е/е 2026</span><SourceTag kind="openbudget" /></div>
+						<div class="rc-v"><b>{mln(bt.fact_2026)}</b> з {mln(bt.plan_2026)} млн грн сплачено{budMonth ? ` (${MONTHS_FULL[budMonth - 1].toLowerCase()})` : ''}</div>
+						<span class="pb"><i style="width:{budPct}%"></i></span>
+						{#if bt.price_2025}<p class="rc-n">фактична ціна 2025: <b>{num(bt.price_2025, 2)} грн/кВт·год</b></p>{/if}
+					</a>
+				{/if}
+			</section>
+		{/if}
 
 		{#if monthly}
 			<section class="card" aria-labelledby="h-mon">
@@ -202,6 +236,61 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 		gap: 1rem;
+	}
+	.real {
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+	}
+	.rc {
+		display: grid;
+		gap: 0.35rem;
+		margin: 0;
+		min-width: 0;
+		align-content: start;
+	}
+	.rl {
+		font-weight: 600;
+		color: var(--muted);
+	}
+	.rv {
+		font-family: var(--font-display);
+		font-size: 2rem;
+		font-weight: 700;
+		color: var(--ink);
+		line-height: 1.1;
+	}
+	.rv small {
+		font-family: inherit;
+		font-size: 0.95rem;
+		color: var(--muted);
+	}
+	.rs {
+		font-weight: 700;
+		color: var(--text-2);
+	}
+	.rs.up {
+		color: var(--warn);
+	}
+	.rs.down {
+		color: var(--ok);
+	}
+	.rn {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.5rem;
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+	.pbar {
+		height: 0.55rem;
+		border-radius: 999px;
+		background: var(--neutral-soft);
+		overflow: hidden;
+	}
+	.pbar i {
+		display: block;
+		height: 100%;
+		background: var(--ok);
 	}
 	.money {
 		display: flex;
@@ -313,6 +402,67 @@
 		.money {
 			flex-direction: column;
 			align-items: flex-start;
+		}
+	}
+	.real {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.rc {
+		display: grid;
+		gap: 0.45rem;
+		color: var(--text);
+		text-decoration: none;
+	}
+	.rc-h {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		color: var(--text-2);
+		font-weight: 600;
+	}
+	.rc-v {
+		font-size: 0.95rem;
+		color: var(--text-2);
+	}
+	.rc-v b {
+		font-size: 1.9rem;
+		color: var(--text);
+		font-variant-numeric: tabular-nums;
+	}
+	.tr {
+		margin-left: 0.5rem;
+		font-weight: 700;
+		font-size: 0.9rem;
+	}
+	.tr.down {
+		color: var(--ok, #1f8a4c);
+	}
+	.tr.up {
+		color: #d9680f;
+	}
+	.rc-n {
+		margin: 0;
+		font-size: 0.82rem;
+		color: var(--muted);
+	}
+	.pb {
+		display: block;
+		height: 8px;
+		border-radius: 99px;
+		background: var(--neutral-soft, #eef0f3);
+		overflow: hidden;
+	}
+	.pb i {
+		display: block;
+		height: 100%;
+		background: #1f8a4c;
+	}
+	@media (max-width: 700px) {
+		.real {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

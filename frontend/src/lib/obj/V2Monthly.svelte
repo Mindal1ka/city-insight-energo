@@ -4,11 +4,20 @@
 	import { MONTHS, num } from '#lib/format.ts';
 	import Disclosure from '#lib/Disclosure.svelte';
 
-	let { months, capacity = null }: { months: MonthRow[]; capacity?: number | null } = $props();
+	let {
+		months,
+		capacity = null,
+		months2026 = null
+	}: { months: MonthRow[]; capacity?: number | null; months2026?: { month: number; kwh: number; kind: string }[] | null } = $props();
+
+	let year = $state<'2025' | '2026'>('2025');
+	const is26 = $derived(year === '2026' && !!months2026?.length);
+	const m26 = $derived(Array.from({ length: 12 }, (_, i) => months2026?.find((x) => x.month === i + 1) ?? null));
+	const consOf = (r: MonthRow, i: number) => (is26 ? (m26[i]?.kwh ?? null) : r.cons_kwh);
 
 	const rows = $derived(months ?? []);
-	const hasGen = $derived(rows.some((r) => r.gen_kwh != null));
-	const max = $derived(Math.max(1, ...rows.map((r) => Math.max(r.cons_kwh ?? 0, r.gen_kwh ?? 0))));
+	const hasGen = $derived(!is26 && rows.some((r) => r.gen_kwh != null));
+	const max = $derived(Math.max(1, ...rows.map((r, i) => Math.max(consOf(r, i) ?? 0, is26 ? 0 : (r.gen_kwh ?? 0)))));
 	type NumKey = 'cons_kwh' | 'gen_kwh' | 'surplus_kwh' | 'grid_kwh';
 	const sum = (k: NumKey) => {
 		const v = rows.map((r) => r[k]);
@@ -38,18 +47,30 @@
 </script>
 
 <div class="mo">
+	{#if months2026?.length}
+		<div class="yr" role="radiogroup" aria-label="Рік споживання">
+			{#each ['2025', '2026'] as y (y)}
+				<button type="button" role="radio" aria-checked={year === y} class:on={year === y} onclick={() => (year = y as '2025' | '2026')}>{y}</button>
+			{/each}
+			{#if is26}<span class="yn">UMUNI · до 11.11 факт, далі прогноз</span>{/if}
+		</div>
+	{/if}
 	<div class="head tnum">
+		{#if is26}
+			<p class="cons"><span class="l">≈ за 2026 рік</span> <b>{num(m26.reduce((a, x) => a + (x?.kwh ?? 0), 0))}</b> <small>кВт·год</small></p>
+		{:else}
 		{#each totals as t (t.l)}
 			<p class={t.cls}><span class="l">{t.l}, за рік</span> <b>{num(t.v)}</b> <small>кВт·год</small></p>
 		{/each}
+		{/if}
 	</div>
 
 	<div class="bars" role="img" aria-label="Споживання та генерація по місяцях, кВт·год">
 		{#each rows as r, i (r.month)}
 			{@const bat = Math.min(r.battery_kwh ?? 0, r.gen_kwh ?? 0)}
-			<div class="col" class:cur={i === curMonth} title="{MONTHS[i]}: спожито {num(r.cons_kwh)}{r.gen_kwh != null ? `, згенеровано ${num(r.gen_kwh)}` : ''} кВт·год">
+			<div class="col" class:cur={i === curMonth} title="{MONTHS[i]}: спожито {num(consOf(r, i))}{is26 && m26[i] ? ` (${m26[i]?.kind})` : ''}{!is26 && r.gen_kwh != null ? `, згенеровано ${num(r.gen_kwh)}` : ''} кВт·год">
 				<div class="pair">
-					<span class="b cons" style="height: {h(r.cons_kwh)}"></span>
+					<span class="b cons" class:fc={is26 && m26[i]?.kind === 'прогноз'} style="height: {h(consOf(r, i))}"></span>
 					{#if hasGen}
 						<span class="b gen" style="height: {h(r.gen_kwh)}">
 							{#if bat > 0}<span class="bt" style="height: {(bat / Math.max(1, r.gen_kwh ?? 1)) * 100}%"></span>{/if}
@@ -62,9 +83,11 @@
 	</div>
 	<p class="legend">
 		<span><i class="sw cons"></i>Спожито</span>
+		{#if is26}<span><i class="sw cons fc"></i>Прогноз</span>{/if}
 		{#if hasGen}<span><i class="sw gen"></i>Згенеровано</span><span><i class="sw bt"></i>Через акумулятор</span>{/if}
 	</p>
 
+	{#if !is26}
 	<Disclosure summary="Детально по місяцях">
 	<div class="scroll-x">
 		<table class="tbl tnum">
@@ -88,6 +111,7 @@
 		</table>
 	</div>
 	</Disclosure>
+	{/if}
 </div>
 
 <style>
@@ -165,6 +189,38 @@
 	.sw.cons {
 		background: var(--cons);
 		opacity: 0.85;
+	}
+	.b.cons.fc,
+	.sw.cons.fc {
+		opacity: 0.5;
+		background: repeating-linear-gradient(45deg, var(--cons) 0 3px, transparent 3px 6px);
+		outline: 1px dashed var(--cons);
+		outline-offset: -1px;
+	}
+	.yr {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.yr button {
+		border: 1px solid var(--line);
+		background: transparent;
+		border-radius: 999px;
+		padding: 0.1rem 0.7rem;
+		font: inherit;
+		font-size: var(--fs-xs);
+		font-weight: 600;
+		color: var(--muted);
+		cursor: pointer;
+	}
+	.yr button.on {
+		background: var(--surface);
+		color: var(--ink);
+		box-shadow: var(--shadow);
+	}
+	.yn {
+		font-size: var(--fs-xs);
+		color: var(--muted);
 	}
 	.b.gen,
 	.sw.gen {

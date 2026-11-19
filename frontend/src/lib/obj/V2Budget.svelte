@@ -4,6 +4,7 @@
 	import { uah } from '#lib/api-ses.ts';
 	import { num } from '#lib/format.ts';
 	import Icon from '#lib/Icon.svelte';
+	import SourceTag from '#lib/SourceTag.svelte';
 
 	let {
 		b,
@@ -40,6 +41,15 @@
 </script>
 
 <div class="bud">
+	<p class="src">
+		{#if b.source === 'openbudget.gov.ua'}
+			<SourceTag kind="openbudget" /> <span>Ліміт: план програми 2026 (openbudget), розподілено пропорційно кВт·год</span>
+		{:else if b.source === 'введено'}
+			<SourceTag kind="manual" />
+		{:else}
+			<SourceTag kind="mok" />
+		{/if}
+	</p>
 	<div class="row">
 		<div class="lbl"><span>Ліміт · місяць</span><b class="tnum">{uah(b.paid_uah.month)} <small>/ {uah(b.limit_uah.month)}</small></b></div>
 		<div class="track" class:over={(pctM ?? 0) > 100}><i style="width: {Math.min(100, pctM ?? 0)}%"></i></div>
@@ -83,6 +93,15 @@
 		display: grid;
 		gap: 0.8rem;
 		min-width: 0;
+	}
+	.src {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.5rem;
+		margin: 0;
+		font-size: var(--fs-xs);
+		color: var(--muted);
 	}
 	.row {
 		display: grid;

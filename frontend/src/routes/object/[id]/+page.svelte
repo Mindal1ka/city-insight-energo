@@ -23,6 +23,7 @@
 	import V2Live from '#lib/obj/V2Live.svelte';
 	import V2Dist from '#lib/obj/V2Dist.svelte';
 	import V2Reco from '#lib/obj/V2Reco.svelte';
+	import SourceTag from '#lib/SourceTag.svelte';
 	import { fetchInsight, updateLimit, type Insight, type MonthRow } from '#lib/api-v2.ts';
 	import { onDestroy } from 'svelte';
 	import { loadObj, saveObj, normSes, normCosts, emptySes, emptyCosts, type ObjDetail, type ObjPatch } from '#lib/obj/ObjApi.ts';
@@ -211,6 +212,7 @@
 		].filter((x) => x.v != null) as { k: string; icon: 'plug'; pre: string; v: number; unit: string; d: number }[]
 	);
 
+	const y26 = $derived(ins?.y2026 ?? null);
 	const place = $derived(d ? String(d.building.address ?? '') : '');
 	const pLabel = $derived(PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? '');
 </script>
@@ -274,6 +276,19 @@
 				</div>
 			{/if}
 
+			{#if y26 && y26.kwh_2026_est != null && y26.quality !== 'немає даних' && y26.quality !== 'немає даних 2026'}
+				<p class="y26 tnum">
+					<span>2026: ≈ <b>{num(y26.kwh_2026_est / 12)}</b> кВт·год/міс</span>
+					{#if y26.trend_pct != null}
+						<span class:up={y26.trend_pct > 0} class:down={y26.trend_pct <= 0}>{y26.trend_pct > 0 ? '+' : '−'}{num(Math.abs(y26.trend_pct), 0)} % до 2025</span>
+					{/if}
+					<SourceTag kind="umuni" />
+					{#if y26.quality === 'ймовірна помилка даних'}
+						<span class="warn" title="2026 відрізняється від 2025 більш ніж у 2,5 раза — перевірити дані UMUNI"><Icon name="alert" size={15} /></span>
+					{/if}
+				</p>
+			{/if}
+
 			{#if sens && ins?.sizing}
 				<V2Reco s={ins.sizing} id={b.id} hasStation={!!ses} surplus={kc === 'Надлишок'} />
 			{/if}
@@ -310,7 +325,7 @@
 		<!-- ---- Огляд ---- -->
 		<div class="tp" id="tp-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={cur !== 'overview'}>
 			{#if ins?.months?.length}
-				<div class="panel pad"><V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} /></div>
+				<div class="panel pad"><V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} months2026={ins.y2026?.months_2026 ?? null} /></div>
 			{:else if !hasCons && !(ses && e?.gen_kwh)}
 				<div class="empty"><span class="e-ic" aria-hidden="true">?</span><p><b>Немає даних про споживання</b></p></div>
 			{:else}
@@ -567,6 +582,31 @@
 	.num.gen .n-v { color: var(--sun-ink); }
 	.num.bat .n-v { color: var(--bat, #6d4fc2); }
 	.num.sav .n-v { color: var(--ok); }
+	.y26 {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.8rem;
+		margin: 0;
+		font-size: var(--fs-sm);
+		color: var(--muted);
+	}
+	.y26 b {
+		color: var(--ink);
+	}
+	.y26 .up {
+		color: var(--warn, #c2610c);
+		font-weight: 700;
+	}
+	.y26 .down {
+		color: var(--ok);
+		font-weight: 700;
+	}
+	.y26 .warn {
+		display: inline-flex;
+		color: #d08a1c;
+		cursor: help;
+	}
 	/* Вкладки */
 	.tabs {
 		display: flex;

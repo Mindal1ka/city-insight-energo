@@ -58,12 +58,30 @@ def _rows(mtime: float) -> list[dict]:
                  "plan": float(r["plan"]), "fact_cum": float(r["fact_cum"])} for r in csv.DictReader(f)]
 
 
+_mt = {"t": 0.0, "v": 0.0}
+
+
+def _mtime() -> float:
+    """mtime файлу, перевіряємо не частіше разу на 5 с (stat на томі Docker у Windows повільний)."""
+    import time
+    now = time.monotonic()
+    if now - _mt["t"] > 5:
+        _mt["t"] = now
+        _mt["v"] = FILE.stat().st_mtime if FILE.exists() else 0.0
+    return _mt["v"]
+
+
 def rows() -> list[dict]:
-    return _rows(FILE.stat().st_mtime if FILE.exists() else 0.0)
+    return _rows(_mtime())
 
 
 def programs(year: int) -> dict[str, dict]:
     """Програма → назва, план (останній місяць), факт наростаючим, останній місяць, платежі по місяцях."""
+    return _programs(year, _mtime())
+
+
+@lru_cache(maxsize=8)
+def _programs(year: int, mtime: float) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for r in rows():
         if r["year"] != year:
@@ -81,12 +99,20 @@ def programs(year: int) -> dict[str, dict]:
     return out
 
 
+_gk: dict[int, dict[str, float]] = {}
+
+
 def group_kwh(store) -> dict[str, float]:
+    key = id(store.buildings)
+    if key in _gk:
+        return _gk[key]
     tot: dict[str, float] = {}
     for b in store.buildings:
         p = program_of(b)
         if p:
             tot[p] = tot.get(p, 0.0) + eff.elec_2025(b)
+    _gk.clear()
+    _gk[key] = tot
     return tot
 
 
@@ -94,6 +120,11 @@ def price_2025(program: str, store) -> float | None:
     a = programs(2025).get(program)
     k = group_kwh(store).get(program)
     return a["fact"] / k if a and k else None
+
+
+@lru_cache(maxsize=64)
+def _alloc(program: str, key: int, mtime: float, price: float | None) -> bool:
+    return bool(price and PRICE_OK[0] <= price <= PRICE_OK[1])
 
 
 def allocatable(program: str | None, store) -> bool:
