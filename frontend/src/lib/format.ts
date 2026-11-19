@@ -80,3 +80,48 @@ export const MONTHS_FULL = [
 	'Листопад',
 	'Грудень'
 ];
+
+/** Число зі знаком: «+12,4» / «−8,1» (справжній мінус U+2212) */
+export function signed(v: number | null | undefined, digits = 1): string {
+	if (v === null || v === undefined || Number.isNaN(v)) return '—';
+	const r = Number(v.toFixed(digits));
+	if (r === 0) return num(0, digits);
+	return (r > 0 ? '+' : '−') + num(Math.abs(r), digits);
+}
+
+/** Енергія з адаптивною одиницею: кВт·год або МВт·год */
+export function energy(kwh: number | null | undefined, digits = 1): { v: string; u: string } {
+	if (kwh === null || kwh === undefined || Number.isNaN(kwh)) return { v: '—', u: '' };
+	if (Math.abs(kwh) >= 10000) return { v: num(kwh / 1000, 1), u: 'МВт·год' };
+	return { v: num(kwh, Math.abs(kwh) >= 1000 ? 0 : digits), u: 'кВт·год' };
+}
+
+/** Година → «08:00» */
+export function hh(h: number): string {
+	return `${String(h).padStart(2, '0')}:00`;
+}
+
+/** Момент «зараз» з бекенду («2026-11-19T13:12+02:00») без перерахунку в часовий пояс браузера */
+export function moment(
+	iso: string | null | undefined
+): { date: string; time: string; hour: number; minute: number } | null {
+	if (!iso) return null;
+	const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+	if (!m) return null;
+	return {
+		date: `${m[3]}.${m[2]}.${m[1]}`,
+		time: `${m[4]}:${m[5]}`,
+		hour: Number(m[4]),
+		minute: Number(m[5])
+	};
+}
+
+const LONG = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' });
+
+/** «2026-11-19» → «19 листопада 2026 р.» */
+export function longDate(iso: string | null | undefined): string {
+	if (!iso) return '—';
+	const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+	if (!m) return iso;
+	return LONG.format(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}

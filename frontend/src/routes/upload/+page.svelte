@@ -90,7 +90,7 @@
 						{/each}
 						<li>Дефектів даних: <strong>{num(result.summary.defects)}</strong> на {num(result.summary.defect_buildings)} будівлях</li>
 					</ul>
-					<p><a href="/">Переглянути огляд</a> · <a href="/rating">Рейтинг</a> · <a href="/defects">Якість даних</a></p>
+					<p><a href="/overview">Переглянути огляд</a> · <a href="/rating">Рейтинг</a> · <a href="/defects">Якість даних</a></p>
 				</div>
 			{/if}
 		</div>

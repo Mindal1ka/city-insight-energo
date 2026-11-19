@@ -98,6 +98,40 @@ async def upload(file: UploadFile):
     return {"ok": True, "kind": kind, "summary": store.summary()}
 
 
+# --- об'єкти з СЕС і добова телеметрія (ДЕМО) ---
+from datetime import date, datetime  # noqa: E402
+
+from .sites import KYIV, Sites  # noqa: E402
+
+sites = Sites(store)
+
+
+def _when(day: str | None, hour: int | None):
+    """?day=YYYY-MM-DD&hour=H — подивитися інший день (наприклад, літній) замість поточного моменту."""
+    if day is None and hour is None:
+        return None
+    try:
+        now = sites._now()
+        d = date.fromisoformat(day) if day else now.date()
+        h = now.hour if hour is None else max(0, min(23, int(hour)))
+        return datetime(d.year, d.month, d.day, h, 0, tzinfo=KYIV)
+    except ValueError:
+        raise HTTPException(400, "Невірна дата (формат РРРР-ММ-ДД)")
+
+
+@app.get("/api/sites")
+def sites_list(day: str | None = None, hour: int | None = None):
+    return sites.listing(_when(day, hour))
+
+
+@app.get("/api/sites/{bid}")
+def site(bid: int, day: str | None = None, hour: int | None = None):
+    for b in store.buildings:
+        if b.id == bid:
+            return sites.detail(b, _when(day, hour))
+    raise HTTPException(404, "Об'єкт не знайдено")
+
+
 # --- модуль СЕС (до SPA-маршруту, інакше catch-all перехопить /api/solar) ---
 from .solar_api import router as solar_router  # noqa: E402
 

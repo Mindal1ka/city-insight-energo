@@ -145,6 +145,127 @@ export interface UploadResult {
 	summary: Summary;
 }
 
+// --- Об'єкти з СЕС і телеметрією (ДЕМО-дані) ---
+
+export type SiteStatus = 'surplus' | 'deficit' | 'no_ses';
+
+export interface SiteTotals {
+	sites: number;
+	with_ses: number;
+	generated_today_kwh: number;
+	consumed_today_kwh: number;
+	surplus_today_kwh: number;
+	deficit_sites: number;
+	surplus_sites: number;
+}
+
+export interface SiteItem {
+	id: number;
+	name: string;
+	address: string;
+	city: string;
+	category_short: string;
+	has_ses: boolean;
+	ses_kw: number | null;
+	status: SiteStatus;
+	balance_kwh_today: number | null;
+	generated_today_kwh: number | null;
+}
+
+export interface SitesResponse {
+	demo: boolean;
+	now: string;
+	totals: SiteTotals;
+	items: SiteItem[];
+}
+
+export interface SiteSes {
+	panels_count: number;
+	panel_w: number;
+	total_kw: number;
+	inverter_model: string;
+	inverter_kw: number;
+	battery_kwh: number;
+	battery_kw: number;
+	connected_kw: number;
+	battery_within_connected: boolean;
+	launched: string;
+	/** «ДЕМО» — змодельовано; «CSV» — з реєстру міста */
+	source?: string;
+}
+
+export interface SiteHour {
+	hour: number;
+	gen_kwh: number;
+	cons_kwh: number;
+	soc_pct: number | null;
+	forecast: boolean;
+}
+
+export interface SiteDistribution {
+	peak_kw: number;
+	peak_hour: number;
+	battery_kwh_now: number | null;
+	battery_soc_pct: number | null;
+	solar_kw_now: number | null;
+	solar_kwh_rest_of_day: number | null;
+	need_kwh_rest_of_day: number;
+	available_kwh: number;
+	balance_kwh: number;
+	enough: boolean;
+	reserve_to_grid_kwh: number;
+}
+
+export interface SiteDetail {
+	demo: boolean;
+	now: string;
+	building: {
+		id: number;
+		name: string;
+		address: string;
+		city: string;
+		category_short: string;
+		heated_area: number | null;
+		floors: number | null;
+		elec_kwh_2025: number | null;
+	};
+	ses: SiteSes | null;
+	today: {
+		date: string;
+		generated_kwh: number;
+		consumed_kwh: number;
+		self_kwh: number;
+		from_grid_kwh: number;
+		to_battery_kwh: number;
+		surplus_kwh: number;
+		peak_kw: number;
+		peak_hour: number;
+	};
+	period: {
+		since: string | null;
+		days: number;
+		generated_kwh: number | null;
+		/** Реальне споживання UMUNI з дати consumed_since */
+		consumed_kwh: number;
+		consumed_since?: string;
+		saved_uah: number | null;
+	};
+	limits: {
+		tariff_uah_kwh: number;
+		money_month_uah: number;
+		money_month_used_uah: number;
+		money_month_pct: number | null;
+		energy_day_kwh: number;
+		energy_day_used_kwh: number;
+		energy_day_pct: number | null;
+		over_money: boolean;
+		over_day: boolean;
+	};
+	distribution: SiteDistribution;
+	hourly: SiteHour[];
+	notes: string[];
+}
+
 /** Помилка запиту з HTTP-статусом і зрозумілим повідомленням */
 export class ApiError extends Error {
 	status: number;
@@ -191,12 +312,28 @@ export function qs(params: Record<string, string | number | null | undefined>): 
 	return s ? `?${s}` : '';
 }
 
+/** Момент, на який показуємо телеметрію: зараз або типовий літній день (для демо) */
+export type ViewKey = 'now' | 'summer';
+
+export const VIEWS: Record<ViewKey, { label: string; day?: string; hour?: number }> = {
+	now: { label: 'Зараз' },
+	summer: { label: 'Літній день', day: '2026-06-05', hour: 13 }
+};
+
+export function viewQs(view?: ViewKey): string {
+	const v = VIEWS[view ?? 'now'];
+	return qs({ day: v.day, hour: v.hour });
+}
+
 export const api = {
 	summary: () => getJSON<Summary>('/api/summary'),
 	buildings: (category?: string) => getJSON<Building[]>('/api/buildings' + qs({ category })),
 	building: (id: string | number) =>
 		getJSON<BuildingFull>(`/api/buildings/${encodeURIComponent(id)}`),
 	defects: () => getJSON<Defect[]>('/api/defects'),
+	sites: (view?: ViewKey) => getJSON<SitesResponse>('/api/sites' + viewQs(view)),
+	site: (id: string | number, view?: ViewKey) =>
+		getJSON<SiteDetail>(`/api/sites/${encodeURIComponent(id)}` + viewQs(view)),
 	solar: (p: { category?: string; tariff?: number | null; capex?: number | null }) =>
 		getJSON<SolarList>('/api/solar' + qs(p)),
 	solarOne: (id: string | number, p: { tariff?: number | null; capex?: number | null }) =>

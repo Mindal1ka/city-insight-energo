@@ -1,235 +1,653 @@
 <script lang="ts">
-	// Сторінка «Огляд»: ключові показники громади, розподіл класів, категорії, джерела даних
-	import { api, errMessage, type Summary } from '#lib/api.ts';
-	import { num, pct, date, dateTime } from '#lib/format.ts';
-	import ClassChart from '#lib/ClassChart.svelte';
+	// «Оберіть об’єкт»: пошук, фільтри, стан кожного об'єкта за сьогодні + розподіл енергії громади
+	import { page } from '$app/state';
+	import { api, errMessage, type SitesResponse, type SiteItem } from '#lib/api.ts';
+	import { auth, greetingName } from '#lib/auth.svelte.ts';
+	import { num, signed, energy } from '#lib/format.ts';
+	import { viewFrom, withView } from '#lib/view.ts';
 	import Status from '#lib/Status.svelte';
+	import StatusTag from '#lib/StatusTag.svelte';
+	import DemoPill from '#lib/DemoPill.svelte';
+	import ViewSwitch from '#lib/ViewSwitch.svelte';
+	import Icon from '#lib/Icon.svelte';
+	import CommunityDistribution from '#lib/CommunityDistribution.svelte';
 
-	let data = $state<Summary | null>(null);
+	const view = $derived(viewFrom(page.url));
+	const tab = $derived(page.url.searchParams.get('tab') === 'distribution' ? 'distribution' : 'list');
+
+	let data = $state<SitesResponse | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 
-	async function load() {
+	let seq = 0;
+	async function load(v = view) {
+		const my = ++seq;
 		loading = true;
 		error = null;
 		try {
-			data = await api.summary();
+			const d = await api.sites(v);
+			if (my === seq) data = d;
 		} catch (e) {
-			error = errMessage(e);
+			if (my === seq) error = errMessage(e);
 		} finally {
-			loading = false;
+			if (my === seq) loading = false;
 		}
 	}
-	load();
-
-	const baseYear = $derived(data?.base_year ? String(data.base_year) : '2025');
-	const base = $derived(data?.years[baseYear]);
-	// Неповні роки (зазвичай поточний 2026)
-	const partialYears = $derived(
-		data ? Object.entries(data.years).filter(([, y]) => y.partial) : []
-	);
-	// Найсвіжіша дата вивантаження серед усіх файлів
-	const updated = $derived.by(() => {
-		if (!data) return null;
-		const dates = [
-			...Object.values(data.years).map((y) => y.created),
-			...data.sources.map((s) => s.created)
-		].filter((d): d is string => !!d);
-		return dates.sort().at(-1) ?? null;
+	$effect(() => {
+		load(view);
 	});
-	const categories = $derived(
-		data ? Object.entries(data.categories).sort((a, b) => b[1].count - a[1].count) : []
+
+	// Фільтри (живуть у стані сторінки)
+	let query = $state('');
+	let category = $state<string>('');
+	let onlySes = $state(false);
+	let sort = $state<'ses' | 'name' | 'balance'>('ses');
+	let limit = $state(60);
+
+	const categories = $derived.by(() => {
+		const m = new Map<string, number>();
+		for (const i of data?.items ?? []) m.set(i.category_short, (m.get(i.category_short) ?? 0) + 1);
+		return [...m.entries()].sort((a, b) => b[1] - a[1]);
+	});
+
+	const norm = (s: string) => s.toLocaleLowerCase('uk').replace(/[’'"«»]/g, '').replace(/\s+/g, ' ');
+
+	const filtered = $derived.by(() => {
+		const q = norm(query.trim());
+		let list = (data?.items ?? []).filter(
+			(i) =>
+				(!category || i.category_short === category) &&
+				(!onlySes || i.has_ses) &&
+				(!q || norm(`${i.name} ${i.address} ${i.city}`).includes(q))
+		);
+		const byName = (a: SiteItem, b: SiteItem) => a.name.localeCompare(b.name, 'uk');
+		if (sort === 'name') list = list.sort(byName);
+		else if (sort === 'balance')
+			list = list.sort(
+				(a, b) => (a.balance_kwh_today ?? Infinity) - (b.balance_kwh_today ?? Infinity) || byName(a, b)
+			);
+		else list = list.sort((a, b) => Number(b.has_ses) - Number(a.has_ses) || byName(a, b));
+		return list;
+	});
+	const shown = $derived(filtered.slice(0, limit));
+
+	// Скидаємо «показати ще», коли змінюються фільтри
+	$effect(() => {
+		void query;
+		void category;
+		void onlySes;
+		void sort;
+		limit = 60;
+	});
+
+	const sesKw = $derived((data?.items ?? []).reduce((a, i) => a + (i.ses_kw ?? 0), 0));
+	const balance = $derived(
+		(data?.items ?? []).reduce((a, i) => a + (i.balance_kwh_today ?? 0), 0)
 	);
+	const gen = $derived(energy(data?.totals.generated_today_kwh));
+	const cover = $derived(
+		data && data.totals.consumed_today_kwh > 0
+			? (data.totals.generated_today_kwh / data.totals.consumed_today_kwh) * 100
+			: null
+	);
+
+	function tabHref(t: 'list' | 'distribution'): string {
+		return withView('/', view, t === 'distribution' ? { tab: 'distribution' } : {});
+	}
+	function reset() {
+		query = '';
+		category = '';
+		onlySes = false;
+	}
 </script>
 
-<svelte:head><title>Огляд · City Insight Map · Енергія</title></svelte:head>
+<svelte:head><title>Об’єкти · City Insight Map · Енергія</title></svelte:head>
 
-<div class="page-head">
+<div class="head">
 	<div>
-		<h1>Огляд енергоспоживання</h1>
-		<p class="lead">
-			Комунальні будівлі громади: скільки споживають тепла, електроенергії й газу та які з них
-			найменш ефективні.
-		</p>
+		{#if auth.user}<p class="hello">Добрий день, {greetingName(auth.user.full_name)}</p>{/if}
+		<h1>Оберіть об’єкт</h1>
+		<p class="lead">Школа, садок, лікарня чи будь-яка інша будівля громади — стан енергії на сьогодні.</p>
 	</div>
-	{#if updated}
-		<p class="muted">Дані оновлено: <strong>{dateTime(updated)}</strong></p>
-	{/if}
+	<div class="head-side">
+		<ViewSwitch now={data?.now ?? null} />
+	</div>
 </div>
 
-<Status {loading} {error} retry={load} />
+<Status loading={loading && !data} {error} retry={() => load()} />
 
-{#if data && !loading}
-	<section aria-labelledby="kpi-h">
-		<h2 id="kpi-h" class="visually-hidden">Ключові показники</h2>
-		<ul class="kpis">
-			<li class="kpi">
-				<span class="kpi-label">Будівель у базі</span>
-				<span class="kpi-value">{num(data.buildings)}</span>
-				<span class="kpi-note">з реєстру та річних звітів UMUNI</span>
-			</li>
-			<li class="kpi">
-				<span class="kpi-label">У рейтингу</span>
-				<span class="kpi-value">{num(data.in_rating)}</span>
-				<span class="kpi-note">
-					ще {num(data.buildings - data.in_rating)} виключено з причиною — <a href="/rating">див. рейтинг</a>
-				</span>
-			</li>
-			<li class="kpi">
-				<span class="kpi-label">Тепло, {baseYear}</span>
-				<span class="kpi-value">{num(base?.heat_gcal)} <span class="kpi-unit">Гкал</span></span>
-				<span class="kpi-note">теплова енергія від мереж</span>
-			</li>
-			<li class="kpi">
-				<span class="kpi-label">Електроенергія, {baseYear}</span>
-				<span class="kpi-value">{num(base?.elec_kwh)} <span class="kpi-unit">кВт·год</span></span>
-				<span class="kpi-note">усі лічильники будівель</span>
-			</li>
-			<li class="kpi">
-				<span class="kpi-label">Газ, {baseYear}</span>
-				<span class="kpi-value">{num(base?.gas_m3)} <span class="kpi-unit">м³</span></span>
-				<span class="kpi-note">природний газ</span>
-			</li>
-			<li class="kpi kpi-warn">
-				<span class="kpi-label">Дефектів даних</span>
-				<span class="kpi-value">{num(data.defects)}</span>
-				<span class="kpi-note">на {num(data.defect_buildings)} будівлях — <a href="/defects">перелік</a></span>
-			</li>
-		</ul>
-		<p class="muted small">
-			Усього енергії за {baseYear}: <strong>{num(base?.total_mwh)} МВт·год</strong> (тепло, електроенергія
-			й газ, перераховані в МВт·год: 1 Гкал = {num(data.coefficients.GCAL_TO_MWH, 3)} МВт·год,
-			1 м³ газу ≈ {num(data.coefficients.GAS_KWH_PER_M3, 1)} кВт·год).
-		</p>
-	</section>
-
-	{#each partialYears as [year, y] (year)}
-		<div class="notice notice-warn">
-			<p>
-				<strong>Дані за {year} рік неповні.</strong> Вивантаження від {date(y.created)} охоплює
-				приблизно {pct(y.coverage)} року. Тому рейтинг і класи рахуються за {baseYear} роком, а
-				{year} показуємо лише для порівняння. Зараз за {year}: тепло {num(y.heat_gcal)} Гкал,
-				електроенергія {num(y.elec_kwh)} кВт·год, газ {num(y.gas_m3)} м³.
+{#if data}
+	<section class="totals" class:stale={loading} aria-label="Підсумки по громаді">
+		<div class="tile">
+			<span class="t-ic navy"><Icon name="building" size={22} /></span>
+			<p class="t-label">Об’єктів</p>
+			<p class="t-val big-num">{num(data.totals.sites)}</p>
+			<p class="t-sub">будівлі громади · дані UMUNI</p>
+		</div>
+		<div class="tile">
+			<span class="t-ic sun"><Icon name="panel" size={22} /></span>
+			<p class="t-label">З СЕС <DemoPill /></p>
+			<p class="t-val big-num">{num(data.totals.with_ses)}</p>
+			<p class="t-sub">сумарно {num(sesKw, 1)} кВт потужності</p>
+		</div>
+		<div class="tile">
+			<span class="t-ic sun"><Icon name="sun" size={22} /></span>
+			<p class="t-label">Згенеровано сьогодні <DemoPill /></p>
+			<p class="t-val big-num">{gen.v}<span class="unit-s">{gen.u}</span></p>
+			<p class="t-sub">
+				{#if cover !== null}покриває {num(cover, 1)} % споживання громади{:else}&nbsp;{/if}
 			</p>
 		</div>
-	{/each}
-
-	<div class="grid-2">
-		<section class="card" aria-labelledby="cls-h">
-			<h2 id="cls-h">Розподіл будівель за класами</h2>
-			<ClassChart counts={data.classes} title="Кількість будівель за умовними класами A–G, {baseYear} рік" />
-		</section>
-
-		<section class="card" aria-labelledby="cat-h">
-			<h2 id="cat-h">Категорії будівель</h2>
-			<div class="table-wrap">
-				<table>
-					<caption>
-						Медіана питомого споживання за {baseYear} рік
-						<span class="muted">(усі види енергії, кВт·год на 1 м² опалюваної площі)</span>
-					</caption>
-					<thead>
-						<tr>
-							<th scope="col">Категорія</th>
-							<th scope="col" class="num">Будівель</th>
-							<th scope="col" class="num">У рейтингу</th>
-							<th scope="col" class="num">Медіана, <span class="unit">кВт·год/м²</span></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each categories as [name, c] (name)}
-							<tr>
-								<th scope="row"><a href="/rating?cat={encodeURIComponent(name)}">{name}</a></th>
-								<td class="num">{num(c.count)}</td>
-								<td class="num">{num(c.in_rating)}</td>
-								<td class="num">{num(c.median_kwh_m2, 1)}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		</section>
-	</div>
-
-	<section class="card sources" aria-labelledby="src-h">
-		<h2 id="src-h">Джерела даних</h2>
-		<p class="muted">
-			Файли-вивантаження з UMUNI, на яких зроблено розрахунок. Щоб оновити — завантажте новий
-			файл на сторінці <a href="/upload">«Оновити дані»</a>.
-		</p>
-		<div class="table-wrap">
-			<table>
-				<caption class="visually-hidden">Файли джерел даних</caption>
-				<thead>
-					<tr>
-						<th scope="col">Файл</th>
-						<th scope="col">Вміст</th>
-						<th scope="col" class="num">Рядків</th>
-						<th scope="col">Дата вивантаження</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.sources as s (s.file)}
-						<tr>
-							<td><code>{s.file}</code></td>
-							<td>{s.kind}</td>
-							<td class="num">{num(s.rows)}</td>
-							<td>{s.created ? dateTime(s.created) : '—'}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+		<div class="tile bal {balance >= 0 ? 'pos' : 'neg'}">
+			<span class="t-ic sign" aria-hidden="true">{balance >= 0 ? '+' : '−'}</span>
+			<p class="t-label">Баланс громади <DemoPill /></p>
+			<p class="t-val big-num">{signed(balance, 0)}<span class="unit-s">кВт·год</span></p>
+			<p class="t-sub">
+				<span class="ok-t">+ {data.totals.surplus_sites} у надлишку</span> ·
+				<span class="bad-t">− {data.totals.deficit_sites} у дефіциті</span>
+			</p>
 		</div>
 	</section>
+
+	<nav class="seg tabs" aria-label="Режим перегляду">
+		<a href={tabHref('list')} aria-current={tab === 'list' ? 'page' : undefined} data-sveltekit-reset="false" data-sveltekit-replacestate>
+			<Icon name="building" size={18} /> Список об’єктів
+		</a>
+		<a href={tabHref('distribution')} aria-current={tab === 'distribution' ? 'page' : undefined} data-sveltekit-reset="false" data-sveltekit-replacestate>
+			<Icon name="bolt" size={18} /> Розподілення енергії громади
+		</a>
+	</nav>
+
+	{#if tab === 'list'}
+		<section class="panel filters" aria-label="Пошук і фільтри">
+			<div class="row1">
+				<div class="search">
+					<label for="q" class="visually-hidden">Пошук за назвою або адресою</label>
+					<Icon name="search" size={20} />
+					<input id="q" type="search" bind:value={query} placeholder="Пошук за назвою або адресою, напр. «ліцей 3»" autocomplete="off" />
+				</div>
+				<label class="switch">
+					<input type="checkbox" role="switch" bind:checked={onlySes} />
+					<span class="track" aria-hidden="true"><span class="knob"></span></span>
+					<span>лише з СЕС</span>
+				</label>
+				<div class="sort">
+					<label for="sort">Сортувати</label>
+					<select id="sort" bind:value={sort}>
+						<option value="ses">спершу з СЕС</option>
+						<option value="balance">за балансом (дефіцит угорі)</option>
+						<option value="name">за назвою</option>
+					</select>
+				</div>
+			</div>
+			<div class="chips" role="group" aria-label="Категорія">
+				<button type="button" class="chip" aria-pressed={category === ''} onclick={() => (category = '')}>
+					Усі <span class="c">{data.items.length}</span>
+				</button>
+				{#each categories as [name, count] (name)}
+					<button type="button" class="chip" aria-pressed={category === name} onclick={() => (category = category === name ? '' : name)}>
+						{name} <span class="c">{count}</span>
+					</button>
+				{/each}
+			</div>
+		</section>
+
+		<p class="found" role="status" aria-live="polite">
+			Знайдено <strong>{num(filtered.length)}</strong>
+			{#if filtered.length !== data.items.length}з {num(data.items.length)}{/if}
+			{#if query || category || onlySes}
+				· <button type="button" class="linkish" onclick={reset}>скинути фільтри</button>
+			{/if}
+		</p>
+
+		{#if filtered.length}
+			<ul class="cards" class:stale={loading}>
+				{#each shown as it (it.id)}
+					<li>
+						<a class="site {it.status}" href={withView(`/object/${it.id}`, view)}>
+							<span class="top">
+								<span class="cat">{it.category_short}</span>
+								{#if it.has_ses}
+									<span class="ses"><Icon name="sun" size={15} stroke={2} /> СЕС {num(it.ses_kw, 1)} кВт</span>
+								{/if}
+							</span>
+							<span class="name" title={it.name}>{it.name}</span>
+							<span class="addr"><Icon name="pin" size={15} />{it.city && !it.address.includes(it.city) ? `${it.city}, ` : ''}{it.address}</span>
+							<span class="bottom">
+								<StatusTag status={it.status} kwh={it.balance_kwh_today} size="sm" />
+								{#if it.generated_today_kwh !== null}
+									<span class="gen tnum"><Icon name="sun" size={14} /> {num(it.generated_today_kwh, 1)} кВт·год</span>
+								{/if}
+							</span>
+						</a>
+					</li>
+				{/each}
+			</ul>
+			{#if filtered.length > limit}
+				<p class="more">
+					<button type="button" class="btn btn-secondary" onclick={() => (limit += 60)}>
+						Показати ще {num(Math.min(60, filtered.length - limit))} з {num(filtered.length - limit)}
+					</button>
+				</p>
+			{/if}
+		{:else}
+			<div class="panel empty">
+				<p><strong>Нічого не знайдено.</strong> Спробуйте іншу назву, номер закладу або вулицю.</p>
+				<button type="button" class="btn btn-secondary" onclick={reset}>Скинути фільтри</button>
+			</div>
+		{/if}
+	{:else}
+		<CommunityDistribution items={data.items} {view} now={data.now} />
+	{/if}
 {/if}
 
 <style>
-	.kpis {
-		list-style: none;
-		padding: 0;
-		margin: 0 0 0.75rem;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-		gap: 1rem;
-	}
-	.kpi {
-		background: var(--surface);
-		border: 1px solid var(--line);
-		border-top: 4px solid var(--accent);
-		border-radius: var(--radius);
-		padding: 0.9rem 1rem;
+	.head {
 		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-		box-shadow: var(--shadow);
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: flex-end;
+		gap: 1rem 2rem;
+		margin-bottom: 1.5rem;
 	}
-	.kpi-warn {
-		border-top-color: var(--warn);
-	}
-	.kpi-label {
-		font-size: 0.875rem;
-		color: var(--muted);
+	.hello {
+		margin: 0 0 0.2rem;
+		color: var(--sun-ink);
 		font-weight: 600;
 	}
-	.kpi-value {
-		font-size: 1.6rem;
-		font-weight: 700;
-		font-variant-numeric: tabular-nums;
-		line-height: 1.2;
+	h1 {
+		font-size: 2.3rem;
+		letter-spacing: -0.02em;
+		margin-bottom: 0.3rem;
 	}
-	.kpi-unit {
+	.lead {
+		margin: 0;
+	}
+	.head-side {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.5rem;
+	}
+	.stale {
+		opacity: 0.55;
+		transition: opacity 0.2s;
+	}
+
+	/* Підсумки */
+	.totals {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 1.25rem;
+		margin-bottom: 1.75rem;
+	}
+	.tile {
+		position: relative;
+		background: var(--surface);
+		border: 1px solid #e3e8ef;
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-md);
+		padding: 1.25rem 1.35rem 1.15rem;
+	}
+	.t-ic {
+		position: absolute;
+		top: 1.15rem;
+		right: 1.15rem;
+		display: grid;
+		place-items: center;
+		width: 2.6rem;
+		height: 2.6rem;
+		border-radius: 12px;
+	}
+	.t-ic.navy {
+		background: #e6eef8;
+		color: var(--navy-3);
+	}
+	.t-ic.sun {
+		background: var(--sun-soft);
+		color: var(--sun-ink);
+	}
+	.t-ic.sign {
+		font-size: 1.9rem;
+		font-weight: 800;
+		color: #fff;
+		line-height: 1;
+		padding-bottom: 0.15rem;
+	}
+	.pos .t-ic.sign {
+		background: var(--surplus);
+	}
+	.neg .t-ic.sign {
+		background: var(--deficit);
+	}
+	.t-label {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.5rem;
+		padding-right: 3.1rem;
+		margin: 0 0 0.35rem;
+		font-weight: 600;
+		color: #3d4857;
+		min-height: 1.6rem;
+	}
+	.t-val {
+		margin: 0;
+		font-size: 2.6rem;
+	}
+	.t-val .unit-s {
+		font-size: 1.15rem;
+	}
+	.pos .t-val {
+		color: var(--surplus-ink);
+	}
+	.neg .t-val {
+		color: var(--deficit-ink);
+	}
+	.t-sub {
+		margin: 0.35rem 0 0;
+		font-size: 0.875rem;
+		color: var(--muted);
+	}
+	.ok-t {
+		color: var(--surplus-ink);
+		font-weight: 600;
+	}
+	.bad-t {
+		color: var(--deficit-ink);
+		font-weight: 600;
+	}
+
+	.tabs {
+		margin-bottom: 1.25rem;
+	}
+
+	/* Фільтри */
+	.filters {
+		padding: 1rem 1.25rem;
+		margin-bottom: 0.9rem;
+	}
+	.row1 {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem 1.5rem;
+		margin-bottom: 0.9rem;
+	}
+	.search {
+		flex: 1 1 24rem;
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+	.search :global(.icon) {
+		position: absolute;
+		left: 0.9rem;
+		color: var(--muted);
+		pointer-events: none;
+	}
+	.search input {
+		width: 100%;
+		min-height: 48px;
+		padding-left: 2.75rem;
+		font-size: 1.05rem;
+		border-radius: 12px;
+		background: #f7f9fc;
+	}
+	.search input:focus-visible {
+		background: #fff;
+	}
+	.switch {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
 		font-size: 0.95rem;
+		cursor: pointer;
+		user-select: none;
+	}
+	.switch input {
+		position: absolute;
+		opacity: 0;
+		width: 1px;
+		height: 1px;
+	}
+	.track {
+		position: relative;
+		width: 2.75rem;
+		height: 1.6rem;
+		border-radius: 999px;
+		background: #c3ccd7;
+		transition: background 0.2s;
+	}
+	.knob {
+		position: absolute;
+		top: 0.2rem;
+		left: 0.2rem;
+		width: 1.2rem;
+		height: 1.2rem;
+		border-radius: 50%;
+		background: #fff;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+		transition: transform 0.2s var(--ease);
+	}
+	.switch input:checked + .track {
+		background: var(--sun-strong);
+	}
+	.switch input:checked + .track .knob {
+		transform: translateX(1.15rem);
+	}
+	.switch input:focus-visible + .track {
+		outline: 3px solid var(--focus);
+		outline-offset: 2px;
+		box-shadow: 0 0 0 5px var(--text);
+	}
+	.sort {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.sort label {
 		font-weight: 500;
 		color: var(--muted);
 	}
-	.kpi-note {
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.4rem 0.85rem;
+		min-height: 38px;
+		border-radius: 999px;
+		border: 1px solid #cfd7e1;
+		background: #fff;
+		color: #2b3645;
+		font: inherit;
+		font-size: 0.925rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s;
+	}
+	.chip:hover {
+		border-color: var(--navy-3);
+		background: #f3f6fa;
+	}
+	.chip[aria-pressed='true'] {
+		background: var(--navy);
+		border-color: var(--navy);
+		color: #fff;
+	}
+	.chip .c {
+		font-size: 0.8rem;
+		font-weight: 700;
+		padding: 0 0.45rem;
+		border-radius: 999px;
+		background: #edf1f5;
+		color: #3d4857;
+	}
+	.chip[aria-pressed='true'] .c {
+		background: rgba(255, 255, 255, 0.18);
+		color: #fff;
+	}
+	.found {
+		margin: 0 0 0.9rem;
+		color: var(--muted);
+	}
+	.linkish {
+		background: none;
+		border: 0;
+		padding: 0;
+		font: inherit;
+		color: var(--accent);
+		text-decoration: underline;
+		cursor: pointer;
+	}
+
+	/* Картки об'єктів */
+	.cards {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+		gap: 1rem;
+		transition: opacity 0.2s;
+	}
+	.site {
+		position: relative;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+		padding: 1rem 1.1rem 1rem 1.3rem;
+		background: var(--surface);
+		border: 1px solid #e3e8ef;
+		border-radius: 14px;
+		box-shadow: var(--shadow);
+		color: var(--text);
+		text-decoration: none;
+		overflow: hidden;
+		transition:
+			transform 0.18s var(--ease),
+			box-shadow 0.18s var(--ease),
+			border-color 0.18s;
+	}
+	.site::before {
+		content: '';
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: 5px;
+		background: #d6dce4;
+	}
+	.site.surplus::before {
+		background: var(--surplus);
+	}
+	.site.deficit::before {
+		background: var(--deficit);
+	}
+	.site:hover {
+		color: var(--text);
+		border-color: #c8d2de;
+		box-shadow: var(--shadow-lg);
+		transform: translateY(-2px);
+	}
+	.site:focus-visible {
+		border-radius: 14px;
+	}
+	.top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.cat {
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.ses {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.12rem 0.55rem;
+		border-radius: 999px;
+		background: var(--sun-soft);
+		color: var(--sun-ink);
+		font-size: 0.8125rem;
+		font-weight: 700;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+	}
+	.name {
+		font-size: 1.05rem;
+		font-weight: 650;
+		line-height: 1.3;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.addr {
+		display: flex;
+		gap: 0.35rem;
+		align-items: flex-start;
+		font-size: 0.875rem;
+		color: var(--muted);
+		line-height: 1.35;
+	}
+	.addr :global(.icon) {
+		margin-top: 0.05rem;
+	}
+	.bottom {
+		margin-top: auto;
+		padding-top: 0.5rem;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.gen {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 		font-size: 0.8125rem;
 		color: var(--muted);
 	}
-	.sources {
+	.more {
+		text-align: center;
 		margin-top: 1.25rem;
 	}
-	code {
-		font-size: 0.875rem;
+	.empty p {
+		margin-bottom: 0.75rem;
+	}
+
+	@media (max-width: 1200px) {
+		.totals {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (max-width: 560px) {
+		.totals {
+			grid-template-columns: 1fr;
+		}
+		h1 {
+			font-size: 1.8rem;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.site,
+		.site:hover {
+			transition: none;
+			transform: none;
+		}
 	}
 </style>

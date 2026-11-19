@@ -17,8 +17,30 @@
 	--bad: #a3201c;
 	--bad-soft: #fbe9e8;
 	--focus: #ffbf47;
-	--radius: 8px;
-	--shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+	--radius: 12px;
+	--radius-lg: 16px;
+	--shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.04);
+	--shadow-md: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 18px -6px rgba(16, 24, 40, 0.12);
+	--shadow-lg: 0 2px 4px rgba(16, 24, 40, 0.04), 0 16px 36px -12px rgba(16, 24, 40, 0.22);
+
+	/* Основна палітра енергетичного дашборду */
+	--navy: #0f2f52;
+	--navy-2: #163d68;
+	--navy-3: #1f4f84;
+	--navy-ink: #c9d6e6;
+	--sun: #f5a524; /* сонячний бурштин — лише для заливок і декору */
+	--sun-strong: #e08a00;
+	--sun-ink: #8a4f00; /* бурштиновий текст, 6:1 на білому */
+	--sun-soft: #fff4dc;
+	--surplus: #1a7f37; /* надлишок, 5.3:1 на білому */
+	--surplus-ink: #14632b;
+	--surplus-soft: #e3f4e8;
+	--deficit: #c2410c; /* дефіцит, 5.2:1 на білому */
+	--deficit-ink: #9a330a;
+	--deficit-soft: #fdebe2;
+	--cons: #1f4f84; /* споживання на графіках */
+	--neutral-soft: #eef2f6;
+	--ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 	--font:
 		'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
 
@@ -43,6 +65,12 @@
 
 html {
 	-webkit-text-size-adjust: 100%;
+}
+
+@media (min-width: 1600px) {
+	html {
+		font-size: 17px;
+	}
 }
 
 body {
@@ -121,7 +149,7 @@ a:hover {
 /* --- Картки й сітка --- */
 .card {
 	background: var(--surface);
-	border: 1px solid var(--line);
+	border: 1px solid #e3e8ef;
 	border-radius: var(--radius);
 	padding: 1.25rem;
 	box-shadow: var(--shadow);
@@ -220,7 +248,7 @@ td.num {
 	align-items: center;
 	gap: 0.4rem;
 	padding: 0.5rem 1rem;
-	border-radius: 6px;
+	border-radius: 10px;
 	border: 1px solid var(--accent);
 	background: var(--accent);
 	color: #fff;
@@ -258,7 +286,7 @@ select {
 	font: inherit;
 	padding: 0.45rem 0.6rem;
 	border: 1px solid var(--line-strong);
-	border-radius: 6px;
+	border-radius: 10px;
 	background: #fff;
 	color: var(--text);
 	min-height: 40px;
@@ -389,4 +417,97 @@ details > summary {
 /* Колонка з назвою будівлі не повинна стискатися до кількох слів */
 td.name {
 	min-width: 16rem;
+}
+
+/* --- Спільні елементи основного сценарію --- */
+.tnum {
+	font-variant-numeric: tabular-nums;
+}
+.big-num {
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.05;
+}
+.unit-s {
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--muted);
+	letter-spacing: 0;
+	margin-left: 0.2em;
+}
+.eyebrow {
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.panel {
+	background: var(--surface);
+	border: 1px solid #e3e8ef;
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-md);
+	padding: 1.5rem;
+}
+.panel-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem 1rem;
+	margin-bottom: 1rem;
+}
+.panel-head h2,
+.panel-head h3 {
+	margin: 0;
+}
+.seg {
+	display: inline-flex;
+	padding: 4px;
+	gap: 4px;
+	border-radius: 12px;
+	background: #e8edf3;
+	border: 1px solid #dbe2ea;
+}
+.seg a,
+.seg button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	padding: 0.5rem 1rem;
+	border-radius: 9px;
+	border: 0;
+	background: transparent;
+	color: #2b3645;
+	font: inherit;
+	font-weight: 600;
+	text-decoration: none;
+	cursor: pointer;
+	transition:
+		background 0.15s,
+		box-shadow 0.15s,
+		color 0.15s;
+}
+.seg a:hover,
+.seg button:hover {
+	color: var(--text);
+	background: rgba(255, 255, 255, 0.6);
+}
+.seg [aria-current='page'],
+.seg [aria-selected='true'] {
+	background: #fff;
+	color: var(--navy);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.15);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.fade-in {
+		animation: fade-in 0.35s var(--ease) both;
+	}
+	@keyframes fade-in {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+	}
 }
