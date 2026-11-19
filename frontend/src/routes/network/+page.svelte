@@ -42,7 +42,7 @@
 	const unit = $derived(period === 'year' ? 'рік' : period === 'month' ? 'місяць' : 'доба');
 </script>
 
-<svelte:head><title>Баланс мережі закладів · City Insight Map · Енергія</title></svelte:head>
+<svelte:head><title>Баланс мережі закладів · Insight Tool</title></svelte:head>
 
 <header class="page-head">
 	<h1>Баланс мережі закладів</h1>

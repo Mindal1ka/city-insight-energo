@@ -6,10 +6,9 @@
 	import { tick } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { auth, logout, initials, verifySession } from '#lib/auth.svelte.ts';
-	import { isInternal, canUpload, roleLabel } from '#lib/roles.ts';
+	import { isCityWide, isInternal, canUpload, roleLabel } from '#lib/roles.ts';
 	import { isReduced, scaleIn, cubicOut } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
-	import Term from '#lib/Term.svelte';
 	import CommandPalette from '#lib/CommandPalette.svelte';
 	import type { LayoutProps } from './$types';
 
@@ -17,20 +16,22 @@
 
 	const isLogin = $derived(page.url.pathname === '/login');
 
-	// Без входу — публічний перегляд: сторінки самі вирішують, що показувати
 	const chip = $derived(roleLabel(auth.user));
-	const loginHref = $derived.by(() => {
+
+	// Шлюз входу: без користувача доступна лише /login
+	$effect(() => {
+		if (auth.user || isLogin) return;
 		const back = page.url.pathname + page.url.search;
-		return '/login' + (back !== '/' && !isLogin ? `?next=${encodeURIComponent(back)}` : '');
+		goto('/login' + (back !== '/' ? `?next=${encodeURIComponent(back)}` : ''), { replace: true, reset: false });
 	});
 
-	// Збережений токен перевіряємо один раз (прострочений → публічний режим)
+	// Збережений токен перевіряємо один раз (прострочений → вихід → /login)
 	verifySession();
 
 	function signOut() {
 		logout();
 		closeSheet(false);
-		goto('/', { reset: false });
+		goto('/login', { replace: true, reset: false });
 	}
 
 	// --- Плавні переходи між сторінками (View Transitions API). Шапка лишається на місці. ---
@@ -58,18 +59,24 @@
 	const tabs = primary;
 
 	// Аналітика: частина пунктів — лише для службових ролей
-	type Analytic = { href: string; label: string; only?: 'internal' | 'upload' };
+	type Analytic = { href: string; label: string; only?: 'internal' | 'upload' | 'citywide' };
 	const ANALYTICS: Analytic[] = [
 		{ href: '/network', label: 'Баланс мережі' },
 		{ href: '/report', label: 'Звіт за місяць' },
 		{ href: '/appeals', label: 'Звернення', only: 'internal' },
 		{ href: '/overview', label: 'Споживання' },
-		{ href: '/rating', label: 'Індекс ефективності' },
+		{ href: '/blackout', label: 'Блекаут', only: 'citywide' },
 		{ href: '/upload', label: 'Оновити дані', only: 'upload' }
 	];
 	const analytics = $derived(
 		ANALYTICS.filter((a) =>
-			!a.only ? true : a.only === 'internal' ? isInternal(auth.user) : canUpload(auth.user)
+			!a.only
+				? true
+				: a.only === 'internal'
+					? isInternal(auth.user)
+					: a.only === 'citywide'
+						? isCityWide(auth.user)
+						: canUpload(auth.user)
 		)
 	);
 
@@ -77,7 +84,6 @@
 		const p = page.url.pathname;
 		if (href === '/') return p === '/' || p === '/map';
 		if (href === '/objects') return p.startsWith('/objects') || p.startsWith('/object/');
-		if (href === '/rating' && p.startsWith('/building/')) return true;
 		return p === href || p.startsWith(href + '/');
 	}
 	const analyticsActive = $derived(analytics.find((a) => isActive(a.href)) ?? null);
@@ -312,7 +318,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>City Insight Map · Енергія</title>
+	<title>Insight Tool</title>
 </svelte:head>
 
 <svelte:window onkeydown={globalKey} onpointerdown={globalDown} />
@@ -325,7 +331,7 @@
 
 {#if isLogin}
 	{@render children()}
-{:else}
+{:else if auth.user}
 	<a class="skip no-print" href="#main">Перейти до змісту</a>
 
 	<header class="site-header no-print">
@@ -334,8 +340,8 @@
 			<a class="brand" href="/">
 				<span class="logo" aria-hidden="true"><Icon name="bolt" size={20} stroke={2.2} /></span>
 				<span class="brand-txt">
-					<span class="brand-name">City Insight Map <span class="brand-dot">·</span> Енергія</span>
-					<span class="brand-short" aria-hidden="true">Енергія</span>
+					<span class="brand-name">Insight Tool</span>
+					<span class="brand-short" aria-hidden="true">Insight Tool</span>
 					<span class="brand-sub">Полтавська громада</span>
 				</span>
 			</a>
@@ -414,38 +420,26 @@
 			</div>
 
 			<div class="user">
-				{#if auth.user}
-					<span class="avatar" aria-hidden="true" title="{auth.user.full_name} · {auth.user.position}">{initials(auth.user.full_name)}</span>
-					<span class="who">
-						<span class="user-name" title={auth.user.position}>{auth.user.full_name}</span>
-						<span class="role-chip">{chip}</span>
-					</span>
-					<button type="button" class="out" onclick={signOut} title="Вийти" aria-label="Вийти">
-						<Icon name="logout" size={18} /> <span class="out-txt">Вийти</span>
-					</button>
-				{:else}
-					<span class="role-chip pub"><Icon name="users" size={14} /> {chip}</span>
-					<a class="in-btn" href={loginHref}><Icon name="lock" size={16} /> Увійти</a>
-				{/if}
+				<span class="avatar" aria-hidden="true" title="{auth.user.full_name} · {auth.user.position}">{initials(auth.user.full_name)}</span>
+				<span class="who">
+					<span class="user-name" title={auth.user.position}>{auth.user.full_name}</span>
+					<span class="role-chip">{chip}</span>
+				</span>
+				<button type="button" class="out" onclick={signOut} title="Вийти" aria-label="Вийти">
+					<Icon name="logout" size={18} /> <span class="out-txt">Вийти</span>
+				</button>
 			</div>
 
-			{#if !auth.user}
-				<a class="in-mob" href={loginHref} aria-label="Увійти">Увійти</a>
-			{/if}
 			<button
 				type="button"
 				class="me-btn"
 				aria-haspopup="dialog"
 				aria-expanded={sheetOpen}
 				aria-controls="m-sheet"
-				aria-label={auth.user ? `Профіль і меню: ${auth.user.full_name}` : 'Меню'}
+				aria-label="Профіль і меню: {auth.user.full_name}"
 				onclick={openSheet}
 			>
-				{#if auth.user}
-					<span class="avatar" aria-hidden="true">{initials(auth.user.full_name)}</span>
-				{:else}
-					<span class="avatar pub" aria-hidden="true"><Icon name="users" size={17} /></span>
-				{/if}
+				<span class="avatar" aria-hidden="true">{initials(auth.user.full_name)}</span>
 			</button>
 
 			<button
@@ -584,19 +578,11 @@
 			>
 				<span class="sheet-grab" aria-hidden="true"></span>
 				<div class="sheet-head">
-					{#if auth.user}
-						<span class="avatar lg" aria-hidden="true">{initials(auth.user.full_name)}</span>
-						<span class="sheet-who">
-							<span class="sheet-name" id="m-sheet-title">{auth.user.full_name}</span>
-							<span class="sheet-role">{chip}</span>
-						</span>
-					{:else}
-						<span class="avatar lg pub" aria-hidden="true"><Icon name="users" size={20} /></span>
-						<span class="sheet-who">
-							<span class="sheet-name" id="m-sheet-title">{chip}</span>
-							<span class="sheet-role">Без входу</span>
-						</span>
-					{/if}
+					<span class="avatar lg" aria-hidden="true">{initials(auth.user.full_name)}</span>
+					<span class="sheet-who">
+						<span class="sheet-name" id="m-sheet-title">{auth.user.full_name}</span>
+						<span class="sheet-role">{chip}</span>
+					</span>
 					<button type="button" class="sheet-close" aria-label="Закрити меню" onclick={() => closeSheet()}>
 						<svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true"><path d="m3 3 8 8m0-8-8 8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
 					</button>
@@ -622,13 +608,9 @@
 					<button type="button" class="sheet-btn" onclick={helpFromSheet}>
 						<span class="sb-q" aria-hidden="true">?</span> Як користуватися
 					</button>
-					{#if auth.user}
-						<button type="button" class="sheet-btn out-m" onclick={signOut}>
-							<Icon name="logout" size={18} /> Вийти
-						</button>
-					{:else}
-						<a class="sheet-btn in-m" href={loginHref}><Icon name="lock" size={18} /> Увійти</a>
-					{/if}
+					<button type="button" class="sheet-btn out-m" onclick={signOut}>
+						<Icon name="logout" size={18} /> Вийти
+					</button>
 				</div>
 			</div>
 		</div>
@@ -637,14 +619,6 @@
 	<main id="main" class="wrap" tabindex="-1">
 		{@render children()}
 	</main>
-
-	<footer class="site-footer">
-		<div class="wrap foot-row">
-			<p>
-				Дані <Term key="UMUNI" /> · СЕС — <Term key="ДЕМО-ДАНІ">ДЕМО</Term><span class="no-print"> · Poltava Open Data Hackathon</span>
-			</p>
-		</div>
-	</footer>
 {/if}
 
 <style>
@@ -753,9 +727,6 @@
 		letter-spacing: -0.005em;
 		white-space: nowrap;
 		line-height: 1.2;
-	}
-	.brand-dot {
-		color: var(--sun);
 	}
 	.brand-sub {
 		font-size: 0.8125rem;
@@ -1071,51 +1042,6 @@
 		text-overflow: ellipsis;
 		max-width: 16rem;
 	}
-	.role-chip.pub {
-		margin-top: 0;
-		align-self: center;
-		padding: 0.2rem 0.65rem;
-		background: rgba(255, 255, 255, 0.08);
-		border-color: rgba(255, 255, 255, 0.22);
-		color: #dfe7f1;
-		font-size: 0.8rem;
-	}
-	.in-btn,
-	.in-mob {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		min-height: 42px;
-		padding: 0.45rem 0.95rem;
-		border-radius: 11px;
-		border: 1px solid #d98c0b;
-		background: linear-gradient(180deg, #ffc54d, var(--sun));
-		color: #2a1900;
-		font-weight: 700;
-		font-size: 0.9rem;
-		text-decoration: none;
-		white-space: nowrap;
-		flex: none;
-		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 8px 20px -12px rgba(245, 165, 36, 0.9);
-		transition:
-			transform var(--dur-base) var(--ease-out),
-			filter var(--dur-fast);
-	}
-	.in-btn:hover,
-	.in-mob:hover {
-		text-decoration: none;
-		color: #2a1900;
-		filter: brightness(1.05);
-		transform: translateY(-1px);
-	}
-	.in-mob {
-		display: none;
-	}
-	.avatar.pub {
-		background: rgba(255, 255, 255, 0.1);
-		box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35);
-		color: #dfe7f1;
-	}
 	.out,
 	.burger {
 		display: inline-flex;
@@ -1338,22 +1264,6 @@
 	}
 	main:focus {
 		outline: none;
-	}
-	.site-footer {
-		border-top: 1px solid var(--line-soft);
-		background: rgba(255, 255, 255, 0.7);
-		padding: 1.1rem 0;
-		font-size: 0.875rem;
-		color: var(--text-2);
-	}
-	.foot-row {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
-		gap: 0.25rem 2rem;
-	}
-	.site-footer p {
-		margin: 0.2rem 0;
 	}
 
 	@media (max-width: 1280px) {
@@ -1595,12 +1505,6 @@
 			font-size: 0.8rem;
 			display: grid;
 		}
-		.in-mob {
-			display: inline-flex;
-			min-height: 38px;
-			padding: 0.3rem 0.8rem;
-			font-size: 0.875rem;
-		}
 		/* Тур: аркуш над нижньою панеллю (видно підсвічені вкладки) */
 		.help-pop {
 			position: fixed;
@@ -1631,11 +1535,7 @@
 
 		main {
 			padding-top: 1rem;
-			padding-bottom: 1.5rem;
-		}
-		.site-footer {
-			padding-bottom: calc(1rem + var(--tabbar-h, 64px));
-			font-size: 0.8125rem;
+			padding-bottom: calc(1.5rem + var(--tabbar-h, 64px));
 		}
 
 		/* --- Нижня панель вкладок --- */
@@ -1927,17 +1827,6 @@
 			font-size: 0.8rem;
 			font-weight: 700;
 		}
-		.in-m {
-			color: #2a1900;
-			text-decoration: none;
-			border-color: #d98c0b;
-			background: linear-gradient(180deg, #ffc54d, var(--sun));
-		}
-		.avatar.lg.pub {
-			background: var(--neutral-soft);
-			color: var(--navy);
-			box-shadow: none;
-		}
 		.out-m {
 			color: var(--bad);
 			border-color: color-mix(in srgb, var(--bad) 30%, var(--line));
@@ -1951,9 +1840,6 @@
 	}
 
 	@media print {
-		.site-footer {
-			border-top: 1px solid #999;
-		}
 		main {
 			view-transition-name: none;
 		}

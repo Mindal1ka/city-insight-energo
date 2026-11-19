@@ -8,6 +8,8 @@
 	import { goto } from '$app/navigation';
 	import SesMap from '#lib/SesMap.svelte';
 	import SesFilters from '#lib/SesFilters.svelte';
+	import ZonePanel from '#lib/ZonePanel.svelte';
+	import { fetchZones, type Zones } from '#lib/api-v2.ts';
 	import KBadge from '#lib/KBadge.svelte';
 	import CategoryIcon from '#lib/CategoryIcon.svelte';
 	import { catLabel } from '#lib/categories.ts';
@@ -15,7 +17,7 @@
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
 	import { isReduced } from '#lib/motion.ts';
-	import { matchExtra, seasonDay, SEASONS, kwhMonth, effText, type Season, type EffClass } from '#lib/ses-extra.ts';
+	import { matchExtra, seasonDay, SEASONS, kwhMonth, type Season } from '#lib/ses-extra.ts';
 	import {
 		fetchSes,
 		filterItems,
@@ -35,8 +37,10 @@
 	let department = $state(page.url.searchParams.get('department') ?? '');
 	let need = $state(false);
 	let season = $state<Season | null>(null);
-	let eff = $state<EffClass | null>(null);
 	let data = $state<SesList | null>(null);
+	let showZones = $state(true);
+	let zonesData = $state<Zones | null>(null);
+	let zoneId = $state<number | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 	let selectedId = $state<number | null>(Number(page.url.searchParams.get('id')) || null);
@@ -44,10 +48,13 @@
 	const restricted = $derived(!!data?.restricted);
 	const items = $derived(data?.items ?? []);
 	const shown = $derived(
-		filterItems(items, { classes: restricted ? [] : classes, types, q }).filter((i) => matchExtra(i, { department, need, eff }))
+		filterItems(items, { classes: restricted ? [] : classes, types, q }).filter((i) => matchExtra(i, { department, need }))
 	);
 	const selected = $derived(items.find((i) => i.id === selectedId) ?? null);
 	const t = $derived(data?.totals);
+	const zones = $derived(zonesData?.items ?? []);
+	const zone = $derived(zones.find((z) => z.id === zoneId) ?? null);
+	const zt = $derived(zonesData?.totals);
 
 	let reqId = 0;
 	async function load(p: Period, s: Season | null) {
@@ -65,9 +72,22 @@
 		}
 	}
 
+	let zReq = 0;
+	async function loadZones(p: Period, s: Season | null) {
+		const my = ++zReq;
+		try {
+			const day = seasonDay(s);
+			const z = day ? await fetchZones('month', day) : await fetchZones(p === 'year' ? 'month' : p);
+			if (my === zReq) zonesData = z;
+		} catch {
+			if (my === zReq) zonesData = null; // зони недоступні (права) — просто без шару
+		}
+	}
+
 	$effect(() => {
 		void auth.user?.token; // перезавантажити після входу / виходу
 		load(period, season);
+		loadZones(period, season);
 	});
 
 	// Стан у URL (щоб «Назад» з картки об'єкта повертав до того самого місця)
@@ -121,13 +141,19 @@
 	let topH = $state(0);
 	async function select(id: number | null) {
 		selectedId = id;
+		if (id != null) zoneId = null;
 		if (id != null) {
 			await tick();
 			cardEl?.focus({ preventScroll: true });
 		}
 	}
+	function pickZone(id: number | null) {
+		zoneId = id;
+		if (id != null) selectedId = null;
+	}
 	function onKey(e: KeyboardEvent) {
-		if (e.key === 'Escape' && selectedId != null) select(null);
+		if (e.key === 'Escape' && zoneId != null) zoneId = null;
+		else if (e.key === 'Escape' && selectedId != null) select(null);
 	}
 	function firstHit() {
 		const f = shown.find((i) => i.lat != null);
@@ -169,6 +195,10 @@
 			onselect={select}
 			waveKey={period + (season ?? '') + (restricted ? 'r' : '')}
 			padBottom={phone && selected ? cardH - topH : 0}
+			{zones}
+			{showZones}
+			selectedZoneId={zoneId}
+			onzone={pickZone}
 		/>
 	{/if}
 
@@ -196,7 +226,7 @@
 		{/if}
 
 		<div class="bar">
-			<SesFilters {items} bind:period bind:classes bind:types bind:q bind:department bind:need bind:season bind:eff {restricted} onenter={firstHit} />
+			<SesFilters {items} bind:period bind:classes bind:types bind:q bind:department bind:need bind:season {restricted} onenter={firstHit} />
 			<div class="meta">
 				{#if restricted}
 					<a class="lock" href="/login?next=/"
@@ -213,6 +243,16 @@
 				{#if data?.demo || data?.mock}<span class="demo" title={data?.mock ? 'Тимчасовий макет: K випадкові' : 'Реєстр СЕС — демо-дані'}>ДЕМО</span>{/if}
 				<span class="cnt"><b>{shown.length}</b> з {items.length} · {shown.length - unmapped} на мапі{#if unmapped}&nbsp;· {unmapped} без адреси{/if}</span>
 				<a class="lst" href="/objects">Список →</a>
+			</div>
+			<div class="zrow">
+				<button type="button" class="ztog" class:on={showZones} aria-pressed={showZones} onclick={() => ((showZones = !showZones), !showZones && (zoneId = null))}
+					><span class="zdot" aria-hidden="true"></span>Зони</button
+				>
+				{#if zt && showZones}
+					<span class="zsum" title="Зон · з надлишком для сусідів · кВт·год"
+						>Зон: <b>{zt.zones}</b> · з надлишком для сусідів: <b>{zt.with_share ?? 0}</b> · <b>{kwh(zt.shareable_kwh)}</b></span
+					>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -234,6 +274,10 @@
 		<div class="state err" role="alert">
 			{error}<button type="button" onclick={() => load(period, season)}>Повторити</button>
 		</div>
+	{/if}
+
+	{#if zone && showZones}
+		{#key zone.id}<ZonePanel {zone} onclose={() => (zoneId = null)} />{/key}
 	{/if}
 
 	<!-- Картка об'єкта -->
@@ -266,7 +310,6 @@
 				<dl class="more">
 					{#if selected.department}<div><dt>Розпорядник</dt><dd>{selected.department}</dd></div>{/if}
 					{#if selected.cons_kwh_month_avg != null}<div><dt>Споживання</dt><dd>≈ {kwhMonth(selected.cons_kwh_month_avg)} кВт·год/міс</dd></div>{/if}
-					{#if selected.eff_index != null}<div><dt>Індекс ефективності</dt><dd>{effText(selected.eff_index)}</dd></div>{/if}
 				</dl>
 				<p class="per">{periodWord}</p>
 				<a class="open" href="/object/{selected.id}">Детальніше <span aria-hidden="true">→</span></a>
@@ -392,6 +435,45 @@
 		color: #4f5b6b;
 		padding: 0 4px;
 		flex-wrap: wrap;
+	}
+	.zrow {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 0 4px;
+		font-size: 0.78rem;
+		color: #4f5b6b;
+		flex-wrap: wrap;
+	}
+	.ztog {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid #dfe5ec;
+		background: #fff;
+		border-radius: 999px;
+		padding: 4px 12px;
+		font: inherit;
+		font-weight: 600;
+		color: #1a2433;
+		cursor: pointer;
+	}
+	.ztog.on {
+		background: #e3eefb;
+		border-color: #1f6fd1;
+	}
+	.zdot {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		border: 2px solid #1f6fd1;
+		background: rgba(31, 111, 209, 0.18);
+	}
+	.zsum {
+		font-variant-numeric: tabular-nums;
+	}
+	.zsum b {
+		color: #0f1b2d;
 	}
 	.cnt {
 		margin-left: auto;

@@ -1,8 +1,8 @@
-// Вхід і поточний користувач. Без входу застосунок працює в публічному режимі (роль public).
+// Вхід і поточний користувач. Без входу застосунок недоступний (лише /login).
 // Токен бекенду (HMAC) і користувач живуть лише в sessionStorage вкладки.
 // Використання: import { auth, currentRole } from '#lib/auth.svelte.ts'; auth.user?.role
 
-import { ROLES, roleName, type RoleId, type RoleInfo, type Department } from './roles.ts';
+import { roleName, type RoleId, type Department } from './roles.ts';
 
 export interface User {
 	full_name: string;
@@ -15,15 +15,9 @@ export interface User {
 }
 
 export interface LoginInput {
-	full_name: string;
-	position: string;
-	role: RoleId;
-	building_id?: number | null;
-	department?: Department | null;
+	login: string;
 	password: string;
 }
-
-export const DEFAULT_POSITION = 'Головний фахівець з енергоменеджменту';
 
 const KEY = 'energo.user';
 
@@ -57,12 +51,12 @@ function read(): User | null {
 
 export const auth = $state<{ user: User | null }>({ user: read() });
 
-/** Роль поточного відвідувача; без входу — 'public' */
+/** Роль поточного користувача; без входу — 'public' (лише службове значення) */
 export function currentRole(): RoleId {
 	return auth.user?.role ?? 'public';
 }
 
-/** Токен для заголовка Authorization (або null у публічному режимі) */
+/** Токен для заголовка Authorization (або null без входу) */
 export function authToken(): string | null {
 	return auth.user?.token ?? null;
 }
@@ -99,21 +93,6 @@ function missing(res: Response): boolean {
 	return res.status === 404 || res.status === 405 || !(res.headers.get('content-type') ?? '').includes('json');
 }
 
-/** Список ролей для форми входу; поки бекенд не готовий — локальний запасний список */
-export async function fetchRoles(): Promise<RoleInfo[]> {
-	try {
-		const res = await fetch('/api/auth/roles', { headers: { Accept: 'application/json' } });
-		if (res.ok && !missing(res)) {
-			const list = (await res.json()) as RoleInfo[];
-			const nonPublic = list.filter((r) => r.id !== 'public');
-			if (nonPublic.length) return nonPublic;
-		}
-	} catch {
-		/* сервер недоступний — запасний список */
-	}
-	return ROLES;
-}
-
 /** POST /api/auth/login → токен + користувач. Кидає LoginError з людським текстом. */
 export async function login(input: LoginInput): Promise<User> {
 	let res: Response;
@@ -121,18 +100,10 @@ export async function login(input: LoginInput): Promise<User> {
 		res = await fetch('/api/auth/login', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-			body: JSON.stringify(input)
+			body: JSON.stringify({ login: input.login, password: input.password })
 		});
 	} catch {
 		throw new LoginError(0, 'Сервер недоступний. Спробуйте ще раз за хвилину.');
-	}
-
-	// Режим розробки: бекенд-автентифікації ще немає — локальний вхід без токена
-	if (import.meta.env.DEV && missing(res)) {
-		console.warn('[auth] /api/auth/login ще не реалізовано — локальний DEV-вхід без токена');
-		const u = normalize({ ...input, role_name: roleName(input.role) }, null)!;
-		save(u, { mock: true });
-		return u;
 	}
 
 	if (!res.ok) {
@@ -143,9 +114,9 @@ export async function login(input: LoginInput): Promise<User> {
 		} catch {
 			/* не JSON */
 		}
-		if (res.status === 401 || res.status === 403) throw new LoginError(res.status, detail || 'Невірний пароль');
+		if (res.status === 401 || res.status === 403) throw new LoginError(res.status, detail || 'Невірний логін або пароль');
 		if (res.status === 429) throw new LoginError(429, detail || 'Забагато спроб. Зачекайте хвилину.');
-		if (res.status === 422 && !detail) throw new LoginError(422, 'Перевірте заповнені поля');
+		if (res.status === 422 && !detail) throw new LoginError(422, 'Введіть логін і пароль');
 		throw new LoginError(res.status, detail || `Не вдалося увійти (помилка ${res.status})`);
 	}
 	const body = (await res.json()) as { token: string; user: Record<string, unknown> };
@@ -155,7 +126,7 @@ export async function login(input: LoginInput): Promise<User> {
 	return u;
 }
 
-/** Перевіряє збережений токен (GET /api/auth/me); прострочений — тихо виходимо в публічний режим */
+/** Перевіряє збережений токен (GET /api/auth/me); прострочений — вихід (шлюз у layout веде на /login) */
 export async function verifySession(): Promise<void> {
 	const token = authToken();
 	if (!token) return;

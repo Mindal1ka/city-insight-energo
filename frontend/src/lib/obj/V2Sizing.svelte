@@ -1,4 +1,4 @@
-<!-- Скільки доставити: +X кВт, capex, окупність, кнопки звернень -->
+<!-- Скільки доставити (лише кВт·год): споживання → потрібна станція → поточна → доставити -->
 <script lang="ts">
 	import type { Sizing } from '#lib/api-v2.ts';
 	import { uah } from '#lib/api-ses.ts';
@@ -9,18 +9,41 @@
 </script>
 
 <div class="panel siz">
+	{#if s.cons_kwh_month_avg != null}
+		<p class="cons tnum"><Icon name="plug" size={16} /> Споживання ≈ <b>{num(s.cons_kwh_month_avg)}</b> кВт·год/міс</p>
+	{/if}
 	{#if s.need}
-		<div class="big tnum"><span class="p">+</span><b>{num(s.add_kw, 1)}</b><small>кВт</small></div>
+		{#if s.need_kw != null || s.need_battery_kwh != null}
+			<div class="need tnum">
+				<span class="l">Потрібна станція</span>
+				<div class="row">
+					{#if s.need_kw != null}<span class="it sun"><Icon name="panel" size={18} /><b>{num(s.need_kw, 1)}</b> <small>кВт панелей</small></span>{/if}
+					{#if s.need_kw != null && s.need_battery_kwh != null}<span class="pl">+</span>{/if}
+					{#if s.need_battery_kwh != null}<span class="it bat"><Icon name="battery" size={18} /><b>{num(s.need_battery_kwh, 1)}</b> <small>кВт·год акумулятор</small></span>{/if}
+				</div>
+				{#if hasStation && (s.current_kw != null || s.current_battery_kwh != null)}
+					<p class="cur">
+						Зараз: {num(s.current_kw ?? 0, 1)} кВт · {num(s.current_battery_kwh ?? 0, 1)} кВт·год
+					</p>
+				{/if}
+			</div>
+		{/if}
+		<div class="big tnum">
+			<span class="l">Доставити</span>
+			<span class="adds">
+				{#if s.add_kw > 0}<span class="a"><span class="p">+</span><b>{num(s.add_kw, 1)}</b><small>кВт</small></span>{/if}
+				{#if (s.add_battery_kwh ?? 0) > 0}<span class="a bat"><span class="p">+</span><b>{num(s.add_battery_kwh, 1)}</b><small>кВт·год</small></span>{/if}
+			</span>
+		</div>
 		<div class="grid tnum">
+			{#if s.k_after != null}<div class="cell"><span class="l">K після</span><b>{num(s.k_after, 2)}</b></div>{/if}
 			{#if s.capex_uah !== undefined}<div class="cell"><span class="l">Вартість</span><b>{uah(s.capex_uah)}</b></div>{/if}
 			{#if s.saved_uah_year !== undefined}<div class="cell good"><span class="l">Економія/рік</span><b>{uah(s.saved_uah_year)}</b></div>{/if}
 			{#if s.payback_years != null}<div class="cell"><span class="l">Окупність</span><b>{num(s.payback_years, 1)} <small>р.</small></b></div>{/if}
-			{#if s.limited_by}<div class="cell"><span class="l">Обмеження</span><b>{s.limited_by}</b></div>{/if}
-			{#if s.roof_max_kw !== undefined}<div class="cell"><span class="l">Дах макс.</span><b>{num(s.roof_max_kw, 1)} <small>кВт</small></b></div>{/if}
 		</div>
 		<a class="btn btn-sun btn-sm" href="/appeals?building={id}&type=expand&kw={s.add_kw}"><Icon name="sun" size={16} /> Подати звернення</a>
 	{:else if hasStation}
-		<p class="ok"><Icon name="check" size={20} stroke={2.4} /> Потужності достатньо</p>
+		<p class="ok">✓ потужності достатньо</p>
 	{/if}
 	{#if surplus}
 		<a class="btn btn-secondary btn-sm" href="/appeals?building={id}&type=surplus"><Icon name="grid" size={16} /> Передати надлишок</a>
@@ -34,15 +57,67 @@
 		padding: 1rem;
 		justify-items: start;
 	}
-	.big {
+	.cons {
 		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: 0;
+		color: var(--muted);
+	}
+	.cons b {
+		color: var(--ink);
+	}
+	.need {
+		display: grid;
+		gap: 0.35rem;
+	}
+	.row,
+	.adds {
+		display: flex;
+		flex-wrap: wrap;
 		align-items: baseline;
-		gap: 0.3rem;
+		gap: 0.4rem 0.8rem;
+	}
+	.it {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.35rem;
+	}
+	.it b {
+		font-size: var(--fs-xl);
+	}
+	.it.sun {
 		color: var(--sun-ink);
 	}
-	.big .p,
-	.big b {
-		font-size: 2.6rem;
+	.it.bat,
+	.a.bat {
+		color: var(--bat, #6d4fc2);
+	}
+	.pl {
+		color: var(--muted);
+		font-weight: 700;
+	}
+	.cur {
+		margin: 0;
+		font-size: var(--fs-sm);
+		color: var(--muted);
+	}
+	.big {
+		display: grid;
+		gap: 0.2rem;
+	}
+	.a {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.25rem;
+		color: var(--sun-ink);
+	}
+	.a.bat {
+		color: var(--bat, #6d4fc2);
+	}
+	.a .p,
+	.a b {
+		font-size: 2.2rem;
 		font-weight: 800;
 		line-height: 1;
 	}

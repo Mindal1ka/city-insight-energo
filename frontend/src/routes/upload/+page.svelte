@@ -103,7 +103,7 @@
 	}
 </script>
 
-<svelte:head><title>Оновити дані · City Insight Map · Енергія</title></svelte:head>
+<svelte:head><title>Оновити дані · Insight Tool</title></svelte:head>
 
 <div class="page-head">
 	<div>

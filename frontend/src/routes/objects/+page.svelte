@@ -9,7 +9,7 @@
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
 	import { isReduced } from '#lib/motion.ts';
-	import { matchExtra, seasonDay, kwhMonth, type Season, type EffClass } from '#lib/ses-extra.ts';
+	import { matchExtra, seasonDay, kwhMonth, type Season } from '#lib/ses-extra.ts';
 	import {
 		fetchSes,
 		filterItems,
@@ -29,7 +29,6 @@
 	let department = $state(page.url.searchParams.get('department') ?? '');
 	let need = $state(false);
 	let season = $state<Season | null>(null);
-	let eff = $state<EffClass | null>(null);
 	let data = $state<SesList | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
@@ -86,7 +85,7 @@
 	}
 
 	const rows = $derived.by(() => {
-		const list = filterItems(items, { classes: restricted ? [] : classes, types, q }).filter((i) => matchExtra(i, { department, need, eff }));
+		const list = filterItems(items, { classes: restricted ? [] : classes, types, q }).filter((i) => matchExtra(i, { department, need }));
 		const dir = asc ? 1 : -1;
 		return [...list].sort((a, b) => {
 			const x = val(a, sortKey);
@@ -140,7 +139,7 @@
 	</header>
 
 	<div class="filters">
-		<SesFilters {items} bind:period bind:classes bind:types bind:q bind:department bind:need bind:season bind:eff {restricted} />
+		<SesFilters {items} bind:period bind:classes bind:types bind:q bind:department bind:need bind:season {restricted} />
 	</div>
 
 	{#if error && !data}

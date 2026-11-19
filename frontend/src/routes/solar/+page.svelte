@@ -370,7 +370,7 @@
 	const budgetLabel = $derived(num(budgetM ?? 0, (budgetM ?? 0) % 1 ? 1 : 0));
 </script>
 
-<svelte:head><title>Нові СЕС · City Insight Map · Енергія</title></svelte:head>
+<svelte:head><title>Нові СЕС · Insight Tool</title></svelte:head>
 
 <!-- Шапка для друку -->
 <div class="print-only print-head">

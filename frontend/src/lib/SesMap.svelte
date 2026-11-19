@@ -8,6 +8,8 @@
 	import type * as Leaflet from 'leaflet';
 	import { kClassMeta, kText, type KClass, type SesItem } from './api-ses.ts';
 	import { categoryMeta, POLTAVA } from './api-map.ts';
+	import type { Zone } from './api-v2.ts';
+	import { ZONE_COLORS } from './zone-meta.ts';
 
 	interface Props {
 		items: SesItem[];
@@ -19,14 +21,20 @@
 		waveKey?: string;
 		/** Різниця «закрито знизу − закрито зверху» (px): вибраний маркер центруємо у видимій смузі */
 		padBottom?: number;
+		/** Зони обміну надлишком (кола навколо якоря) */
+		zones?: Zone[];
+		showZones?: boolean;
+		selectedZoneId?: number | null;
+		onzone?: (id: number | null) => void;
 	}
 
-	let { items, colorBy = 'class', selectedId = null, onselect, waveKey = '', padBottom = 0 }: Props = $props();
+	let { items, colorBy = 'class', selectedId = null, onselect, waveKey = '', padBottom = 0, zones = [], showZones = true, selectedZoneId = null, onzone }: Props = $props();
 
 	let el: HTMLDivElement;
 	let L: typeof Leaflet | null = null;
 	let map: Leaflet.Map | null = null;
 	let layer: Leaflet.MarkerClusterGroup | null = null;
+	let zoneGroup: Leaflet.LayerGroup | null = null;
 	let ready = $state(false);
 	const markers = new Map<number, Leaflet.Marker>();
 	const byId = new Map<number, SesItem>();
@@ -161,6 +169,46 @@
 		}
 	}
 
+	function renderZones() {
+		if (!L || !map || !zoneGroup) return;
+		zoneGroup.clearLayers();
+		if (!showZones) return;
+		const renderer = L.svg({ pane: 'zones' });
+		for (const z of zones) {
+			const color = ZONE_COLORS[z.status ?? 'no_ses'];
+			const sel = z.id === selectedZoneId;
+			const c = L.circle([z.lat, z.lon], {
+				radius: z.radius_m,
+				pane: 'zones',
+				renderer,
+				color,
+				weight: sel ? 3 : 1.5,
+				opacity: sel ? 0.95 : 0.6,
+				fillColor: color,
+				fillOpacity: sel ? 0.22 : 0.1,
+				bubblingMouseEvents: false
+			});
+			c.on('click', () => onzone?.(z.id));
+			c.bindTooltip(esc(z.name), { sticky: true, direction: 'top' });
+			zoneGroup.addLayer(c);
+			if ((z.shareable_kwh ?? 0) > 0) {
+				const donors = z.members.filter((m) => m.role === 'donor');
+				const takers = z.members.filter((m) => m.role === 'taker');
+				for (const d of donors)
+					for (const t of takers)
+						zoneGroup.addLayer(
+							L.polyline(
+								[
+									[d.lat, d.lon],
+									[t.lat, t.lon]
+								],
+								{ pane: 'zones', renderer, color: ZONE_COLORS.surplus, weight: 2, opacity: 0.8, dashArray: '6 6', interactive: false }
+							)
+						);
+			}
+		}
+	}
+
 	function focusSelected(id: number | null) {
 		if (!map || !L) return;
 		for (const mid of new Set([prevSel, id])) {
@@ -209,7 +257,9 @@
 			}).addTo(map);
 			map.on('dragstart', () => (autoFit = false));
 			el.addEventListener('wheel', () => (autoFit = false), { passive: true });
-			layer = L.markerClusterGroup({
+			map.createPane('zones').style.zIndex = '380';
+				zoneGroup = L.layerGroup().addTo(map);
+				layer = L.markerClusterGroup({
 				showCoverageOnHover: false,
 				maxClusterRadius: 48,
 				disableClusteringAtZoom: 15,
@@ -217,7 +267,10 @@
 				animate: !reduced,
 				iconCreateFunction: clusterIcon
 			}).addTo(map);
-			map.on('click', () => onselect?.(null));
+			map.on('click', () => {
+					onselect?.(null);
+					onzone?.(null);
+				});
 			ready = true;
 		});
 		const ro = new ResizeObserver(() => {
@@ -239,6 +292,13 @@
 		void colorBy;
 		void waveKey;
 		if (ready) untrack(render);
+	});
+
+	$effect(() => {
+		void zones;
+		void showZones;
+		void selectedZoneId;
+		if (ready) untrack(renderZones);
 	});
 
 	$effect(() => {

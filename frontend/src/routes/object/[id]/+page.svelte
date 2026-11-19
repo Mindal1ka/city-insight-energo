@@ -18,7 +18,7 @@
 	import OutageSimulator from '#lib/OutageSimulator.svelte';
 	import ForecastCard from '#lib/ForecastCard.svelte';
 	import ObjTile from '#lib/obj/ObjTile.svelte';
-	import ObjMonthChart from '#lib/obj/ObjMonthChart.svelte';
+	import V2Blackout from '#lib/obj/V2Blackout.svelte';
 	import ObjFinance from '#lib/obj/ObjFinance.svelte';
 	import ObjEditDrawer from '#lib/obj/ObjEditDrawer.svelte';
 	import V2Monthly from '#lib/obj/V2Monthly.svelte';
@@ -287,14 +287,20 @@
 					</div>
 				{/key}
 			{/if}
-			{#if d.monthly.some((x) => (x.cons_kwh ?? 0) > 0 || (ses && (x.gen_kwh ?? 0) > 0))}
-				<div class="panel chart">
-					<ObjMonthChart data={d.monthly} hasSes={!!ses} />
-				</div>
-			{:else if ins?.monthly_kwh?.some((x) => x > 0)}
-				<V2Monthly data={ins.monthly_kwh} />
-			{/if}
 		</section>
+
+		<!-- ============ 3a. Місяць за місяцем (v2) ============ -->
+		{#if ins?.months?.length}
+			<section class="sec" aria-labelledby="mm-h">
+				<h2 id="mm-h"><span class="si en" aria-hidden="true"><Icon name="chart" size={18} /></span>Місяць за місяцем</h2>
+				<V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} />
+			</section>
+		{/if}
+
+		<!-- ============ 3b. Блекаут (v2; 403 — блок ховається) ============ -->
+		{#if isInternal(user)}
+			<V2Blackout id={b.id} canEdit={editable || user?.role === 'energy_manager'} />
+		{/if}
 
 		<!-- ============ 4. Фінанси ============ -->
 		{#if fin && (hasCons || ses)}

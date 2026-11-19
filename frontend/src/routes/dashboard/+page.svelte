@@ -285,7 +285,7 @@
 	});
 </script>
 
-<svelte:head><title>Дашборд ефективності СЕС · City Insight Map · Енергія</title></svelte:head>
+<svelte:head><title>Дашборд ефективності СЕС · Insight Tool</title></svelte:head>
 
 <header class="page-head dh-head">
 	<div>

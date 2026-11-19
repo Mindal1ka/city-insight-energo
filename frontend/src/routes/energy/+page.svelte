@@ -46,7 +46,7 @@
 	const nf = (v: number | null | undefined, d = 1) => num(v, d);
 </script>
 
-<svelte:head><title>Розподіл енергії · City Insight Map · Енергія</title></svelte:head>
+<svelte:head><title>Розподіл енергії · Insight Tool</title></svelte:head>
 
 <header class="page-head">
 	<h1>Розподіл енергії</h1>

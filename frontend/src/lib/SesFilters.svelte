@@ -13,7 +13,7 @@
 	} from './api-ses.ts';
 	import { CATEGORIES } from './api-map.ts';
 	import { DEPARTMENTS } from './api-v2.ts';
-	import { SEASONS, EFF_CLASSES, type Season, type EffClass } from './ses-extra.ts';
+	import { SEASONS, type Season } from './ses-extra.ts';
 
 	let {
 		items,
@@ -24,7 +24,6 @@
 		department = $bindable(''),
 		need = $bindable(false),
 		season = $bindable(null),
-		eff = $bindable(null),
 		restricted = false,
 		onenter
 	}: {
@@ -36,7 +35,6 @@
 		department?: string;
 		need?: boolean;
 		season?: Season | null;
-		eff?: EffClass | null;
 		restricted?: boolean;
 		/** Enter у пошуку */
 		onenter?: () => void;
@@ -64,7 +62,7 @@
 		return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 	}
 	const active = $derived(
-		classes.length + types.length + (q.trim() ? 1 : 0) + (department ? 1 : 0) + (need ? 1 : 0) + (season ? 1 : 0) + (eff ? 1 : 0)
+		classes.length + types.length + (q.trim() ? 1 : 0) + (department ? 1 : 0) + (need ? 1 : 0) + (season ? 1 : 0)
 	);
 	function resetAll() {
 		classes = [];
@@ -73,7 +71,6 @@
 		department = '';
 		need = false;
 		season = null;
-		eff = null;
 	}
 </script>
 
@@ -136,21 +133,11 @@
 				onclick={() => (need = !need)}><span class="dot" aria-hidden="true">↓</span>Потреба в розширенні</button
 			>
 		</div>
-		<div class="row chips" role="group" aria-label="Відділ та індекс ефективності">
+		<div class="row chips" role="group" aria-label="Розпорядник">
 			<select bind:value={department} aria-label="Розпорядник" class:on={!!department}>
 				<option value="">Усі розпорядники</option>
 				{#each DEPARTMENTS as d (d)}<option value={d}>{d}</option>{/each}
 			</select>
-			{#each EFF_CLASSES as e (e.id)}
-				<button
-					type="button"
-					class="chip plain"
-					class:on={eff === e.id}
-					aria-pressed={eff === e.id}
-					style="--c: {e.color}; --soft: #eef2f7"
-					onclick={() => (eff = eff === e.id ? null : e.id)}>{e.label}</button
-				>
-			{/each}
 		</div>
 		<div class="row chips" role="group" aria-label="Клас ефективності">
 			{#each K_CLASSES as c (c.id)}
