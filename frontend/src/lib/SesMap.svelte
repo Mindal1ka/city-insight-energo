@@ -241,6 +241,46 @@
 		fitAll(true);
 	}
 
+	// ---- шари меж із ГІС міста ----
+	const GIS_TILES = 'https://mbk.rada-poltava.gov.ua/api/gis-rtile';
+	type BoundKey = 'districts' | 'starosta' | 'otg';
+	const BOUNDS: { key: BoundKey; id: string; label: string; opacity: number }[] = [
+		{ key: 'districts', id: '2272630265727681598', label: 'Райони міста', opacity: 0.45 },
+		{ key: 'starosta', id: '2464582733746145100', label: 'Старостинські округи', opacity: 0.8 },
+		{ key: 'otg', id: '2450807838365189461', label: 'Межа громади', opacity: 0.9 }
+	];
+	const BOUNDS_KEY = 'insight.bounds';
+	function loadBounds(): Record<BoundKey, boolean> {
+		const def = { districts: true, starosta: false, otg: true };
+		try {
+			const v = JSON.parse(localStorage.getItem(BOUNDS_KEY) || 'null');
+			return v && typeof v === 'object' ? { ...def, ...v } : def;
+		} catch {
+			return def;
+		}
+	}
+	let boundsOn = $state<Record<BoundKey, boolean>>(loadBounds());
+	let boundsMenu = $state(false);
+	const boundLayers: Partial<Record<BoundKey, Leaflet.TileLayer>> = {};
+	function applyBounds() {
+		if (!map) return;
+		for (const b of BOUNDS) {
+			const l = boundLayers[b.key];
+			if (!l) continue;
+			if (boundsOn[b.key] && !map.hasLayer(l)) l.addTo(map);
+			if (!boundsOn[b.key] && map.hasLayer(l)) map.removeLayer(l);
+		}
+		try {
+			localStorage.setItem(BOUNDS_KEY, JSON.stringify(boundsOn));
+		} catch {
+			/* приватний режим */
+		}
+	}
+	function toggleBound(k: BoundKey) {
+		boundsOn = { ...boundsOn, [k]: !boundsOn[k] };
+		applyBounds();
+	}
+
 	onMount(() => {
 		let alive = true;
 		import('leaflet').then(async (mod) => {
@@ -259,6 +299,18 @@
 				attribution:
 					'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">учасники OpenStreetMap</a>'
 			}).addTo(map);
+			// Межі з ГІС Полтавської міської ради (растрові XYZ-тайли порталу mbk.rada-poltava.gov.ua)
+			map.createPane('bounds').style.zIndex = '250';
+			for (const b of BOUNDS) {
+				boundLayers[b.key] = L.tileLayer(`${GIS_TILES}/${b.id}/{z}/{x}/{y}.png`, {
+					pane: 'bounds',
+					opacity: b.opacity,
+					maxZoom: 19,
+					maxNativeZoom: 18,
+					attribution: '<a href="https://mbk.rada-poltava.gov.ua/maps/otg_map" target="_blank" rel="noopener">ГІС Полтавської міської ради</a>'
+				});
+			}
+			applyBounds();
 			map.on('dragstart', () => (autoFit = false));
 			el.addEventListener('wheel', () => (autoFit = false), { passive: true });
 			map.createPane('zones').style.zIndex = '380';
@@ -312,6 +364,20 @@
 </script>
 
 <div class="sm-root" bind:this={el} role="region" aria-label="Мапа комунальних об’єктів"></div>
+<div class="bt-wrap">
+	<button type="button" class="zt" class:on={BOUNDS.some((b) => boundsOn[b.key])} aria-expanded={boundsMenu}
+		title="Межі районів і округів (ГІС міста)" onclick={() => (boundsMenu = !boundsMenu)}
+		><span class="bd" aria-hidden="true"></span>Межі</button
+	>
+	{#if boundsMenu}
+		<div class="bmenu" role="group" aria-label="Шари меж">
+			{#each BOUNDS as b (b.key)}
+				<label><input type="checkbox" checked={boundsOn[b.key]} onchange={() => toggleBound(b.key)} /> {b.label}</label>
+			{/each}
+			<small>ГІС Полтавської міської ради</small>
+		</div>
+	{/if}
+</div>
 {#if ontogglezones && zones.length}
 	<button
 		type="button"
@@ -434,6 +500,49 @@
 		border-radius: 50%;
 		border: 2px solid #1f6fd1;
 		background: rgba(31, 111, 209, 0.18);
+	}
+	.bt-wrap {
+		position: absolute;
+		z-index: 501;
+		right: 10px;
+		bottom: 140px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 6px;
+	}
+	.bt-wrap .zt {
+		position: static;
+	}
+	.bd {
+		width: 12px;
+		height: 12px;
+		border-radius: 3px;
+		border: 2px dashed #6a4fb3;
+	}
+	.bmenu {
+		order: -1;
+		display: grid;
+		gap: 6px;
+		padding: 10px 12px;
+		background: #fff;
+		border-radius: 12px;
+		box-shadow: 0 2px 10px rgba(15, 35, 65, 0.18);
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: #1a2433;
+	}
+	.bmenu label {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.bmenu small {
+		color: #6b7686;
+		font-weight: 500;
+		font-size: 0.7rem;
 	}
 	.zt:focus-visible {
 		outline: 3px solid var(--focus, #ffbf47);
