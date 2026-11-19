@@ -7,6 +7,11 @@
 	import StatCard from '#lib/StatCard.svelte';
 	import Icon from '#lib/Icon.svelte';
 	import { fadeUp, scaleIn, stagger } from '#lib/motion.ts';
+	import Disclosure from '#lib/Disclosure.svelte';
+	import { auth } from '#lib/auth.svelte.ts';
+	import { canUpload, isInternal } from '#lib/roles.ts';
+
+	const allowed = $derived(canUpload(auth.user));
 
 	type Phase = 'idle' | 'selected' | 'uploading' | 'done' | 'error';
 
@@ -102,15 +107,20 @@
 
 <div class="page-head">
 	<div>
-		<h1>Оновити дані</h1>
-		<p class="lead">
-			<span class="hide-phone">Перетягніть сюди</span><span class="only-phone">Оберіть</span> свіже вивантаження з <Term key="UMUNI" plain /> — і споживання, рейтинг, якість
-			даних та розрахунок <Term key="СЕС" plain>сонячних станцій</Term> оновляться самі.<span class="hide-phone"> Розробник для цього
-			не потрібен.</span>
-		</p>
+		<h1>Оновити дані <Term key="UMUNI" plain /></h1>
 	</div>
 </div>
 
+{#if !allowed}
+	<!-- Завантаження — лише енергоменеджер і адміністратор даних -->
+	<section class="card lock" aria-labelledby="lock-h">
+		<span class="lock-ic" aria-hidden="true"><Icon name="lock" size={26} /></span>
+		<h2 id="lock-h">{auth.user && isInternal(auth.user) ? 'Лише для енергоменеджера' : 'Доступно після входу'}</h2>
+		{#if !(auth.user && isInternal(auth.user))}
+			<a class="btn" href="/login?next={encodeURIComponent('/upload')}">Увійти <Icon name="arrow-right" size={18} /></a>
+		{/if}
+	</section>
+{:else}
 <div class="layout">
 	<section class="card up" aria-labelledby="up-h">
 		<h2 id="up-h" class="visually-hidden">Завантаження файлу</h2>
@@ -178,17 +188,13 @@
 					</label>
 				{/if}
 			</div>
-			<p id="file-help" class="muted small help">
-				Підходять звіти «Характеристики будівель» (Buildings_Info_Report) та «Річне використання ресурсів»
-				за будь-який рік. Завантажуйте файл як є, без змін.
-			</p>
 		{/if}
 
 		<div class="status" aria-live="polite" bind:this={statusEl} tabindex="-1">
 			{#if phase === 'uploading'}
 				<div class="busy" in:fadeUp>
 					<p class="busy-t"><strong>Завантажуємо й перераховуємо…</strong></p>
-					<p class="muted small">{file?.name} · зазвичай це кілька секунд. Не закривайте сторінку.</p>
+					<p class="muted small">{file?.name}</p>
 					<span class="bar" aria-hidden="true"><span></span></span>
 				</div>
 			{:else if phase === 'error' && error}
@@ -214,7 +220,7 @@
 						</span>
 						<div>
 							<p class="done-t"><strong>Готово! Дані оновлено.</strong></p>
-							<p class="muted">Розпізнано: {kindLabel(result.kind)}. Усі сторінки вже показують нові цифри.</p>
+							<p class="muted">{kindLabel(result.kind)}</p>
 						</div>
 					</div>
 					<div class="done-stats">
@@ -237,7 +243,7 @@
 								icon="alert"
 								tone={result.summary.defects ? 'warn' : 'good'}
 								href="/defects"
-								hint="На {num(result.summary.defect_buildings)} {plural(result.summary.defect_buildings, ['будівлі', 'будівлях', 'будівлях'])}, разом із записами про тепло, газ і воду."
+								hint="На {num(result.summary.defect_buildings)} {plural(result.summary.defect_buildings, ['будівлі', 'будівлях', 'будівлях'])}."
 							/>
 						</div>
 					</div>
@@ -257,30 +263,44 @@
 		</div>
 	</section>
 
-	<aside class="card how" aria-labelledby="how-h">
-		<h2 id="how-h">Як це працює</h2>
+	<aside class="card how" aria-label="Як це працює">
 		<ol class="steps">
-			<li>
-				<span class="n" aria-hidden="true">1</span>
-				<span><strong>Вивантажте звіт з UMUNI</strong><br /><span class="muted">у форматі XLSX, нічого в ньому не змінюючи.</span></span>
-			</li>
-			<li>
-				<span class="n" aria-hidden="true">2</span>
-				<span><strong><span class="hide-phone">Перетягніть його сюди</span><span class="only-phone">Оберіть його тут</span></strong><br /><span class="muted">Система сама визначить тип звіту й рік.</span></span>
-			</li>
-			<li>
-				<span class="n" aria-hidden="true">3</span>
-				<span><strong>Готово</strong><br /><span class="muted">Споживання, рейтинг і якість даних перераховуються одразу.</span></span>
-			</li>
+			<li><span class="n" aria-hidden="true">1</span><span><strong>XLSX з UMUNI</strong></span></li>
+			<li><span class="n" aria-hidden="true">2</span><span><strong><span class="hide-phone">Перетягніть сюди</span><span class="only-phone">Оберіть тут</span></strong></span></li>
+			<li><span class="n" aria-hidden="true">3</span><span><strong>Усе перераховано</strong></span></li>
 		</ol>
-		<p class="muted small">
-			Якщо за рік уже є файл, береться новіший за датою вивантаження. Неповний поточний рік позначається
-			окремо — його не порівнюємо напряму з повним.
-		</p>
+		<Disclosure summary="Як рахуємо">
+			<p id="file-help" class="muted small">
+				Підходять «Характеристики будівель» (Buildings_Info_Report) і «Річне використання ресурсів» за будь-який рік — файл як є, без змін.
+				Тип звіту й рік визначаються автоматично. Якщо за рік уже є файл, береться новіший; неповний поточний рік позначається окремо.
+			</p>
+		</Disclosure>
 	</aside>
 </div>
+{/if}
 
 <style>
+	.lock {
+		display: grid;
+		justify-items: center;
+		gap: 0.9rem;
+		max-width: 26rem;
+		margin: 2rem auto;
+		text-align: center;
+	}
+	.lock h2 {
+		margin: 0;
+		font-size: 1.35rem;
+	}
+	.lock-ic {
+		display: grid;
+		place-items: center;
+		width: 3.25rem;
+		height: 3.25rem;
+		border-radius: 50%;
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
 	.layout {
 		display: grid;
 		grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
@@ -403,9 +423,6 @@
 	.go {
 		min-height: 46px;
 		padding: 0.6rem 1.25rem;
-	}
-	.help {
-		margin: 0.6rem 0 0;
 	}
 	.status:focus,
 	.status:focus-visible {

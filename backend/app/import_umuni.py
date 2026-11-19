@@ -100,6 +100,7 @@ def _info_sheet(wb) -> dict[str, object]:
 def detect_kind(path: Path) -> str:
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     first = [r for _, r in zip(range(5), wb.worksheets[0].iter_rows(values_only=True))]
+    wb.close()  # Windows: не тримати файл відкритим
     flat = " ".join(_str(c) for r in first for c in r if c is not None).lower()
     if "характеристики будівель" in flat or ("heated_area" in flat and "latitude" in flat):
         return "buildings"
@@ -113,6 +114,7 @@ def detect_kind(path: Path) -> str:
 def read_buildings(path: Path) -> list[Building]:
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     rows = list(wb.worksheets[0].iter_rows(values_only=True))
+    wb.close()
     h = _find_header(rows, "id")
     cols = {_str(c): i for i, c in enumerate(rows[h])}
     get = lambda r, c: r[cols[c]] if c in cols and cols[c] < len(r) else None
@@ -164,6 +166,7 @@ def read_annual(path: Path) -> AnnualReport:
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     info = _info_sheet(wb)
     rows = list(wb.worksheets[0].iter_rows(values_only=True))
+    wb.close()
     h = _find_header(rows, "Назва будівлі")
     cols = {_str(c): i for i, c in enumerate(rows[h])}
     missing = [v for v in ANNUAL_COLS.values() if v not in cols]

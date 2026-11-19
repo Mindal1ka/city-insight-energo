@@ -1,5 +1,6 @@
 <!--
-	СТАНДАРТНА ПРОСТА КАРТКА ПОКАЗНИКА: назва → велике анімоване число → одне речення пояснення.
+	СТАНДАРТНА ПРОСТА КАРТКА ПОКАЗНИКА: назва → велике анімоване число. Пояснення (hint) приховане:
+	значок «i» з підказкою при наведенні, дотик по картці розгортає (екранні зчитувачі читають завжди).
 	Стан (tone) показано кольором І значком І прихованим текстом — ніколи лише кольором.
 
 	ВИКОРИСТАННЯ
@@ -82,6 +83,9 @@
 			<span class="sc-ico" aria-hidden="true"><Icon name={icon} size={20} /></span>
 		{/if}
 		<span class="sc-label">{label}</span>
+		{#if hint}
+			<span class="sc-i" title={hint} aria-hidden="true">i</span>
+		{/if}
 		{#if demo}
 			<span class="sc-demo" title="Змодельовані (демонстраційні) дані">ДЕМО</span>
 		{/if}
@@ -104,7 +108,8 @@
 		{/if}
 	</span>
 
-	{#if hint}<span class="sc-hint">{hint}</span>{/if}
+	<!-- Пояснення не займає місця: значок «i» з підказкою; дотик по картці розгортає текст -->
+	{#if hint}<span class="sc-hint" class:visually-hidden={!open}>{hint}</span>{/if}
 	{#if children}<span class="sc-extra">{@render children()}</span>{/if}
 
 	{#if href}
@@ -250,6 +255,19 @@
 		background: var(--t-bg);
 		color: var(--t-fg);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-line) 45%, transparent);
+	}
+	.sc-i {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 1.1rem;
+		height: 1.1rem;
+		border-radius: 50%;
+		border: 1px solid currentColor;
+		font: italic 700 0.7rem/1 Georgia, serif;
+		color: var(--muted);
+		opacity: 0.7;
+		cursor: help;
 	}
 	.sc-hint {
 		font-size: 0.9375rem;

@@ -94,17 +94,13 @@
 
 <div class="page-head">
 	<div>
-		<h1>Якість даних</h1>
-		<p class="lead">
-			Помилки й пропуски в даних <Term key="UMUNI" plain />, які система знайшла сама.<span class="hide-phone"> Ми згрупували їх
-			за типом і підказали, що зробити: виправите в UMUNI — і рейтинг та розрахунки стануть точнішими.</span>
-		</p>
+		<h1>Якість даних <Term key="UMUNI" plain /></h1>
 	</div>
 	<a class="btn btn-secondary" href="/api/defects.csv" download="data-defects.csv">
 		<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"
 			><path d="M10 3v9m-4-4 4 4 4-4M4 15.5h12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg
 		>
-		<span class="hide-phone">Завантажити повний перелік (CSV)</span><span class="only-phone">Перелік у CSV</span>
+		Перелік CSV
 	</a>
 </div>
 
@@ -118,7 +114,7 @@
 				label="Проблем знайдено"
 				value={scope.length}
 				icon="search"
-				hint="На {num(nBuildings)} {plural(nBuildings, ['будівлі', 'будівлях', 'будівлях'])}. Кожну можна виправити в UMUNI."
+				hint="На {num(nBuildings)} {plural(nBuildings, ['будівлі', 'будівлях', 'будівлях'])}."
 			/>
 		</Reveal>
 		<Reveal delay={70}>
@@ -128,7 +124,7 @@
 				icon="alert"
 				tone={nHigh ? 'bad' : 'good'}
 				toneLabel={nHigh ? 'виправити в першу чергу' : 'немає'}
-				hint="Через них будівлю не можна чесно порівняти з іншими. Почніть з них."
+				hint="Будівля випадає з рейтингу. Почніть з них."
 			/>
 		</Reveal>
 		<Reveal delay={140}>
@@ -138,7 +134,7 @@
 				icon="chart"
 				tone={nMid ? 'warn' : 'good'}
 				toneLabel={nMid ? 'перевірити' : 'немає'}
-				hint="Незвичні зміни споживання: може бути реальне зростання, а може — помилка."
+				hint="Незвичні стрибки споживання."
 			/>
 		</Reveal>
 		<Reveal delay={210}>
@@ -146,7 +142,7 @@
 				label="Довідкові"
 				value={nLow}
 				icon="info"
-				hint="Порожні довідкові поля й координати. На розрахунок електрики не впливають."
+				hint="На розрахунки не впливають."
 			/>
 		</Reveal>
 	</section>
@@ -164,19 +160,11 @@
 			<label for="f-q">Знайти будівлю</label>
 			<input id="f-q" type="search" bind:value={query} placeholder="Частина назви" />
 		</div>
-		<label class="toggle">
-			<input type="checkbox" bind:checked={showNonElec} />
-			Показати також тепло, газ і воду ({num(hiddenCount)})
-		</label>
 	</div>
 
 	<p class="muted found" aria-live="polite">
 		{#if q || sev}
-			Знайдено {num(shownRecords)} {plural(shownRecords, ['запис', 'записи', 'записів'])} у {groups.length}
-			{plural(groups.length, ['групі', 'групах', 'групах'])}.
-			<button type="button" class="linkish" onclick={reset}>Скинути фільтри</button>
-		{:else}
-			{groups.length} {plural(groups.length, ['тип', 'типи', 'типів'])} проблем — від найважливіших до довідкових.
+			Знайдено {num(shownRecords)} · <button type="button" class="linkish" onclick={reset}>скинути</button>
 		{/if}
 	</p>
 
@@ -192,8 +180,7 @@
 					<div class="g-main">
 						<p class="g-sev"><span class="pill pill-{g.severity}">{SEVERITY_LABEL[g.severity]}</span></p>
 						<h2 class="g-title">{g.title}</h2>
-						<p class="g-why">{g.why}</p>
-						<p class="g-todo"><Icon name="check" size={18} /> <span><strong>Що робити:</strong> {g.todo}</span></p>
+						<p class="g-todo" title={g.why}><Icon name="check" size={18} /> <span><strong>Що робити:</strong> {g.todo}</span></p>
 					</div>
 					<div class="g-count">
 						<span class="g-n tnum">{num(g.shown.length)}</span>
@@ -211,6 +198,7 @@
 				</button>
 				{#if open}
 					<div class="g-body" id="g-{gi}" in:fadeUp={{ y: -6 }}>
+						<p class="g-why">{g.why}</p>
 						<ul class="items">
 							{#each g.shown.slice(0, limit) as d, i (i)}
 								<li in:fadeUp={{ delay: i >= limit - STEP ? stagger(i - (limit - STEP), 15, 300) : 0 }}>
@@ -321,10 +309,6 @@
 		font-weight: 500;
 		min-height: 42px;
 		cursor: pointer;
-	}
-	.toggle input {
-		width: 1.1rem;
-		height: 1.1rem;
 	}
 	.found {
 		margin: 0 0 0.9rem;

@@ -100,10 +100,6 @@
 <div class="page-head">
 	<div>
 		<h1>Споживання електроенергії</h1>
-		<p class="lead">
-			Скільки електрики за рік витрачають школи, садочки, лікарні та інші комунальні будівлі громади —
-			і хто витрачає найбільше.<span class="hide-phone"> Саме там економія та сонячні станції дадуть найбільший ефект.</span>
-		</p>
 	</div>
 	{#if updated}
 		<p class="muted small fresh">Дані <Term key="UMUNI" plain /> від <strong>{dateTime(updated)}</strong></p>
@@ -165,7 +161,7 @@
 					tone={noData ? 'warn' : 'neutral'}
 					toneLabel="є будівлі без даних"
 					hint={noData
-						? `У ${num(noData)} немає даних про електрику за ${BASE_YEAR} рік, з них у ${num(noneAtAll)} — взагалі жодних показників (ні тепла, ні газу, ні води). Деталі — у «Якості даних».`
+						? `Без даних про електрику за ${BASE_YEAR}: ${num(noData)}.`
 						: 'Для всіх є дані про електрику.'}
 				/>
 			</Reveal>
@@ -175,8 +171,7 @@
 	<div class="grid-2 main">
 		<Reveal class="cell">
 			<section class="card" aria-labelledby="cat-h">
-				<h2 id="cat-h">Хто споживає найбільше: за типами будівель</h2>
-				<p class="muted sub">Частка від усієї електрики громади за {BASE_YEAR} рік.</p>
+				<h2 id="cat-h">За типами будівель <span class="h-chip">{BASE_YEAR}</span></h2>
 				<ul class="cats" {@attach grow}>
 					{#each byCategory as c, i (c.name)}
 						<li>
@@ -217,21 +212,13 @@
 							</tbody>
 						</table>
 					</div>
-					<p class="muted small note">
-						Порівнюйте лише всередині категорії: лікарня з цілодобовим обладнанням закономірно витрачає
-						на 1 м² більше, ніж музей.
-					</p>
 				</Disclosure>
 			</section>
 		</Reveal>
 
 		<Reveal class="cell" delay={90}>
 			<section class="card" aria-labelledby="top-h">
-				<h2 id="top-h">Найбільші споживачі</h2>
-				<p class="muted sub">
-					П’ять будівель нижче витрачають <strong class="ink">{pct(top5Share)}</strong> усієї електрики
-					громади. Тут сонячна станція заощадить найбільше.
-				</p>
+				<h2 id="top-h">Найбільші споживачі <span class="h-chip" title="Частка п’ятірки від усієї електрики громади">топ-5 = {pct(top5Share)}</span></h2>
 				<ol class="top" {@attach grow}>
 					{#each topShown as b, i (b.id)}
 						{@const kwh = b.years[BASE_YEAR]?.elec_kwh ?? 0}
@@ -254,28 +241,23 @@
 							{showMoreTop ? 'Показати лише п’ять' : `Показати всі ${top.length} (разом ${pct(topShare)})`}
 						</button>
 					{/if}
-					<a href="/solar" class="go">Де ставити сонячні станції →</a>
+					<a href="/solar" class="go">Нові СЕС →</a>
 				</div>
 			</section>
 		</Reveal>
 	</div>
 
-	{#if cur && projection}
-		<Disclosure summary="Чому {cur[0]} рік не порівнюємо з {BASE_YEAR} напряму" class="card soft">
-			<p>
-				Останнє вивантаження від {date(cur[1].created)} охоплює лише ≈ {pct(cur[1].coverage)} року, тож
-				у ньому менше місяців. Тому рейтинг і порівняння рахуємо за повним {BASE_YEAR} роком. Якщо решта
-				{cur[0]} року йтиме так само, за рік вийде приблизно <strong>{kwhText(projection)}</strong> — це груба
-				оцінка, а не прогноз.
-			</p>
-		</Disclosure>
-	{/if}
-
-	<Disclosure summary="Звідки ці дані" hint="{data.sources.length} {plural(data.sources.length, ['файл', 'файли', 'файлів'])} з UMUNI" class="card soft">
-		<p class="muted small">
-			Розрахунок зроблено на вивантаженнях з <Term key="UMUNI" plain />. Щоб оновити — завантажте новий
-			файл на сторінці <a href="/upload">«Оновити дані»</a>.
-		</p>
+	<Disclosure summary="Як рахуємо" hint="{data.sources.length} {plural(data.sources.length, ['файл', 'файли', 'файлів'])} з UMUNI" class="card soft">
+		<ul class="muted small">
+			<li>Дані — вивантаження з <Term key="UMUNI" plain />, лише електроенергія.</li>
+			<li>Порівнюйте всередині категорії: лікарня закономірно витрачає на 1 м² більше, ніж музей.</li>
+			{#if cur && projection}
+				<li>
+					{cur[0]} рік (вивантаження від {date(cur[1].created)}) охоплює ≈ {pct(cur[1].coverage)} року, тому рейтинг — за {BASE_YEAR}.
+					Груба оцінка за весь {cur[0]}: <strong>{kwhText(projection)}</strong>.
+				</li>
+			{/if}
+		</ul>
 		<ul class="sources">
 			{#each data.sources as s (s.file)}
 				<li>
@@ -291,6 +273,17 @@
 <style>
 	.fresh {
 		margin: 0;
+	}
+	.h-chip {
+		display: inline-block;
+		margin-left: 0.4rem;
+		padding: 0.1rem 0.55rem;
+		border-radius: 999px;
+		background: var(--accent-soft);
+		color: var(--accent-dark, var(--accent));
+		font-size: 0.8rem;
+		font-weight: 700;
+		vertical-align: middle;
 	}
 	.stats {
 		display: grid;
@@ -310,12 +303,6 @@
 	}
 	.main {
 		margin-bottom: 1.25rem;
-	}
-	.sub {
-		margin: -0.25rem 0 1rem;
-	}
-	.ink {
-		color: var(--text);
 	}
 	.cats {
 		list-style: none;
@@ -370,9 +357,6 @@
 		:global(.grown) .fill {
 			transform: none;
 		}
-	}
-	.note {
-		margin: 0.75rem 0 0;
 	}
 	.top {
 		list-style: none;
@@ -519,9 +503,6 @@
 		}
 		.top-foot .btn {
 			flex: 1 1 100%;
-		}
-		.sub {
-			font-size: 0.9rem;
 		}
 	}
 </style>

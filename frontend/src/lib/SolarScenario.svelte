@@ -141,8 +141,7 @@
 </script>
 
 <section class="card scen" aria-labelledby="{uid}-h">
-	<h2 id="{uid}-h">А якщо поставити іншу станцію?</h2>
-	<p class="muted intro">Посуньте повзунок — цифри й графік зміняться одразу.</p>
+	<h2 id="{uid}-h">Інша потужність?</h2>
 
 	<div class="kwbox">
 		<div class="kwtop">
@@ -187,7 +186,7 @@
 			value={sim.savings / 1000}
 			unit="тис. грн"
 			icon="wallet"
-			hint="Стільки менше заплатимо за світло."
+			
 		/>
 		<StatCard
 			label="Окупиться за"
@@ -210,7 +209,7 @@
 
 	<SolarChart months={sim.months} />
 
-	<Disclosure summary="Технічні деталі розрахунку">
+	<Disclosure summary="Дах і точна потужність">
 		<div class="tech">
 			<div class="field roof">
 				<label for="{uid}-roof">Площа даху, м²</label>

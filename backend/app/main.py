@@ -9,11 +9,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .analytics import Store
+from .auth import User, can_see_ses, can_see_sensitive, require, require_login
 from .import_umuni import detect_kind
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,7 +64,7 @@ def defects_csv():
 
 
 @app.post("/api/upload")
-async def upload(file: UploadFile):
+async def upload(file: UploadFile, user: User = Depends(require("energy_manager", "data_admin"))):
     """Нове вивантаження UMUNI → перерахунок без участі розробника."""
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(400, "Потрібен файл XLSX з UMUNI")
@@ -75,8 +76,33 @@ async def upload(file: UploadFile):
             kind = detect_kind(tmp_path)
         except Exception:
             raise HTTPException(400, "Файл пошкоджений або не є звітом UMUNI у форматі XLSX")
+        if kind == "meters":
+            # Реєстр лічильників: сирий файл НЕ зберігаємо (там заводські номери) —
+            # лише знеособлений data/meters.csv
+            from .meters import METERS_CSV, sanitize_meters, write_csv
+            try:
+                rows = sanitize_meters(tmp_path)
+            except Exception as e:
+                raise HTTPException(400, f"Не вдалося прочитати реєстр лічильників: {e}")
+            if not rows:
+                raise HTTPException(400, "У файлі лічильників немає рядків")
+            target = DATA_DIR / METERS_CSV
+            backup = target.with_suffix(".bak") if target.exists() else None
+            if backup:
+                shutil.copy2(target, backup)
+            write_csv(rows, target)
+            try:
+                store.reload()
+            except Exception as e:
+                if backup:
+                    shutil.move(backup, target)
+                store.reload()
+                raise HTTPException(400, f"Не вдалося обробити реєстр лічильників: {e}")
+            if backup:
+                backup.unlink(missing_ok=True)
+            return {"ok": True, "kind": kind, "summary": store.summary()}
         if kind not in ("buildings", "annual"):
-            raise HTTPException(400, "Не розпізнано звіт UMUNI (очікується «Характеристики будівель» або «Річний звіт»)")
+            raise HTTPException(400, "Не розпізнано звіт UMUNI (очікується «Характеристики будівель», «Річний звіт» або «Лічильники»)")
         target = DATA_DIR / Path(file.filename).name
         backup = target.with_suffix(".bak") if target.exists() else None
         if backup:
@@ -120,14 +146,19 @@ def _when(day: str | None, hour: int | None):
 
 
 @app.get("/api/sites")
-def sites_list(day: str | None = None, hour: int | None = None):
-    return sites.listing(_when(day, hour))
+def sites_list(day: str | None = None, hour: int | None = None, user: User = Depends(require_login)):
+    data = sites.listing(_when(day, hour))
+    # наявність СЕС по об'єктах — лише дозволеним ролям (finance теж бачить СЕС, але не акумулятори)
+    data["items"] = [i for i in data["items"] if can_see_ses(user, i["category_short"], i["id"])]
+    return data
 
 
 @app.get("/api/sites/{bid}")
-def site(bid: int, day: str | None = None, hour: int | None = None):
+def site(bid: int, day: str | None = None, hour: int | None = None, user: User = Depends(require_login)):
     for b in store.buildings:
         if b.id == bid:
+            if not can_see_sensitive(user, b.category_short, b.id):
+                raise HTTPException(403, "Немає доступу до даних цього об'єкта")
             return sites.detail(b, _when(day, hour))
     raise HTTPException(404, "Об'єкт не знайдено")
 

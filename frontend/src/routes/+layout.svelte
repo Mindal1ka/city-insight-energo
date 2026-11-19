@@ -5,7 +5,8 @@
 	import { goto, afterNavigate, onNavigate } from '$app/navigation';
 	import { tick } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
-	import { auth, logout, initials, safeNext } from '#lib/auth.svelte.ts';
+	import { auth, logout, initials, verifySession } from '#lib/auth.svelte.ts';
+	import { isInternal, canUpload, roleLabel } from '#lib/roles.ts';
 	import { isReduced, scaleIn, cubicOut } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
 	import Term from '#lib/Term.svelte';
@@ -16,15 +17,21 @@
 
 	const isLogin = $derived(page.url.pathname === '/login');
 
-	// Клієнтський «замок»: без тестового входу всі сторінки ведуть на /login
-	$effect(() => {
-		if (!auth.user && !isLogin) {
-			const back = page.url.pathname + page.url.search;
-			goto('/login' + (back !== '/' ? `?next=${encodeURIComponent(back)}` : ''), { replace: true });
-		} else if (auth.user && isLogin) {
-			goto(safeNext(page.url), { replace: true });
-		}
+	// Без входу — публічний перегляд: сторінки самі вирішують, що показувати
+	const chip = $derived(roleLabel(auth.user));
+	const loginHref = $derived.by(() => {
+		const back = page.url.pathname + page.url.search;
+		return '/login' + (back !== '/' && !isLogin ? `?next=${encodeURIComponent(back)}` : '');
 	});
+
+	// Збережений токен перевіряємо один раз (прострочений → публічний режим)
+	verifySession();
+
+	function signOut() {
+		logout();
+		closeSheet(false);
+		goto('/', { reset: false });
+	}
 
 	// --- Плавні переходи між сторінками (View Transitions API). Шапка лишається на місці. ---
 	onNavigate((nav) => {
@@ -39,26 +46,35 @@
 		});
 	});
 
-	type NavItem = { href: string; label: string; icon: 'building' | 'pin' | 'battery' | 'sun'; map?: boolean };
-	// Основні сценарії продукту
+	type NavItem = { href: string; label: string; short: string; icon: 'building' | 'gauge' | 'sun'; map?: boolean };
+	// Основні розділи (PLAN_v3)
 	const primary: NavItem[] = [
-		{ href: '/', label: 'Об’єкти', icon: 'building' },
-		{ href: '/map', label: 'Мапа', icon: 'pin', map: true },
-		{ href: '/independence', label: 'Енергонезалежність', icon: 'battery' },
-		{ href: '/solar', label: 'Де ставити СЕС', icon: 'sun' }
+		{ href: '/', label: 'Мапа', short: 'Мапа', icon: 'building', map: true },
+		{ href: '/dashboard', label: 'Дашборд', short: 'Дашборд', icon: 'gauge' },
+		{ href: '/objects', label: 'Об’єкти', short: 'Об’єкти', icon: 'building' },
+		{ href: '/solar', label: 'Нові СЕС', short: 'Нові СЕС', icon: 'sun' }
 	];
+	const tabs = primary;
 
-	// Аналітика на реальних річних даних UMUNI
-	const analytics = [
-		{ href: '/overview', label: 'Споживання електроенергії', hint: 'Скільки й хто споживає' },
-		{ href: '/rating', label: 'Рейтинг будівель', hint: 'Хто витрачає забагато на 1 м²' },
-		{ href: '/defects', label: 'Якість даних', hint: 'Помилки й пропуски в UMUNI' },
-		{ href: '/upload', label: 'Оновити дані', hint: 'Завантажити новий файл' }
+	// Аналітика: частина пунктів — лише для службових ролей
+	type Analytic = { href: string; label: string; only?: 'internal' | 'upload' };
+	const ANALYTICS: Analytic[] = [
+		{ href: '/independence', label: 'Енергонезалежність', only: 'internal' },
+		{ href: '/overview', label: 'Споживання' },
+		{ href: '/rating', label: 'Рейтинг' },
+		{ href: '/defects', label: 'Якість даних' },
+		{ href: '/upload', label: 'Оновити дані', only: 'upload' }
 	];
+	const analytics = $derived(
+		ANALYTICS.filter((a) =>
+			!a.only ? true : a.only === 'internal' ? isInternal(auth.user) : canUpload(auth.user)
+		)
+	);
 
 	function isActive(href: string): boolean {
 		const p = page.url.pathname;
-		if (href === '/') return p === '/' || p.startsWith('/object/');
+		if (href === '/') return p === '/' || p === '/map';
+		if (href === '/objects') return p.startsWith('/objects') || p.startsWith('/object/');
 		if (href === '/rating' && p.startsWith('/building/')) return true;
 		return p === href || p.startsWith(href + '/');
 	}
@@ -148,10 +164,6 @@
 	let burgerBtn = $state<HTMLButtonElement>();
 
 	// --- Телефон (≤ 768 px): нижня панель вкладок + аркуш «Меню» ---
-	const tabs: (NavItem & { short: string })[] = primary.map((p) => ({
-		...p,
-		short: p.href === '/independence' ? 'Незалежність' : p.href === '/solar' ? 'СЕС' : p.label
-	}));
 	let sheetOpen = $state(false);
 	let sheetEl = $state<HTMLDivElement>();
 	let sheetTrigger: HTMLElement | null = null;
@@ -230,23 +242,22 @@
 	// --- Глобальний пошук ---
 	let paletteOpen = $state(false);
 
-	// --- «Як користуватися»: міні-тур із 3 кроків (перший візит + кнопка «?») ---
-	const TOUR_KEY = 'energo.tour.v1';
+	// --- «Як користуватися»: міні-тур із 3 кроків (лише за кнопкою «?») ---
 	const steps = [
 		{
-			title: 'Що це за сервіс',
-			text: 'Карта енергетики будівель Полтавської громади: шкіл, садочків, лікарень, адмінбудівель. Видно, скільки електрики споживає кожна з них.',
+			title: 'Мапа',
+			text: 'Колір точки — наскільки ефективно працює СЕС об’єкта.',
 			hl: ['/']
 		},
 		{
-			title: 'Знайдіть свою будівлю',
-			text: 'Відкрийте «Об’єкти» чи «Мапу» — або просто почніть пошук за назвою чи адресою.',
-			hl: ['/', '/map', 'search']
+			title: 'Дашборд і об’єкти',
+			text: 'Фільтри за класом, типом закладу й періодом. Пошук — Ctrl K.',
+			hl: ['/dashboard', '/objects', 'search']
 		},
 		{
-			title: 'Плануйте незалежність',
-			text: '«Енергонезалежність» покаже, скільки годин будівля протримається без світла. «Де ставити СЕС» — де сонячні панелі окупляться найшвидше.',
-			hl: ['/independence', '/solar']
+			title: 'Нові СЕС',
+			text: 'Де сонячні панелі окупляться найшвидше.',
+			hl: ['/solar']
 		}
 	];
 	let helpOpen = $state(false);
@@ -262,11 +273,6 @@
 	}
 	function closeHelp(focusBtn = false) {
 		helpOpen = false;
-		try {
-			localStorage.setItem(TOUR_KEY, '1');
-		} catch {
-			/* сховище недоступне */
-		}
 		if (focusBtn) helpBtn?.focus();
 	}
 	function go(d: number) {
@@ -275,20 +281,6 @@
 		if (n >= steps.length) closeHelp(true);
 		else step = Math.max(0, n);
 	}
-	// Перший візит після входу — показуємо тур самі (раз)
-	$effect(() => {
-		if (!auth.user || isLogin) return;
-		let seen = true;
-		try {
-			seen = localStorage.getItem(TOUR_KEY) === '1';
-		} catch {
-			/* приватний режим */
-		}
-		if (seen) return;
-		const t = setTimeout(openHelp, 900);
-		return () => clearTimeout(t);
-	});
-
 	afterNavigate(() => {
 		menuOpen = false;
 		navOpen = false;
@@ -297,7 +289,7 @@
 
 	function globalKey(e: KeyboardEvent) {
 		if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K' || e.code === 'KeyK')) {
-			if (!auth.user || isLogin) return;
+			if (isLogin) return;
 			e.preventDefault();
 			paletteOpen = !paletteOpen;
 		} else if (e.key === 'Escape') {
@@ -331,7 +323,7 @@
 
 {#if isLogin}
 	{@render children()}
-{:else if auth.user}
+{:else}
 	<a class="skip no-print" href="#main">Перейти до змісту</a>
 
 	<header class="site-header no-print">
@@ -420,26 +412,38 @@
 			</div>
 
 			<div class="user">
-				<span class="avatar" aria-hidden="true" title="{auth.user.full_name} · {auth.user.position}">{initials(auth.user.full_name)}</span>
-				<span class="who">
-					<span class="user-name">{auth.user.full_name}</span>
-					<span class="user-role">{auth.user.position}</span>
-				</span>
-				<button type="button" class="out" onclick={logout} title="Вийти" aria-label="Вийти">
-					<Icon name="logout" size={18} /> <span class="out-txt">Вийти</span>
-				</button>
+				{#if auth.user}
+					<span class="avatar" aria-hidden="true" title="{auth.user.full_name} · {auth.user.position}">{initials(auth.user.full_name)}</span>
+					<span class="who">
+						<span class="user-name" title={auth.user.position}>{auth.user.full_name}</span>
+						<span class="role-chip">{chip}</span>
+					</span>
+					<button type="button" class="out" onclick={signOut} title="Вийти" aria-label="Вийти">
+						<Icon name="logout" size={18} /> <span class="out-txt">Вийти</span>
+					</button>
+				{:else}
+					<span class="role-chip pub"><Icon name="users" size={14} /> {chip}</span>
+					<a class="in-btn" href={loginHref}><Icon name="lock" size={16} /> Увійти</a>
+				{/if}
 			</div>
 
+			{#if !auth.user}
+				<a class="in-mob" href={loginHref} aria-label="Увійти">Увійти</a>
+			{/if}
 			<button
 				type="button"
 				class="me-btn"
 				aria-haspopup="dialog"
 				aria-expanded={sheetOpen}
 				aria-controls="m-sheet"
-				aria-label="Профіль і меню: {auth.user.full_name}"
+				aria-label={auth.user ? `Профіль і меню: ${auth.user.full_name}` : 'Меню'}
 				onclick={openSheet}
 			>
-				<span class="avatar" aria-hidden="true">{initials(auth.user.full_name)}</span>
+				{#if auth.user}
+					<span class="avatar" aria-hidden="true">{initials(auth.user.full_name)}</span>
+				{:else}
+					<span class="avatar pub" aria-hidden="true"><Icon name="users" size={17} /></span>
+				{/if}
 			</button>
 
 			<button
@@ -504,7 +508,6 @@
 						<li>
 							<a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
 								<span class="dd-label">{item.label}</span>
-								<span class="dd-hint">{item.hint}</span>
 							</a>
 						</li>
 					{/each}
@@ -579,11 +582,19 @@
 			>
 				<span class="sheet-grab" aria-hidden="true"></span>
 				<div class="sheet-head">
-					<span class="avatar lg" aria-hidden="true">{initials(auth.user.full_name)}</span>
-					<span class="sheet-who">
-						<span class="sheet-name" id="m-sheet-title">{auth.user.full_name}</span>
-						<span class="sheet-role">{auth.user.position}</span>
-					</span>
+					{#if auth.user}
+						<span class="avatar lg" aria-hidden="true">{initials(auth.user.full_name)}</span>
+						<span class="sheet-who">
+							<span class="sheet-name" id="m-sheet-title">{auth.user.full_name}</span>
+							<span class="sheet-role">{chip}</span>
+						</span>
+					{:else}
+						<span class="avatar lg pub" aria-hidden="true"><Icon name="users" size={20} /></span>
+						<span class="sheet-who">
+							<span class="sheet-name" id="m-sheet-title">{chip}</span>
+							<span class="sheet-role">Без входу</span>
+						</span>
+					{/if}
 					<button type="button" class="sheet-close" aria-label="Закрити меню" onclick={() => closeSheet()}>
 						<svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true"><path d="m3 3 8 8m0-8-8 8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
 					</button>
@@ -598,7 +609,6 @@
 							<a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
 								<span class="sl-txt">
 									<span class="sl-label">{item.label}</span>
-									<span class="sl-hint">{item.hint}</span>
 								</span>
 								<svg class="sl-chev" width="16" height="16" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
 							</a>
@@ -610,9 +620,13 @@
 					<button type="button" class="sheet-btn" onclick={helpFromSheet}>
 						<span class="sb-q" aria-hidden="true">?</span> Як користуватися
 					</button>
-					<button type="button" class="sheet-btn out-m" onclick={logout}>
-						<Icon name="logout" size={18} /> Вийти
-					</button>
+					{#if auth.user}
+						<button type="button" class="sheet-btn out-m" onclick={signOut}>
+							<Icon name="logout" size={18} /> Вийти
+						</button>
+					{:else}
+						<a class="sheet-btn in-m" href={loginHref}><Icon name="lock" size={18} /> Увійти</a>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -625,10 +639,8 @@
 	<footer class="site-footer">
 		<div class="wrap foot-row">
 			<p>
-				Будівлі й річне споживання — реальні дані <Term key="UMUNI" />. Станції, телеметрія й ліміти
-				позначені <Term key="ДЕМО-ДАНІ" />. Аналітична оцінка, не офіційний енергосертифікат.
+				Дані <Term key="UMUNI" /> · СЕС — <Term key="ДЕМО-ДАНІ">ДЕМО</Term><span class="no-print"> · Poltava Open Data Hackathon</span>
 			</p>
-			<p class="muted small no-print">Poltava Open Data Hackathon · трек 2 «Енергетичний менеджмент»</p>
 		</div>
 	</footer>
 {/if}
@@ -1038,13 +1050,69 @@
 		text-overflow: ellipsis;
 		max-width: 14rem;
 	}
-	.user-role {
-		font-size: 0.78rem;
-		color: #a9bdd6;
+	.role-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		align-self: flex-start;
+		margin-top: 0.15rem;
+		padding: 0.05rem 0.5rem;
+		border-radius: 999px;
+		background: rgba(255, 213, 107, 0.16);
+		border: 1px solid rgba(255, 213, 107, 0.45);
+		color: #ffe3a1;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.01em;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 14rem;
+		max-width: 16rem;
+	}
+	.role-chip.pub {
+		margin-top: 0;
+		align-self: center;
+		padding: 0.2rem 0.65rem;
+		background: rgba(255, 255, 255, 0.08);
+		border-color: rgba(255, 255, 255, 0.22);
+		color: #dfe7f1;
+		font-size: 0.8rem;
+	}
+	.in-btn,
+	.in-mob {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 42px;
+		padding: 0.45rem 0.95rem;
+		border-radius: 11px;
+		border: 1px solid #d98c0b;
+		background: linear-gradient(180deg, #ffc54d, var(--sun));
+		color: #2a1900;
+		font-weight: 700;
+		font-size: 0.9rem;
+		text-decoration: none;
+		white-space: nowrap;
+		flex: none;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 8px 20px -12px rgba(245, 165, 36, 0.9);
+		transition:
+			transform var(--dur-base) var(--ease-out),
+			filter var(--dur-fast);
+	}
+	.in-btn:hover,
+	.in-mob:hover {
+		text-decoration: none;
+		color: #2a1900;
+		filter: brightness(1.05);
+		transform: translateY(-1px);
+	}
+	.in-mob {
+		display: none;
+	}
+	.avatar.pub {
+		background: rgba(255, 255, 255, 0.1);
+		box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+		color: #dfe7f1;
 	}
 	.out,
 	.burger {
@@ -1259,10 +1327,6 @@
 	.dd-label {
 		font-weight: 600;
 	}
-	.dd-hint {
-		font-size: 0.85rem;
-		color: var(--muted);
-	}
 
 	main {
 		padding-top: 1.75rem;
@@ -1404,9 +1468,6 @@
 			box-shadow: none;
 			color: #fff;
 		}
-		.dd-hint {
-			color: #9fb3cb;
-		}
 	}
 	@media (max-width: 600px) {
 		.brand-name {
@@ -1531,6 +1592,12 @@
 			height: 2.1rem;
 			font-size: 0.8rem;
 			display: grid;
+		}
+		.in-mob {
+			display: inline-flex;
+			min-height: 38px;
+			padding: 0.3rem 0.8rem;
+			font-size: 0.875rem;
 		}
 		/* Тур: аркуш над нижньою панеллю (видно підсвічені вкладки) */
 		.help-pop {
@@ -1818,10 +1885,6 @@
 		.sl-label {
 			font-weight: 600;
 		}
-		.sl-hint {
-			font-size: 0.8125rem;
-			color: var(--muted);
-		}
 		.sl-chev {
 			flex: none;
 			color: var(--line-strong);
@@ -1861,6 +1924,17 @@
 			color: #ffd56b;
 			font-size: 0.8rem;
 			font-weight: 700;
+		}
+		.in-m {
+			color: #2a1900;
+			text-decoration: none;
+			border-color: #d98c0b;
+			background: linear-gradient(180deg, #ffc54d, var(--sun));
+		}
+		.avatar.lg.pub {
+			background: var(--neutral-soft);
+			color: var(--navy);
+			box-shadow: none;
 		}
 		.out-m {
 			color: var(--bad);

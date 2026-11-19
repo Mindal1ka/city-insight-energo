@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from . import independence as ind
+from .auth import User, can_see_sensitive, can_see_ses, current_user, require_login
 from .sites import KYIV
 
 router = APIRouter(tags=["Енергонезалежність"])
@@ -43,13 +44,36 @@ def _find(store, bid: int):
     raise HTTPException(404, "Об'єкт не знайдено")
 
 
+# поля, яких не бачить finance (акумулятори й автономність)
+_SENSITIVE_FIELDS = ("battery_kwh", "autonomy_hours", "autonomy_hours_with_sun", "index", "index_class")
+
+
+def _visible_items(user: User, evs: list[dict]) -> list[dict]:
+    """Об'єкти, дозволені ролі: повні — за can_see_sensitive, без акумуляторів/автономності — для finance."""
+    out = []
+    for e in evs:
+        item = ind.public(e)
+        if can_see_sensitive(user, item["category_short"], item["id"]):
+            out.append(item)
+        elif can_see_ses(user, item["category_short"], item["id"]):
+            out.append({**item, **{k: None for k in _SENSITIVE_FIELDS}})
+    return out
+
+
+def _guard(user: User, b) -> None:
+    if not can_see_sensitive(user, b.category_short, b.id):
+        raise HTTPException(403, "Немає доступу до даних цього об'єкта")
+
+
 def _sort_key(e: dict):
     # спершу критичні й заклади освіти, усередині — найменш захищені
     return (e["priority_rank"], e["index"], e["name"])
 
 
 @router.get("/api/independence")
-def independence_list(day: str | None = None, hour: int | None = None):
+def independence_list(day: str | None = None, hour: int | None = None, user: User = Depends(current_user)):
+    # Публічний режим: лише зведені цифри громади й категорій (без жодного об'єкта) —
+    # щоб відсоток енергонезалежності збігався на всіх сторінках; items для public порожній.
     store, sites = _ctx()
     now = _moment(day, hour)
     reg = _stations(store, sites)
@@ -57,14 +81,16 @@ def independence_list(day: str | None = None, hour: int | None = None):
     evs.sort(key=_sort_key)
     return {"demo": True, "now": now.isoformat(timespec="minutes"),
             "community": ind.community(evs), "categories": ind.categories(evs),
-            "items": [ind.public(e) for e in evs], "formula": ind.formula(), "notes": ind.NOTES}
+            "items": _visible_items(user, evs), "formula": ind.formula(), "notes": ind.NOTES}
 
 
 @router.get("/api/independence/{bid}")
-def independence_item(bid: int, day: str | None = None, hour: int | None = None):
+def independence_item(bid: int, day: str | None = None, hour: int | None = None,
+                      user: User = Depends(require_login)):
     store, sites = _ctx()
     now = _moment(day, hour)
     b = _find(store, bid)
+    _guard(user, b)
     ev = ind.evaluate(b, _stations(store, sites).get(b.id), now)
     return {"demo": True, "now": now.isoformat(timespec="minutes"), "item": ind.public(ev),
             "explain": ind.explain(ev, now), "improve": ind.improve(ev), "formula": ind.formula(),
@@ -73,9 +99,10 @@ def independence_item(bid: int, day: str | None = None, hour: int | None = None)
 
 @router.get("/api/sites/{bid}/outage")
 def outage(bid: int, day: str | None = None, start_hour: int | None = None,
-           hours: int = Query(4, ge=1, le=72), soc: float | None = Query(None, ge=0, le=100)):
+           hours: int = Query(4, ge=1, le=72), soc: float | None = Query(None, ge=0, le=100), user: User = Depends(require_login)):
     store, sites = _ctx()
     now = _moment(day, start_hour)
     b = _find(store, bid)
+    _guard(user, b)
     return ind.simulate_outage(b, _stations(store, sites).get(b.id), now.date(), now.hour, hours, soc)
 

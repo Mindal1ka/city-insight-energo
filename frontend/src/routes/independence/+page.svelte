@@ -27,6 +27,8 @@
 	import Reveal from '#lib/Reveal.svelte';
 	import Disclosure from '#lib/Disclosure.svelte';
 	import StatCard from '#lib/StatCard.svelte';
+	import { auth } from '#lib/auth.svelte.ts';
+	import { isInternal } from '#lib/roles.ts';
 
 	const view = $derived(viewFrom(page.url));
 	const HEALTH = "Охорона здоров'я";
@@ -58,8 +60,11 @@
 			if (my === seq) loading = false;
 		}
 	}
+	// Акумулятори й автономність — лише для внутрішніх ролей (публічний режим бачить картку входу)
+	const internal = $derived(isInternal(auth.user) && (auth.user as { role?: string } | null)?.role !== 'finance');
 	$effect(() => {
-		load(view);
+		if (internal) load(view);
+		else loading = false;
 	});
 
 	const c = $derived(data?.community);
@@ -202,16 +207,26 @@
 <header class="head">
 	<div>
 		<h1><Term key="енергонезалежність" plain>Енергонезалежність</Term> громади</h1>
-		<p class="lead">Скільки електрики будівлі громади отримують від власного сонця і що буде, якщо зникне світло.</p>
 	</div>
-	<span class="demo-quiet">
-		<DemoPill text="Будівлі й річне споживання електроенергії — реальні дані UMUNI 2025. Наявні сонячні панелі й акумулятори змодельовані, доки місто не надасть перелік." />
-	</span>
+	{#if internal}
+		<span class="demo-quiet">
+			<DemoPill text="Будівлі й річне споживання електроенергії — реальні дані UMUNI 2025. Наявні сонячні панелі й акумулятори змодельовані, доки місто не надасть перелік." />
+		</span>
+	{/if}
 </header>
 
+{#if !internal}
+	<!-- Публічний режим: акумулятори й автономність — внутрішні дані -->
+	<section class="block lock" aria-labelledby="lock-h">
+		<span class="lock-ic" aria-hidden="true"><Icon name="lock" size={26} /></span>
+		<h2 id="lock-h">Доступно після входу</h2>
+		<a class="btn" href="/login?next={encodeURIComponent('/independence')}">Увійти <Icon name="arrow-right" size={18} /></a>
+	</section>
+{:else}
 <Status loading={loading && !data} {error} retry={() => load()} />
+{/if}
 
-{#if data && c}
+{#if internal && data && c}
 	<div class="story" class:stale={loading}>
 		<!-- 1. Де ми зараз -->
 		<section class="block now" aria-labelledby="now-h">
@@ -220,17 +235,14 @@
 				<div class="now-main" use:inview={() => (heroSeen = true)}>
 					<p class="nm-l"><Icon name="sun" size={22} /> Власне сонце дає</p>
 					<p class="nm-v"><span class="big-num"><CountUp value={c.self_sufficiency_pct} decimals={1} duration={600} /></span><span class="u">%</span></p>
-					<p class="nm-s">
-						усієї електрики, яку {num(c.sites)} будівель громади споживають за рік. Решту
-						<b class="tnum">{num(100 - c.self_sufficiency_pct, 0)} %</b> купуємо з мережі.
-					</p>
+					<p class="nm-s">електрики · {num(c.sites)} будівель · рік</p>
 					<div class="mix" class:go={heroSeen} role="img" aria-label="Сонце {num(c.self_sufficiency_pct, 1)} %, мережа {num(100 - c.self_sufficiency_pct, 1)} %">
 						<span class="mix-sun" style:--w="{c.self_sufficiency_pct}%"></span>
 						<span class="mix-grid"></span>
 					</div>
 					<p class="mix-legend" aria-hidden="true">
-						<span><i class="dot sun"></i>сонце на дахах</span>
-						<span><i class="dot grid"></i>мережа</span>
+						<span><i class="dot sun"></i>сонце {num(c.self_sufficiency_pct, 1)} %</span>
+						<span><i class="dot grid"></i>мережа {num(100 - c.self_sufficiency_pct, 1)} %</span>
 					</p>
 				</div>
 				<div class="stats">
@@ -258,7 +270,6 @@
 					<p class="statement">
 						Дані про резерв внесено лише для <b class="tnum">{num(c.critical_sites_total - noReserve.length)} з {num(c.critical_sites_total)}</b> медзакладів <span class="demo-tag">ДЕМО</span>
 					</p>
-					<p class="muted sub">Це прогалина в даних, а не висновок про стан закладів. Після підключення реального реєстру станцій тут будуть справжні дані. Нижче — медзаклади без даних, що споживають найбільше.</p>
 					<ul class="crit-list" class:seen={critSeen} use:inview={() => (critSeen = true)}>
 						{#each showAllCrit ? noReserve : noReserve.slice(0, CRIT_TOP) as i, n (i.id)}
 							<li style:--i={n >= CRIT_TOP ? Math.min(n - CRIT_TOP, 6) : n}>
@@ -311,8 +322,8 @@
 				</div>
 				<div class="pot-foot">
 					<p class="pot-facts">
-						Для цього — ще <b class="tnum">{num(c.potential_kw, 0)} кВт</b> панелей{#if c.potential_sites}{' '}на <b class="tnum">{num(c.potential_sites)}</b> будівлях{/if},
-						кожна станція під власне споживання будівлі. Орієнтовна вартість — <b class="tnum">{money(c.potential_cost_uah)}</b>.
+						+<b class="tnum">{num(c.potential_kw, 0)} кВт</b>{#if c.potential_sites}{' '}· <b class="tnum">{num(c.potential_sites)}</b> будівель{/if}
+						· ≈ <b class="tnum">{money(c.potential_cost_uah)}</b>
 					</p>
 					<a class="btn" href={withView('/solar', view)} data-sveltekit-reset="false">Де ставити нові СЕС <Icon name="arrow-right" size={18} /></a>
 				</div>
@@ -323,10 +334,6 @@
 		<Reveal>
 			<section class="block rank-block" aria-labelledby="rank-h">
 				<h2 id="rank-h" class="kicker"><span class="step" aria-hidden="true">4</span>Рейтинг закладів</h2>
-				<p class="index-explain">
-					<b>Індекс енергостійкості</b> — бал від 0 до 100: половина балів — за частку власного сонця,
-					половина — за години роботи на акумуляторі без світла. 0 — немає ні панелей, ні акумулятора.
-				</p>
 
 				<!-- Телефон: пошук + ряд чипів типів + шторка «Фільтри» -->
 				<div class="pf only-phone" role="search">
@@ -536,12 +543,12 @@
 			</section>
 		</Reveal>
 
-		<!-- 5. Як ми рахуємо -->
+		<!-- Як рахуємо: усе пояснення — тут, згорнуте -->
 		<Reveal>
-			<section class="block how" aria-labelledby="how-h">
-				<h2 id="how-h" class="kicker"><span class="step" aria-hidden="true">5</span>Як ми рахуємо</h2>
-				<Disclosure summary="Звідки цифри і як рахується індекс енергостійкості">
+			<section class="block how" aria-label="Як рахуємо">
+				<Disclosure summary="Як рахуємо">
 					<ul class="how-list">
+						<li><b>Дані про резерв</b> — прогалина в даних, а не висновок про стан закладу; акумулятори змодельовані до отримання реєстру станцій.</li>
 						<li><b>Частка власного сонця</b> — скільки з річного споживання електрики будівлі покривають її сонячні панелі (виробіток 1 кВт панелей — за даними <Term key="PVGIS" plain>PVGIS</Term> для Полтави).</li>
 						<li><b>Резерв</b> — скільки годин <Term key="акумулятор" plain>акумулятор</Term> тримає будівлю без світла і без сонця при звичайному навантаженні.</li>
 						<li><b>Індекс енергостійкості</b> — 50 балів за сонце (максимум, якщо сонце покриває 40 % і більше) + 50 балів за резерв (максимум від 8 годин).</li>
@@ -553,10 +560,8 @@
 							{#each data.notes as nt, k (k)}<li>{nt}</li>{/each}
 						</ul>
 					{/if}
+					<p class="security muted small"><Icon name="lock" size={16} /> Без карти: розташування резерву — чутлива інформація.</p>
 				</Disclosure>
-				<p class="security muted small">
-					<Icon name="lock" size={16} /> Карту навмисно не показуємо: де саме є резервне живлення — чутлива інформація.
-				</p>
 			</section>
 		</Reveal>
 	</div>
@@ -606,6 +611,27 @@
 		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-md);
 		padding: 1.75rem 2rem;
+	}
+	.lock {
+		display: grid;
+		justify-items: center;
+		gap: 0.9rem;
+		max-width: 26rem;
+		margin: 2rem auto;
+		text-align: center;
+	}
+	.lock h2 {
+		margin: 0;
+		font-size: 1.35rem;
+	}
+	.lock-ic {
+		display: grid;
+		place-items: center;
+		width: 3.25rem;
+		height: 3.25rem;
+		border-radius: 50%;
+		background: var(--accent-soft);
+		color: var(--accent);
 	}
 	.kicker {
 		display: flex;

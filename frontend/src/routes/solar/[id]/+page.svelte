@@ -12,6 +12,8 @@
 	import Disclosure from '#lib/Disclosure.svelte';
 	import Reveal from '#lib/Reveal.svelte';
 	import { fadeUp } from '#lib/motion.ts';
+	import { auth } from '#lib/auth.svelte.ts';
+	import { canSeeSensitive, canSeeBattery } from '#lib/roles.ts';
 
 	type ParamsX = SolarList['params'] & {
 		capex_fixed_uah?: number;
@@ -48,7 +50,8 @@
 				getJSON<{ item: IndependenceItem }>(`/api/independence/${encodeURIComponent(bid)}`).catch(() => null)
 			]);
 			data = d;
-			exist = ie?.item ?? null;
+			// Наявна СЕС / акумулятор об'єкта — лише для ролей з доступом до чутливих даних
+			exist = ie?.item && canSeeSensitive(auth.user, d.item?.category_short, d.item?.id) ? ie.item : null;
 			prm = (d.params ?? list?.params ?? null) as ParamsX | null;
 		} catch (e) {
 			data = null;
@@ -98,8 +101,8 @@
 			if (add <= 0)
 				return {
 					tone: 'ok',
-					main: `Тут уже працює станція ${kwTxt(exist.ses_kw)} кВт — цього достатньо.`,
-					sub: `Вона покриває ${num(exist.self_sufficiency_pct, 1)} % потреби будівлі. Більша станція виробляла б надлишок, який заклад не може продати.`
+					main: `Уже є ${kwTxt(exist.ses_kw)} кВт — достатньо.`,
+					sub: `Покриває ${num(exist.self_sufficiency_pct, 1)} % потреби.`
 				};
 			const gain = Math.max(
 				0,
@@ -110,30 +113,29 @@
 			return {
 				tone: 'ok',
 				main: `Тут уже є станція ${kwTxt(exist.ses_kw)} кВт. Варто додати ще ${kwTxt(add)} кВт: разом покриють ${num(exist.potential_self_sufficiency_pct)} % потреби, доповнення ${paybackWords(save > 0 ? cost / save : null)}.`,
-				sub: `Доповнення коштуватиме ≈ ${money(cost)} і заощаджуватиме ≈ ${money(save)} на рік. Повзунок нижче показує станцію загалом.`
+				sub: `≈ ${money(cost)} · економія ≈ ${money(save)}/рік`
 			};
 		}
 		if (it.payback_years === null)
-			return { tone: 'warn', main: 'Сонячна станція тут не окупиться.', sub: 'Будівля споживає вдень замало електроенергії.' };
+			return { tone: 'warn', main: 'СЕС тут не окупиться.', sub: 'Замале денне споживання.' };
 		return {
 			tone: 'ok',
 			main: `Тут варто поставити ${kwTxt(it.kw_recommended ?? 0)} кВт: покриє ${num(it.coverage_pct)} % потреби, ${paybackWords(it.payback_years)}.`,
-			sub: `Коштуватиме ≈ ${money(it.capex_uah)}, заощаджуватиме ≈ ${money(it.savings_uah_year)} на рік.`
+			sub: `≈ ${money(it.capex_uah)} · економія ≈ ${money(it.savings_uah_year)}/рік`
 		};
 	});
 </script>
 
 <svelte:head><title>{it ? it.name : 'Розрахунок СЕС'} · City Insight Map · Енергія</title></svelte:head>
 
-<p class="no-print back"><a href="/solar{backQs}" data-sveltekit-reset="false">← До переліку «Де ставити СЕС»</a></p>
+<p class="no-print back"><a href="/solar{backQs}" data-sveltekit-reset="false">← Нові СЕС</a></p>
 
 <Status {loading} {error} retry={() => load(id, q)} />
 
 {#if notReady && !loading}
 	<div class="notice notice-warn" role="status">
 		<p>
-			<strong>Розрахунку для цієї будівлі немає.</strong>
-			Ймовірно, будівлю не оцінено (немає даних про електроенергію чи площу) або її не знайдено.
+			<strong>Розрахунку немає.</strong>
 			<a href="/object/{id}">Відкрити об’єкт</a>
 		</p>
 	</div>
@@ -188,16 +190,11 @@
 			<Reveal delay={120}>
 				<ForecastCard kw={scenKw ?? it.kw_recommended} />
 			</Reveal>
-			<p class="muted small side-note">Прогноз — для станції, яку ви вибрали повзунком.</p>
 		</aside>
 	</div>
 
 	<section class="card more" aria-labelledby="more-h">
-		<h2 id="more-h">Подробиці розрахунку</h2>
-		<p class="muted small more-lead">
-			Станцію підібрано <strong>під власне споживання будівлі</strong>: надлишок комунальний заклад не може продати,
-			тож більша станція коштує дорожче, а заощаджує майже стільки ж.
-		</p>
+		<h2 id="more-h">Подробиці</h2>
 		{#if months.length}
 			<Disclosure summary="Таблиця по місяцях" hint="рекомендована станція {num(it.kw_recommended, 1)} кВт">
 				<div class="table-wrap">
@@ -246,17 +243,18 @@
 				{#if exist?.has_ses}
 					<div>
 						<dt>Наявна станція (ДЕМО-дані)</dt>
-						<dd>{num(exist.ses_kw, 1)} кВт{exist.battery_kwh ? `, акумулятор ${num(exist.battery_kwh, 1)} кВт·год` : ''}</dd>
+						<dd>{num(exist.ses_kw, 1)} кВт{exist.battery_kwh && canSeeBattery(auth.user, it.category_short, it.id) ? `, акумулятор ${num(exist.battery_kwh, 1)} кВт·год` : ''}</dd>
 					</div>
 				{/if}
 			</dl>
 		</Disclosure>
 		{#if data.assumptions?.length}
-			<Disclosure summary="Припущення розрахунку" hint="{data.assumptions.length} пунктів">
+			<Disclosure summary="Як рахуємо" hint="{data.assumptions.length} пунктів">
 				<ul class="assume">
+					<li>Станція — під власне споживання будівлі: надлишок комунальний заклад не може продати. Аналітична оцінка, а не проєкт.</li>
+					<li>Прогноз погоди — для станції, вибраної повзунком.</li>
 					{#each data.assumptions as a, i (i)}<li>{a}</li>{/each}
 				</ul>
-				<p class="muted small">Це аналітична оцінка, а не проєкт станції.</p>
 			</Disclosure>
 		{/if}
 	</section>

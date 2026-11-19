@@ -228,13 +228,13 @@
 
 		{#if data?.stale || data?.demo}
 			<p class="fc-flags">
-				{#if data?.demo}<span class="pill pill-warn">демо</span> Прогноз ще не підключено — показано приклад{/if}
-				{#if data?.stale}<span class="pill pill-warn" role="note">⚠ дані застарілі: показано останній збережений прогноз</span>{/if}
+				{#if data?.demo}<span class="pill pill-warn" title="Прогноз ще не підключено — показано приклад">демо</span>{/if}
+				{#if data?.stale}<span class="pill pill-warn" role="note" title="Показано останній збережений прогноз">⚠ застарілий</span>{/if}
 			</p>
 		{/if}
 
 		{#if !compact}
-			<Disclosure summary="Детальніше про прогноз">
+			<Disclosure summary="Детальніше">
 				{#if ratioPct !== null}
 					<div class="norm">
 						<div class="norm-txt">

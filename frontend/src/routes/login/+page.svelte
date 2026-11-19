@@ -1,34 +1,129 @@
 <script lang="ts">
-	// Вікно входу. ТЕСТОВИЙ вхід для демонстрації: будь-яке ПІБ + будь-який непорожній пароль.
-	import { login, DEFAULT_POSITION } from '#lib/auth.svelte.ts';
+	// Вхід: ПІБ, посада, роль (+ заклад / управління), пароль → POST /api/auth/login.
+	// «Переглянути як мешканець» — публічний режим без входу.
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { login, logout, fetchRoles, safeNext, LoginError, DEFAULT_POSITION } from '#lib/auth.svelte.ts';
+	import { ROLES, DEPARTMENTS, type RoleInfo, type RoleId, type Department } from '#lib/roles.ts';
+	import { api, type Building } from '#lib/api.ts';
 	import Icon from '#lib/Icon.svelte';
 
 	let fullName = $state('');
 	let position = $state(DEFAULT_POSITION);
 	let password = $state('');
-	// Підказки для поля «Посада»; можна ввести й свою
-	const POSITIONS = [
-		'Енергоменеджер',
-		'Головний фахівець з енергоменеджменту',
-		'Директор закладу',
-		'Представник департаменту'
-	];
+	let roles = $state<RoleInfo[]>(ROLES);
+	let roleId = $state<RoleId>('energy_manager');
+	let department = $state<Department | ''>('');
 	let tried = $state(false);
 	let busy = $state(false);
+	let serverErr = $state('');
 
-	const nameErr = $derived(fullName.trim() ? '' : 'Вкажіть ваше ПІБ');
-	const passErr = $derived(password ? '' : 'Введіть будь-який пароль');
+	const role = $derived(roles.find((r) => r.id === roleId) ?? roles[0]);
+	// Короткий підпис ролі (локальний), довгий опис бекенду — запасний
+	const roleDesc = $derived(ROLES.find((r) => r.id === roleId)?.description ?? role?.description ?? '');
 
-	function submit(e: SubmitEvent) {
+	fetchRoles().then((list) => {
+		roles = list;
+		if (!list.some((r) => r.id === roleId)) roleId = list[0]?.id ?? 'energy_manager';
+	});
+
+	// --- Пошук закладу (для керівника закладу) ---
+	let buildings = $state<Building[]>([]);
+	let bLoading = $state(false);
+	let bQuery = $state('');
+	let buildingId = $state<number | null>(null);
+	let bOpen = $state(false);
+	let bActive = $state(0);
+	const chosen = $derived(buildings.find((b) => b.id === buildingId) ?? null);
+
+	$effect(() => {
+		if (!role?.needs_building || buildings.length || bLoading) return;
+		bLoading = true;
+		api
+			.buildings()
+			.then((list) => (buildings = list))
+			.catch(() => (buildings = []))
+			.finally(() => (bLoading = false));
+	});
+
+	function norm(s: string) {
+		return s.toLocaleLowerCase('uk').replace(/[’'ʼ`]/g, '').replace(/\s+/g, ' ').trim();
+	}
+	const matches = $derived.by(() => {
+		const q = norm(bQuery);
+		if (!q || (chosen && bQuery === chosen.name)) return buildings.slice(0, 0);
+		const words = q.split(' ');
+		return buildings
+			.filter((b) => {
+				const hay = norm(`${b.name} ${b.address} ${b.id}`);
+				return words.every((w) => hay.includes(w));
+			})
+			.slice(0, 8);
+	});
+	function pick(b: Building) {
+		buildingId = b.id;
+		bQuery = b.name;
+		bOpen = false;
+	}
+	function bKey(e: KeyboardEvent) {
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			bOpen = true;
+			bActive = Math.min(bActive + 1, matches.length - 1);
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			bActive = Math.max(bActive - 1, 0);
+		} else if (e.key === 'Enter' && bOpen && matches[bActive]) {
+			e.preventDefault();
+			pick(matches[bActive]);
+		} else if (e.key === 'Escape') {
+			bOpen = false;
+		}
+	}
+	function bInput() {
+		buildingId = null;
+		bOpen = true;
+		bActive = 0;
+	}
+
+	const nameErr = $derived(fullName.trim() ? '' : 'Вкажіть ПІБ');
+	const passErr = $derived(password ? '' : 'Введіть пароль');
+	const bErr = $derived(role?.needs_building && !buildingId ? 'Оберіть заклад зі списку' : '');
+	const dErr = $derived(role?.needs_department && !department ? 'Оберіть управління' : '');
+
+	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		tried = true;
-		if (nameErr || passErr) {
-			document.getElementById(nameErr ? 'fio' : 'pass')?.focus();
+		serverErr = '';
+		const first = nameErr ? 'fio' : bErr ? 'bld' : dErr ? 'dep-0' : passErr ? 'pass' : null;
+		if (first) {
+			document.getElementById(first)?.focus();
 			return;
 		}
 		busy = true;
-		// Коротка пауза, щоб було видно відгук кнопки; переадресацію робить +layout
-		setTimeout(() => login({ full_name: fullName.trim().replace(/\s+/g, ' '), position: position.trim().replace(/\s+/g, ' ') || DEFAULT_POSITION }), 280);
+		try {
+			await login({
+				full_name: fullName.trim().replace(/\s+/g, ' '),
+				position: position.trim().replace(/\s+/g, ' ') || DEFAULT_POSITION,
+				role: roleId,
+				building_id: role?.needs_building ? buildingId : null,
+				department: role?.needs_department ? (department as Department) : null,
+				password
+			});
+			goto(safeNext(page.url), { replace: true, reset: false });
+		} catch (err) {
+			serverErr = err instanceof LoginError ? err.message : 'Не вдалося увійти';
+			busy = false;
+			if (err instanceof LoginError && (err.status === 401 || err.status === 403)) {
+				password = '';
+				document.getElementById('pass')?.focus();
+			}
+		}
+	}
+
+	function asResident() {
+		logout();
+		goto(safeNext(page.url), { replace: true, reset: false });
 	}
 
 	// Вогники міста на схемі: [x, y, затримка]
@@ -57,11 +152,7 @@
 		</p>
 
 		<h1 id="hero-h" class="rise" style="--d: 80ms">Енергія громади —<br /><span class="hl">видно з першого погляду</span></h1>
-		<p class="one rise" style="--d: 160ms">
-			Карта будівель Полтавської громади: скільки електрики споживає кожна школа, садочок чи лікарня — і
-			де варто поставити сонячні панелі й батареї, щоб у школах і лікарнях світло було довше.
-		</p>
-
+		<p class="one rise" style="--d: 160ms">Ефективність сонячних станцій комунальних об’єктів.</p>
 		<svg class="art rise" style="--d: 240ms" viewBox="0 0 520 300" aria-hidden="true" focusable="false">
 			<defs>
 				<radialGradient id="lg-sun" cx="0.5" cy="0.5" r="0.5">
@@ -123,9 +214,7 @@
 
 	<section class="side" aria-labelledby="form-h">
 		<form class="card-form" onsubmit={submit} novalidate>
-			<span class="test-tag"><span class="tdot" aria-hidden="true"></span>Тестовий вхід</span>
 			<h2 id="form-h">Вхід</h2>
-			<p class="sub">Для демонстрації підійде будь‑яке ім’я і будь‑який пароль; посаду можна не змінювати.</p>
 
 			<div class="f">
 				<label for="fio">ПІБ</label>
@@ -135,7 +224,7 @@
 						id="fio"
 						type="text"
 						autocomplete="name"
-						placeholder="Напр., Коваленко Олена Петрівна"
+						placeholder="Коваленко Олена Петрівна"
 						bind:value={fullName}
 						aria-invalid={tried && !!nameErr}
 						aria-describedby={tried && nameErr ? 'fio-err' : undefined}
@@ -145,29 +234,85 @@
 			</div>
 
 			<div class="f">
-				<label for="pos">Посада <span class="opt">необов’язково</span></label>
+				<label for="pos">Посада</label>
 				<div class="inp">
 					<Icon name="building" size={18} />
-					<input
-						id="pos"
-						type="text"
-						list="pos-list"
-						autocomplete="organization-title"
-						placeholder="Оберіть зі списку або впишіть свою"
-						bind:value={position}
-						aria-describedby="pos-hint"
-					/>
-					<datalist id="pos-list">
-						{#each POSITIONS as p (p)}<option value={p}></option>{/each}
-					</datalist>
+					<input id="pos" type="text" autocomplete="organization-title" bind:value={position} />
 				</div>
-				<div class="pos-chips" role="group" aria-label="Швидкий вибір посади">
-					{#each POSITIONS as p (p)}
-						<button type="button" class="pchip" aria-pressed={position.trim() === p} onclick={() => (position = p)}>{p}</button>
-					{/each}
-				</div>
-				<p id="pos-hint" class="visually-hidden">Можна обрати підказку або ввести власну посаду. Якщо залишити порожнім — {DEFAULT_POSITION}.</p>
 			</div>
+
+			<div class="f">
+				<label for="role">Роль</label>
+				<div class="inp sel">
+					<Icon name="lock" size={18} />
+					<select id="role" bind:value={roleId}>
+						{#each roles as r (r.id)}<option value={r.id}>{r.name}</option>{/each}
+					</select>
+				</div>
+				{#if roleDesc}<p class="hint">{roleDesc}</p>{/if}
+			</div>
+
+			{#if role?.needs_building}
+				<div class="f">
+					<label for="bld">Ваш заклад</label>
+					<div class="inp combo">
+						<Icon name="search" size={18} />
+						<input
+							id="bld"
+							type="text"
+							role="combobox"
+							autocomplete="off"
+							placeholder={bLoading ? 'Завантаження…' : 'Назва, адреса або id'}
+							bind:value={bQuery}
+							oninput={bInput}
+							onkeydown={bKey}
+							onfocus={() => (bOpen = true)}
+							onblur={() => setTimeout(() => (bOpen = false), 150)}
+							aria-expanded={bOpen && matches.length > 0}
+							aria-controls="bld-list"
+							aria-autocomplete="list"
+							aria-activedescendant={bOpen && matches[bActive] ? `bld-${matches[bActive].id}` : undefined}
+							aria-invalid={tried && !!bErr}
+						/>
+						{#if chosen}<span class="ok-mark" aria-label="Обрано"><Icon name="check" size={16} /></span>{/if}
+						{#if bOpen && matches.length}
+							<ul id="bld-list" class="combo-list" role="listbox">
+								{#each matches as b, i (b.id)}
+									<li
+										id="bld-{b.id}"
+										role="option"
+										aria-selected={i === bActive}
+										class:act={i === bActive}
+										onmousedown={(e) => {
+											e.preventDefault();
+											pick(b);
+										}}
+									>
+										<span class="cl-name">{b.name}</span>
+										<span class="cl-addr">{b.address}</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+					{#if tried && bErr}<p class="err"><Icon name="alert" size={15} /> {bErr}</p>{:else if chosen}<p class="hint">{chosen.address}</p>{/if}
+				</div>
+			{/if}
+
+			{#if role?.needs_department}
+				<fieldset class="f dep">
+					<legend>Управління</legend>
+					<div class="seg">
+						{#each DEPARTMENTS as d, i (d.id)}
+							<label class="seg-opt" class:on={department === d.id}>
+								<input id="dep-{i}" type="radio" name="dep" value={d.id} bind:group={department} />
+								{d.id === 'освіта' ? 'Освіта' : 'Охорона здоров’я'}
+							</label>
+						{/each}
+					</div>
+					{#if tried && dErr}<p class="err"><Icon name="alert" size={15} /> {dErr}</p>{/if}
+				</fieldset>
+			{/if}
 
 			<div class="f">
 				<label for="pass">Пароль</label>
@@ -177,7 +322,6 @@
 						id="pass"
 						type="password"
 						autocomplete="current-password"
-						placeholder="Будь-який"
 						bind:value={password}
 						aria-invalid={tried && !!passErr}
 						aria-describedby={tried && passErr ? 'pass-err' : undefined}
@@ -186,17 +330,21 @@
 				{#if tried && passErr}<p id="pass-err" class="err"><Icon name="alert" size={15} /> {passErr}</p>{/if}
 			</div>
 
+			{#if serverErr}<p class="err srv" role="alert"><Icon name="alert" size={15} /> {serverErr}</p>{/if}
+
 			<button class="go" type="submit" disabled={busy} aria-busy={busy}>
 				<span>{busy ? 'Входимо…' : 'Увійти'}</span>
 				<span class="go-ico"><Icon name="arrow-right" size={18} /></span>
 			</button>
 
-			<p class="test-note">
-				<Icon name="info" size={16} />
-				<span>Це тестовий вхід: справжньої перевірки пароля немає, дані зберігаються лише в цій вкладці.</span>
-			</p>
+			<div class="or" aria-hidden="true"><span>або</span></div>
+
+			<button class="pub" type="button" onclick={asResident}>
+				<Icon name="users" size={20} />
+				<span>Переглянути як мешканець</span>
+			</button>
 		</form>
-		<p class="foot">Poltava Open Data Hackathon · трек 2 «Енергетичний менеджмент»</p>
+		<p class="foot">Poltava Open Data Hackathon · трек 2</p>
 	</section>
 </div>
 
@@ -342,33 +490,9 @@
 			0 40px 80px -30px rgba(0, 0, 0, 0.65),
 			0 0 0 1px rgba(255, 255, 255, 0.4);
 	}
-	.test-tag {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.45rem;
-		padding: 0.2rem 0.7rem;
-		border-radius: 999px;
-		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--sun-ink);
-		background: var(--sun-soft);
-		border: 1px dashed #d08a1c;
-	}
-	.tdot {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: var(--sun-strong);
-	}
 	h2 {
 		font-size: 1.75rem;
-		margin: 0.9rem 0 0.3rem;
-	}
-	.sub {
-		color: var(--muted);
-		margin: 0 0 1.4rem;
+		margin: 0 0 1.1rem;
 	}
 	.f {
 		margin-bottom: 1rem;
@@ -407,46 +531,6 @@
 	}
 	.inp input[aria-invalid='true'] {
 		border-color: var(--bad);
-	}
-	.opt {
-		font-weight: 400;
-		font-size: 0.8125rem;
-		color: var(--muted);
-		margin-left: 0.3rem;
-	}
-	.pos-chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem;
-		margin-top: 0.5rem;
-	}
-	.pchip {
-		min-height: 32px;
-		padding: 0.2rem 0.7rem;
-		border-radius: 999px;
-		border: 1px solid var(--line);
-		background: #fff;
-		color: var(--text-2);
-		font: inherit;
-		font-size: 0.8125rem;
-		cursor: pointer;
-		transition:
-			background var(--dur-fast),
-			border-color var(--dur-fast),
-			color var(--dur-fast),
-			transform var(--dur-base) var(--ease-out);
-	}
-	.pchip:hover {
-		border-color: var(--line-strong);
-		background: var(--surface-2);
-	}
-	.pchip:active {
-		transform: scale(0.96);
-	}
-	.pchip[aria-pressed='true'] {
-		background: var(--navy);
-		border-color: var(--navy);
-		color: #fff;
 	}
 	.err {
 		display: flex;
@@ -515,23 +599,173 @@
 		background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
 		transform: skewX(-20deg);
 	}
-	.test-note {
-		display: flex;
-		gap: 0.5rem;
-		align-items: flex-start;
-		margin: 1.1rem 0 0;
-		font-size: 0.85rem;
-		color: var(--muted);
-		line-height: 1.45;
-	}
-	.test-note :global(.icon) {
-		flex: none;
-		margin-top: 0.1rem;
-	}
 	.foot {
 		margin: 0;
 		font-size: 0.8125rem;
 		color: #8ea5c2;
+	}
+
+	.hint {
+		margin: 0.3rem 0 0;
+		font-size: 0.8125rem;
+		color: var(--muted);
+		line-height: 1.35;
+	}
+	.sel select {
+		width: 100%;
+		min-height: 50px;
+		padding-left: 2.6rem;
+		border-radius: 13px;
+		font-size: 1rem;
+		background-color: var(--surface-2);
+		border-color: var(--line);
+	}
+	.sel select:focus {
+		background-color: #fff;
+		box-shadow: 0 0 0 4px rgba(11, 92, 173, 0.12);
+	}
+	.combo input {
+		padding-right: 2.4rem;
+	}
+	.ok-mark {
+		position: absolute;
+		right: 0.8rem;
+		display: grid;
+		place-items: center;
+		color: var(--good, #1a7f4b);
+	}
+	.ok-mark :global(.icon) {
+		position: static;
+	}
+	.combo-list {
+		position: absolute;
+		z-index: 5;
+		top: calc(100% + 6px);
+		left: 0;
+		right: 0;
+		margin: 0;
+		padding: 0.3rem;
+		list-style: none;
+		max-height: 16rem;
+		overflow-y: auto;
+		border-radius: 14px;
+		background: #fff;
+		border: 1px solid var(--line);
+		box-shadow: 0 20px 40px -18px rgba(8, 20, 38, 0.45);
+	}
+	.combo-list li {
+		display: flex;
+		flex-direction: column;
+		padding: 0.45rem 0.65rem;
+		border-radius: 10px;
+		cursor: pointer;
+		line-height: 1.3;
+	}
+	.combo-list li.act,
+	.combo-list li:hover {
+		background: var(--sun-soft);
+	}
+	.cl-name {
+		font-weight: 600;
+		font-size: 0.9rem;
+		color: var(--text);
+	}
+	.cl-addr {
+		font-size: 0.78rem;
+		color: var(--muted);
+	}
+	fieldset.dep {
+		border: 0;
+		padding: 0;
+		min-width: 0;
+	}
+	.dep legend {
+		padding: 0;
+		margin-bottom: 0.35rem;
+		font-weight: 600;
+	}
+	.seg {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.4rem;
+	}
+	.seg-opt {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 46px;
+		padding: 0.3rem 0.6rem;
+		border-radius: 12px;
+		border: 1px solid var(--line);
+		background: var(--surface-2);
+		font-weight: 600;
+		font-size: 0.9rem;
+		text-align: center;
+		cursor: pointer;
+		transition:
+			background var(--dur-fast),
+			border-color var(--dur-fast),
+			color var(--dur-fast);
+	}
+	.seg-opt input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.seg-opt:has(input:focus-visible) {
+		outline: 3px solid var(--focus);
+		outline-offset: 2px;
+	}
+	.seg-opt.on {
+		background: var(--navy);
+		border-color: var(--navy);
+		color: #fff;
+	}
+	.srv {
+		padding: 0.55rem 0.75rem;
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--bad) 8%, #fff);
+	}
+	.or {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin: 1rem 0 0.8rem;
+		color: var(--muted);
+		font-size: 0.8125rem;
+	}
+	.or::before,
+	.or::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--line);
+	}
+	.pub {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.6rem;
+		width: 100%;
+		min-height: 52px;
+		border-radius: 14px;
+		border: 1.5px solid var(--navy);
+		background: #fff;
+		color: var(--navy);
+		font: inherit;
+		font-weight: 700;
+		font-size: 1.0625rem;
+		cursor: pointer;
+		transition:
+			background var(--dur-fast),
+			transform var(--dur-base) var(--ease-out);
+	}
+	.pub:hover {
+		background: var(--accent-soft, #eaf2fb);
+		transform: translateY(-1px);
+	}
+	.pub:active {
+		transform: scale(0.985);
 	}
 
 	/* --- Анімації --- */
@@ -685,9 +919,6 @@
 		}
 	}
 	@media (pointer: coarse) {
-		.pchip {
-			min-height: 40px;
-		}
 	}
 	/* Телефон: усе на одному-півтора екранах, форма — головне */
 	@media (max-width: 640px) {
@@ -726,17 +957,9 @@
 			padding: 1.1rem 1rem 1rem;
 			border-radius: 20px;
 		}
-		.test-tag {
-			margin-bottom: 0.5rem;
-		}
 		.card-form h2 {
 			font-size: 1.35rem;
 			margin-bottom: 0.25rem;
-		}
-		.sub {
-			font-size: 0.875rem;
-			line-height: 1.4;
-			margin-bottom: 0.9rem;
 		}
 		.f {
 			margin-bottom: 0.75rem;
@@ -745,26 +968,6 @@
 			min-height: 48px;
 		}
 		/* Підказки посади — один ряд із прокруткою */
-		.pos-chips {
-			flex-wrap: nowrap;
-			overflow-x: auto;
-			scroll-snap-type: x proximity;
-			margin-inline: -1rem;
-			padding: 2px 1rem;
-			scrollbar-width: none;
-		}
-		.pos-chips::-webkit-scrollbar {
-			display: none;
-		}
-		.pchip {
-			flex: none;
-			scroll-snap-align: start;
-			white-space: nowrap;
-		}
-		.test-note {
-			margin-top: 0.75rem;
-			font-size: 0.8rem;
-		}
 		.foot {
 			font-size: 0.75rem;
 			text-align: center;

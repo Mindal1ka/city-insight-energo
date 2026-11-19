@@ -99,12 +99,6 @@
 <div class="page-head">
 	<div>
 		<h1>Рейтинг будівель</h1>
-		<p class="lead">
-			Порівнюємо схожі будівлі — школи зі школами, садочки із садочками — за
-			<Term key="питоме споживання">питомим споживанням</Term><span class="hide-phone">: скільки електрики будівля витрачає на
-			кожен квадратний метр. Так можна чесно порівнювати великі й малі будівлі</span>.
-			<strong>№ 1 у черзі на перевірку</strong> — будівля, що витрачає найбільше на 1 м²: її варто перевірити першою.
-		</p>
 	</div>
 </div>
 
@@ -114,8 +108,7 @@
 		<span class="f-op" aria-hidden="true">÷</span>
 		<span class="f-part"><Icon name="building" size={18} /> площа будівлі</span>
 		<span class="f-op" aria-hidden="true">=</span>
-		<span class="f-part f-res">кВт·год на 1 м²</span>
-		<span class="f-ex muted small">Напр.: школа 2 000 м² спожила 40 000 кВт·год → 20 кВт·год/м²</span>
+		<span class="f-part f-res"><Term key="питоме споживання" plain>кВт·год на 1 м²</Term></span>
 	</p>
 </Reveal>
 
@@ -155,7 +148,7 @@
 					label="Будівель у рейтингу"
 					value={totalRated}
 					icon="building"
-					hint="Категорія «{current}», дані за {BASE_YEAR} рік."
+					hint="«{current}», {BASE_YEAR} рік."
 				/>
 			</Reveal>
 			<Reveal delay={70}>
@@ -187,7 +180,7 @@
 						tone="warn"
 						toneLabel="помилки в даних"
 						href="#excluded"
-						hint="Через неповні чи сумнівні дані. Список — унизу сторінки."
+						hint="Неповні чи сумнівні дані."
 					/>
 				</Reveal>
 			{/if}
@@ -196,7 +189,7 @@
 		<div class="toolbar">
 			<div class="field search">
 				<label for="q">Знайти будівлю</label>
-				<input id="q" type="search" bind:value={query} placeholder="Назва або адреса, напр. «гімназія № 3»" />
+				<input id="q" type="search" bind:value={query} placeholder="Назва або адреса" />
 			</div>
 			<div class="field">
 				<span class="lbl" id="sort-l">Порядок</span>
@@ -275,7 +268,7 @@
 									</dl>
 									<p class="det-links">
 										<a href="/building/{r.b.id}">Паспорт даних →</a>
-										<a href="/object/{r.b.id}">Сонце й автономність →</a>
+										<a href="/object/{r.b.id}">Картка об’єкта →</a>
 									</p>
 								</div>
 							{/if}
@@ -294,26 +287,12 @@
 			{/if}
 		</div>
 		<p class="muted small legend">
-			<span class="lg-tick" aria-hidden="true"></span> Вертикальна риска — типове значення для категорії
-			({num(median, 1)} кВт·год/м²). Клас — аналітична оцінка відносно схожих будівель, а не офіційний
-			енергосертифікат.
+			<span class="lg-tick" aria-hidden="true"></span> типово: {num(median, 1)} кВт·год/м²
 		</p>
-
-		<Disclosure summary="Що означають класи A–G" class="card soft">
-			<ul class="classes">
-				{#each CLASSES as c (c.letter)}
-					<li><ClassBadge cls={c.letter} short /> <span>{c.text}</span> <span class="muted small">({c.range})</span></li>
-				{/each}
-			</ul>
-		</Disclosure>
 
 		{#if excluded.length}
 			<section id="excluded" class="card excl" aria-labelledby="excl-h">
-				<h2 id="excl-h">Не потрапили в рейтинг: {excluded.length} {plural(excluded.length, ['будівля', 'будівлі', 'будівель'])}</h2>
-				<p class="muted">
-					Ми їх не ховаємо: їх не можна чесно порівняти, доки дані в <Term key="UMUNI" plain /> не
-					виправлено. Як тільки виправите — будівля з’явиться в рейтингу сама.
-				</p>
+				<h2 id="excl-h">Поза рейтингом: {excluded.length}</h2>
 				<Disclosure summary="Показати будівлі й причини" hint={String(excluded.length)}>
 					<ul class="excl-list">
 						{#each excluded as r (r.b.id)}
@@ -327,6 +306,20 @@
 				</Disclosure>
 			</section>
 		{/if}
+
+		<Disclosure summary="Як рахуємо" class="card soft">
+			<ul class="small muted how">
+				<li>Порівнюємо лише схожі будівлі (школи зі школами) за електрикою на 1 м² площі. Напр.: 2 000 м² і 40 000 кВт·год → 20 кВт·год/м².</li>
+				<li>№ 1 у черзі на перевірку — найбільше на 1 м². Риска на смузі — типове (медіана) для категорії.</li>
+				<li>Будівлі з неповними даними в <Term key="UMUNI" plain /> не ранжуємо — після виправлення з’являться самі.</li>
+				<li>Клас — аналітична оцінка відносно схожих будівель, а не офіційний енергосертифікат:</li>
+			</ul>
+			<ul class="classes">
+				{#each CLASSES as c (c.letter)}
+					<li><ClassBadge cls={c.letter} short /> <span>{c.text}</span> <span class="muted small">({c.range})</span></li>
+				{/each}
+			</ul>
+		</Disclosure>
 	{/if}
 {/if}
 

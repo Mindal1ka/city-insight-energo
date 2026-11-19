@@ -5,16 +5,17 @@
 		hint?: string;
 	}
 
-	/** Сторінки, на які можна перейти з пошуку */
-	export const PALETTE_PAGES: PaletteLink[] = [
-		{ href: '/', label: 'Об’єкти', hint: 'Усі будівлі, сонце й акумулятори сьогодні' },
-		{ href: '/map', label: 'Мапа', hint: 'Будівлі громади на карті міста' },
-		{ href: '/independence', label: 'Енергонезалежність', hint: 'Покриття сонцем і години автономності' },
-		{ href: '/solar', label: 'Де ставити СЕС', hint: 'Де нова сонячна станція дасть найбільше' },
-		{ href: '/overview', label: 'Споживання електроенергії', hint: 'Скільки споживає громада й хто найбільше' },
-		{ href: '/rating', label: 'Рейтинг будівель', hint: 'Порівняння схожих будівель за кВт·год/м²' },
-		{ href: '/defects', label: 'Якість даних', hint: 'Помилки й пропуски у даних UMUNI' },
-		{ href: '/upload', label: 'Оновити дані', hint: 'Завантажити свіже вивантаження з UMUNI' }
+	/** Сторінки, на які можна перейти з пошуку (only — лише для службових ролей) */
+	export const PALETTE_PAGES: (PaletteLink & { only?: 'internal' | 'upload' })[] = [
+		{ href: '/', label: 'Мапа', hint: 'Об’єкти на карті, клас СЕС' },
+		{ href: '/dashboard', label: 'Дашборд', hint: 'K, класи, фінанси громади' },
+		{ href: '/objects', label: 'Об’єкти', hint: 'Список, фільтри' },
+		{ href: '/solar', label: 'Нові СЕС', hint: 'Де ставити, окупність' },
+		{ href: '/independence', label: 'Енергонезалежність', hint: 'Акумулятори, автономність', only: 'internal' },
+		{ href: '/overview', label: 'Споживання', hint: 'Електроенергія громади' },
+		{ href: '/rating', label: 'Рейтинг', hint: 'кВт·год/м²' },
+		{ href: '/defects', label: 'Якість даних', hint: 'Помилки UMUNI' },
+		{ href: '/upload', label: 'Оновити дані', hint: 'Завантажити UMUNI', only: 'upload' }
 	];
 </script>
 
@@ -26,6 +27,8 @@
 	import { api, errMessage, type Building } from './api.ts';
 	import Icon from './Icon.svelte';
 	import { catLabel } from './categories.ts';
+	import { auth } from './auth.svelte.ts';
+	import { isInternal, canUpload } from './roles.ts';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -88,7 +91,9 @@
 		| { kind: 'building'; id: string; href: string; label: string; hint: string; cat: string };
 
 	const pageItems = $derived.by((): Item[] => {
-		const list = PALETTE_PAGES.map((p) => ({ kind: 'page' as const, id: 'p' + p.href, ...p }));
+		const list = PALETTE_PAGES.filter((p) =>
+			!p.only ? true : p.only === 'internal' ? isInternal(auth.user) : canUpload(auth.user)
+		).map(({ href, label, hint }) => ({ kind: 'page' as const, id: 'p' + href, href, label, hint }));
 		if (!tokens.length) return list;
 		return list.filter((p) => {
 			const hay = norm(p.label + ' ' + (p.hint ?? ''));

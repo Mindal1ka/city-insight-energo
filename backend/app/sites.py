@@ -12,8 +12,11 @@ from __future__ import annotations
 import calendar
 import csv
 import math
+import os
 import random
 import re
+import tempfile
+import threading
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -21,7 +24,8 @@ from . import solar
 
 KYIV = timezone(timedelta(hours=2))  # листопад: EET, UTC+2 (спрощення для демо)
 BATTERY_RESERVE = 0.3  # 30 % ємності акумулятора тримаємо в резерві на відключення
-REGISTRY_FILE = Path(__file__).resolve().parents[1] / "data" / "ses_registry.csv"
+REGISTRY_FILE = (Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
+                 / "ses_registry.csv")
 
 # тривалість світлового дня в Полтаві по місяцях, годин (наближено)
 DAYLIGHT_H = [8.5, 10.0, 11.8, 13.6, 15.2, 16.0, 15.6, 14.2, 12.4, 10.6, 9.0, 8.1]
@@ -51,11 +55,63 @@ DAY_PROFILES = {
 WEEKEND_FACTOR = {"Заклади освіти": 0.35, "Дошкільні заклади": 0.35, "Громадські будівлі": 0.45,
                   "Спортивні споруди": 0.8, "Охорона здоров'я": 0.95, "Житлові будинки": 1.0}
 
-INVERTERS = [("Deye SUN-5K-SG04LP3", 5), ("Deye SUN-8K-SG04LP3", 8), ("Deye SUN-10K-SG04LP3", 10), ("Deye SUN-12K-SG04LP3", 12), ("Deye SUN-20K-SG01HP3", 20),
-             ("Deye SUN-30K-SG01HP3", 30), ("Deye SUN-50K-SG01HP3", 50), ("Growatt MOD 15KTL3-XH", 15),
-             ("LuxPower LXP-LB-EU 12K", 12)]
-DEMO_MAX_COVERAGE = 0.30  # стеля частки власної генерації для демо-станцій
-SES_CATEGORIES = {"Заклади освіти", "Дошкільні заклади", "Охорона здоров'я", "Громадські будівлі"}
+# --- ДЕМО-реєстр СЕС ---
+# Реальні моделі інверторів (номінал, кВт) за виробниками; якщо одного не вистачає — кілька паралельно.
+INVERTER_FAMILIES = {
+    "Deye": [("Deye SUN-5K-SG04LP3-EU", 5), ("Deye SUN-8K-SG04LP3-EU", 8), ("Deye SUN-10K-SG04LP3-EU", 10),
+             ("Deye SUN-12K-SG04LP3-EU", 12), ("Deye SUN-15K-SG01HP3-EU-AM2", 15),
+             ("Deye SUN-20K-SG01HP3-EU-AM2", 20), ("Deye SUN-25K-SG01HP3-EU-AM2", 25),
+             ("Deye SUN-30K-SG01HP3-EU-BM3", 30), ("Deye SUN-50K-SG01HP3-EU-BM4", 50)],
+    "Huawei": [("Huawei SUN2000-5KTL-M1", 5), ("Huawei SUN2000-8KTL-M1", 8), ("Huawei SUN2000-10KTL-M1", 10),
+               ("Huawei SUN2000-20KTL-M2", 20), ("Huawei SUN2000-30KTL-M3", 30),
+               ("Huawei SUN2000-50KTL-M3", 50), ("Huawei SUN2000-100KTL-M1", 100)],
+    "Growatt": [("Growatt MOD 6KTL3-XH", 6), ("Growatt MOD 10KTL3-XH", 10), ("Growatt MOD 15KTL3-XH", 15),
+                ("Growatt MID 25KTL3-X", 25), ("Growatt MAX 50KTL3 LV", 50), ("Growatt MAX 100KTL3-X LV", 100)],
+    "LuxPower": [("LuxPower LXP-LB-EU 10K", 10), ("LuxPower LXP-LB-EU 12K", 12)],
+}
+INVERTER_WEIGHTS = {"Deye": 0.45, "Huawei": 0.25, "Growatt": 0.2, "LuxPower": 0.1}
+DC_AC_RATIO_MAX = 1.3  # панелей може бути до 1,3× номіналу інвертора (типове перевантаження DC/AC)
+PANEL_W_CHOICES = (410, 450, 550, 590)
+BATTERY_MODULES_KWH = (5.12, 10.24)  # LiFePO4-модулі 51,2 В × 100 / 200 А·год
+BATTERY_C_RATE = 0.5  # потужність акумулятора ≈ 0,5 × ємність
+
+SES_MIN_KWH = 8000  # станції лише в будівлях із річним споживанням е/е 2025 ≥ 8 000 кВт·год
+SES_SHARE = 0.4  # ≈ 40 % таких будівель мають станцію (детерміновано за id)
+PV_DERATE = 0.92  # втрати й деградація понад PVGIS (той самий множник, що й у detail())
+# суміш цільових річних K = генерація ÷ споживання: (частка, від, до)
+K_MIX = ((0.35, 0.35, 0.8), (0.40, 0.8, 1.2), (0.25, 1.2, 1.6))
+
+# --- ДЕМО-ціни (орієнтовні ринкові, 2025) ---
+PANEL_UAH_PER_450W = 4500.0  # панель 450 Вт; інші потужності — пропорційно
+INVERTER_UAH_PER_KW = 3500.0
+BATTERY_UAH_PER_KWH = 16000.0
+INSTALL_SHARE, INSTALL_FIXED_UAH = 0.15, 20000.0  # монтаж ≈ 15 % обладнання + 20 000 грн
+
+# Колонки CSV реєстру (data/ses_registry.csv) — ключ у коді → заголовок українською
+CSV_COLUMNS = {
+    "building_id": "building_id",
+    "panels_count": "панелей_шт",
+    "panel_w": "потужність_панелі_Вт",
+    "total_kw": "потужність_СЕС_кВт",
+    "inverter_model": "інвертор_модель",
+    "inverter_kw": "інвертор_кВт",
+    "battery_count": "к-сть_акумуляторів",
+    "battery_module_kwh": "ємність_модуля_кВт·год",
+    "battery_kwh": "акумулятор_кВт·год",
+    "battery_kw": "акумулятор_кВт",
+    "connected_kw": "приєднана_потужність_кВт",
+    "launched": "дата_запуску",
+    "panels_uah": "вартість_панелей_грн",
+    "inverter_uah": "вартість_інвертора_грн",
+    "batteries_uah": "вартість_акумуляторів_грн",
+    "install_uah": "вартість_монтажу_грн",
+    "source": "джерело",
+    "updated": "оновлено",
+}
+SES_FIELDS = ("panels_count", "panel_w", "total_kw", "inverter_model", "inverter_kw", "battery_count",
+              "battery_module_kwh", "battery_kwh", "battery_kw", "connected_kw", "launched")
+COST_FIELDS = ("panels_uah", "inverter_uah", "batteries_uah", "install_uah")
+_registry_lock = threading.Lock()
 
 
 def city_of(address: str) -> str:
@@ -70,49 +126,156 @@ def _f(v, default=None):
         return default
 
 
-def load_registry(buildings) -> dict[int, dict]:
-    """Реєстр СЕС: CSV команди (якщо є) або детермінована генерація."""
-    reg: dict[int, dict] = {}
-    if REGISTRY_FILE.exists():
-        with REGISTRY_FILE.open(encoding="utf-8-sig") as fh:
-            for r in csv.DictReader(fh):
-                bid = int(_f(r.get("building_id"), 0) or 0)
-                if not bid:
-                    continue
-                n, w = int(_f(r.get("панелей_шт"), 0) or 0), _f(r.get("потужність_панелі_Вт"), 450)
-                reg[bid] = {
-                    "panels_count": n, "panel_w": w, "total_kw": round(n * w / 1000, 1),
-                    "inverter_model": r.get("інвертор_модель") or "—", "inverter_kw": _f(r.get("інвертор_кВт"), 0),
-                    "battery_kwh": _f(r.get("акумулятор_кВт·год"), 0), "battery_kw": _f(r.get("акумулятор_кВт"), 0),
-                    "connected_kw": _f(r.get("приєднана_потужність_кВт"), 0),
-                    "launched": (r.get("дата_запуску") or "2024-06-01")[:10], "source": r.get("джерело") or "CSV",
-                }
-        if reg:
-            return reg
+def _pick_inverter(family: str, need_kw: float) -> tuple[str, float]:
+    """Найменший інвертор родини з номіналом ≥ need_kw; якщо такого немає — N однакових паралельно."""
+    models = INVERTER_FAMILIES[family]
+    for name, kw in models:
+        if kw >= need_kw:
+            return name, float(kw)
+    name, kw = models[-1]
+    n = math.ceil(need_kw / kw)
+    return f"{n} × {name}", float(n * kw)
 
+
+def _round10(x: float) -> float:
+    return float(round(x, -1))
+
+
+def demo_costs(panels_count: int, panel_w: float, inverter_kw: float, battery_kwh: float,
+               rng: random.Random | None = None) -> dict:
+    """Орієнтовні витрати на станцію (ДЕМО-ціни вище; rng — невеликий розкид цін постачальників)."""
+    j = (lambda: rng.uniform(0.92, 1.08)) if rng else (lambda: 1.0)
+    panels = _round10(panels_count * PANEL_UAH_PER_450W * panel_w / 450 * j())
+    inverter = _round10(inverter_kw * INVERTER_UAH_PER_KW * j())
+    batteries = _round10(battery_kwh * BATTERY_UAH_PER_KWH * j())
+    install = _round10(INSTALL_SHARE * (panels + inverter + batteries) + INSTALL_FIXED_UAH)
+    return {"panels_uah": panels, "inverter_uah": inverter, "batteries_uah": batteries, "install_uah": install}
+
+
+def demo_station(b, elec_kwh: float, rng: random.Random) -> dict:
+    """Одна ДЕМО-станція під цільовий річний K (суміш K_MIX)."""
+    u, acc = rng.random(), 0.0
+    lo, hi = K_MIX[-1][1:]
+    for share, a, z in K_MIX:
+        acc += share
+        if u < acc:
+            lo, hi = a, z
+            break
+    k_target = rng.uniform(lo, hi)
+    kw_target = k_target * elec_kwh / (sum(solar.pvgis_monthly()) * PV_DERATE)
+    panel_w = rng.choice(PANEL_W_CHOICES)
+    n = max(4, round(kw_target * 1000 / panel_w))
+    total_kw = round(n * panel_w / 1000, 2)
+    fam = rng.choices(list(INVERTER_WEIGHTS), weights=list(INVERTER_WEIGHTS.values()))[0]
+    model, inv_kw = _pick_inverter(fam, total_kw / DC_AC_RATIO_MAX)
+    bat_n = rng.choices(range(7), weights=[30, 12, 18, 12, 14, 6, 8])[0]  # ≈30 % без акумулятора
+    module = rng.choice(BATTERY_MODULES_KWH) if bat_n else None
+    bat_kwh = round(bat_n * module, 2) if bat_n else 0.0
+    bat_kw = round(min(bat_kwh * BATTERY_C_RATE, inv_kw), 1) if bat_n else 0.0
+    peak_kw = elec_kwh / 8760 * 3  # орієнтовний пік навантаження
+    connected = next((c for c in (15, 30, 50, 75, 100, 150, 200, 300, 400, 500, 750, 1000)
+                      if c >= max(peak_kw * rng.uniform(1.2, 1.8), inv_kw * 0.8)), 1000)
+    if bat_kw >= 8 and rng.random() < 0.1:  # кілька станцій навмисно з порушенням «акумулятор > приєднаної»
+        connected = max(5, round(bat_kw * 0.8))
+    start = min(date(2023, 1, 15) + timedelta(days=rng.randint(0, 1080)), date(2025, 12, 20))
+    st = {"panels_count": n, "panel_w": panel_w, "total_kw": total_kw, "inverter_model": model,
+          "inverter_kw": inv_kw, "battery_count": bat_n, "battery_module_kwh": module, "battery_kwh": bat_kwh,
+          "battery_kw": bat_kw, "connected_kw": float(connected), "launched": start.isoformat(),
+          "source": "ДЕМО", "k_target": round(k_target, 3)}
+    st["costs"] = _with_total(demo_costs(n, panel_w, inv_kw, bat_kwh, rng))
+    return st
+
+
+def _with_total(costs: dict) -> dict | None:
+    vals = [costs.get(k) for k in COST_FIELDS]
+    if all(v is None for v in vals):
+        return None
+    return {**{k: costs.get(k) for k in COST_FIELDS}, "total_uah": float(sum(v or 0 for v in vals))}
+
+
+def make_entry(raw: dict, source: str = "введено") -> dict:
+    """Нормалізує введені дані (CSV / форма): порожнє = None («немає даних»); похідні поля — тут."""
+    num = lambda k: _f(raw.get(k)) if raw.get(k) is not None else None
+    n, w = num("panels_count"), num("panel_w")
+    total = round(n * w / 1000, 2) if n and w else num("total_kw")
+    bat_n, module = num("battery_count"), num("battery_module_kwh")
+    bat_kwh = round(bat_n * module, 2) if bat_n is not None and module else num("battery_kwh")
+    if bat_n == 0 and bat_kwh is None:
+        bat_kwh = 0.0
+    launched = str(raw.get("launched") or "").strip()[:10] or None
+    e = {"panels_count": int(n) if n is not None else None, "panel_w": w, "total_kw": total,
+         "inverter_model": (str(raw.get("inverter_model") or "").strip() or None), "inverter_kw": num("inverter_kw"),
+         "battery_count": int(bat_n) if bat_n is not None else None, "battery_module_kwh": module,
+         "battery_kwh": bat_kwh, "battery_kw": num("battery_kw"), "connected_kw": num("connected_kw"),
+         "launched": launched, "source": source}
+    e["costs"] = _with_total({k: num(k) for k in COST_FIELDS})
+    return e
+
+
+def is_station(e: dict | None) -> bool:
+    """Запис реєстру описує СЕС (є панелі) або хоча б акумулятор."""
+    return bool(e and ((e.get("total_kw") or 0) > 0 or (e.get("battery_kwh") or 0) > 0))
+
+
+def read_csv(path: Path | None = None) -> dict[int, dict]:
+    """Сирі рядки CSV за building_id (ключі — англійські, як у CSV_COLUMNS)."""
+    path = path or REGISTRY_FILE
+    out: dict[int, dict] = {}
+    if not path.exists():
+        return out
+    back = {v: k for k, v in CSV_COLUMNS.items()}
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        for r in csv.DictReader(fh):
+            row = {back.get(h, h): (v.strip() if isinstance(v, str) else v) for h, v in r.items() if h}
+            bid = int(_f(row.get("building_id"), 0) or 0)
+            if bid:
+                out[bid] = {k: (v if v not in ("", None) else None) for k, v in row.items()}
+    return out
+
+
+def save_entry(bid: int, data: dict, path: Path | None = None) -> None:
+    """Записати/оновити рядок будівлі в CSV атомарно (тимчасовий файл + os.replace), UTF-8 з BOM для Excel."""
+    path = path or REGISTRY_FILE
+    with _registry_lock:
+        rows = read_csv(path)
+        row = {k: data.get(k) for k in (*SES_FIELDS, *COST_FIELDS)}
+        row.update(building_id=bid, source="введено", updated=datetime.now(KYIV).isoformat(timespec="seconds"))
+        rows[bid] = row
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=".ses_registry.", suffix=".tmp", dir=path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8-sig", newline="") as fh:
+                w = csv.writer(fh)
+                w.writerow(CSV_COLUMNS.values())
+                for b_id in sorted(rows):
+                    r = rows[b_id]
+                    w.writerow(["" if r.get(k) is None else r.get(k) for k in CSV_COLUMNS])
+            os.replace(tmp, path)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+
+
+def load_registry(buildings) -> dict[int, dict]:
+    """Реєстр СЕС: ДЕМО-генерація (детерміновано за id), поверх неї — рядки data/ses_registry.csv ('введено').
+
+    Рядок CSV без панелей і акумулятора означає «станції немає» — ДЕМО-станцію цієї будівлі прибираємо.
+    """
+    reg: dict[int, dict] = {}
     for b in buildings:
         y = b.years.get(2025)
-        if b.category_short not in SES_CATEGORIES or not y or not y.elec_kwh or y.elec_kwh < 15000:
+        if not y or not y.elec_kwh or y.elec_kwh < SES_MIN_KWH:
             continue
-        rng = random.Random(f"ses-{b.id}")
-        if rng.random() > 0.3:  # приблизно третина великих споживачів має станцію
+        rng = random.Random(f"ses-v5-{b.id}")  # сіль підібрано: розподіл K близький до K_MIX
+        if rng.random() >= SES_SHARE:
             continue
-        # як на практиці (інтерв'ю з енергоменеджером): станція покриває ~15–30 % власного споживання
-        cap_kw = y.elec_kwh * DEMO_MAX_COVERAGE / sum(solar.pvgis_monthly())
-        model, inv_kw = min(INVERTERS, key=lambda m: abs(m[1] - max(5.0, cap_kw * 0.8)))
-        panel_w = rng.choice([410, 450, 550, 590])
-        total_kw = min(inv_kw * rng.uniform(1.0, 1.25), max(3.0, cap_kw))
-        n = max(6, round(total_kw * 1000 / panel_w))
-        bat_kwh = rng.choice([10.0, 15.36, 20.48, 30.72, 40.96]) if inv_kw <= 20 else rng.choice([40.96, 61.44, 81.92])
-        bat_kw = min(bat_kwh / 2, inv_kw)
-        connected = rng.choice([30, 50, 75, 100, 150, 200])
-        if rng.random() < 0.1:  # кілька станцій навмисно з порушенням «акумулятор > приєднаної потужності»
-            connected = max(5, round(bat_kw * 0.8))
-        start = date(2023, 3, 1) + timedelta(days=rng.randint(0, 900))
-        reg[b.id] = {"panels_count": n, "panel_w": panel_w, "total_kw": round(n * panel_w / 1000, 1),
-                     "inverter_model": model, "inverter_kw": inv_kw, "battery_kwh": bat_kwh,
-                     "battery_kw": round(bat_kw, 1), "connected_kw": connected,
-                     "launched": start.isoformat(), "source": "ДЕМО"}
+        reg[b.id] = demo_station(b, y.elec_kwh, rng)
+    for bid, raw in read_csv().items():
+        e = make_entry(raw, raw.get("source") or "введено")
+        if is_station(e):
+            reg[bid] = e
+        else:
+            reg.pop(bid, None)
     return reg
 
 
@@ -153,10 +316,10 @@ def simulate_day(b, ses: dict | None, d: date) -> list[dict]:
     bat_kwh = soc = 0.0
     if ses:
         days = calendar.monthrange(d.year, d.month)[1]
-        e_day = solar.pvgis_monthly()[d.month - 1] / days * ses["total_kw"]
+        e_day = solar.pvgis_monthly()[d.month - 1] / days * (ses.get("total_kw") or 0.0)
         e_day *= _weather(d) * random.Random(f"gen-{b.id}-{d}").uniform(0.92, 1.05)
         gen = [e_day * s for s in _solar_shape(d.month)]
-        bat_kwh = ses["battery_kwh"] or 0.0
+        bat_kwh = ses.get("battery_kwh") or 0.0
         soc = random.Random(f"soc-{b.id}-{d}").uniform(0.45, 0.85) * bat_kwh
     rows = []
     for h in range(24):
@@ -164,7 +327,7 @@ def simulate_day(b, ses: dict | None, d: date) -> list[dict]:
         self_use = min(g, c)
         net = g - c
         to_bat = from_bat = surplus = 0.0
-        p = ses["battery_kw"] if ses else 0.0
+        p = (ses.get("battery_kw") or bat_kwh * BATTERY_C_RATE) if ses else 0.0
         if net > 0 and bat_kwh:
             to_bat = min(net, p, bat_kwh - soc)
             soc += to_bat
@@ -223,14 +386,14 @@ class Sites:
         period = {"since": None, "days": 0, "generated_kwh": None, "saved_uah": None,
                   "consumed_kwh": round((y25.elec_kwh or 0) + ((y26.elec_kwh or 0) if y26 else 0)) if y25 else None,
                   "consumed_since": "2025-01-01"}
-        if ses:
+        if ses and ses.get("launched") and ses.get("total_kw"):
             start = date.fromisoformat(ses["launched"])
             gen_total = 0.0
             cur = start
             while cur <= d:  # помісячно за PVGIS × 0,92 (втрати й деградація)
                 dim = calendar.monthrange(cur.year, cur.month)[1]
                 last = min(date(cur.year, cur.month, dim), d)
-                gen_total += solar.pvgis_monthly()[cur.month - 1] * ses["total_kw"] * 0.92 * ((last - cur).days + 1) / dim
+                gen_total += solar.pvgis_monthly()[cur.month - 1] * ses["total_kw"] * PV_DERATE * ((last - cur).days + 1) / dim
                 cur = last + timedelta(days=1)
             period.update(since=ses["launched"], days=(d - start).days, generated_kwh=round(gen_total),
                           saved_uah=round(gen_total * 0.9 * tariff))
@@ -241,8 +404,9 @@ class Sites:
         available = 0.0
         if ses:
             soc_now = past[-1]["soc_kwh"] if past else rows[0]["soc_kwh"]
-            usable = max(0.0, soc_now - BATTERY_RESERVE * ses["battery_kwh"])
-            dist.update(battery_kwh_now=_r(soc_now), battery_soc_pct=_r(100 * soc_now / ses["battery_kwh"]) if ses["battery_kwh"] else None,
+            bk = ses.get("battery_kwh") or 0.0
+            usable = max(0.0, soc_now - BATTERY_RESERVE * bk)
+            dist.update(battery_kwh_now=_r(soc_now), battery_soc_pct=_r(100 * soc_now / bk) if bk else None,
                         solar_kw_now=_r(rows[hnow]["gen_kwh"], 2), solar_kwh_rest_of_day=_r(sm(fut, "gen_kwh")))
             available = usable + sm(fut, "gen_kwh")
         balance = available - sm(fut, "cons_kwh")

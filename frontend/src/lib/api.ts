@@ -1,4 +1,8 @@
 // Клієнт API бекенду (FastAPI). Усі шляхи відносні: у розробці працює проксі Vite, у продакшні — той самий сервер.
+// Кожен запит до /api (і через getJSON, і звичайний fetch) отримує `Authorization: Bearer <token>`, якщо є вхід.
+
+import { goto } from '$app/navigation';
+import { auth, logout } from './auth.svelte.ts';
 
 export interface YearSummary {
 	partial: boolean;
@@ -288,6 +292,50 @@ async function errorText(res: Response): Promise<string> {
 	return `Сервер відповів помилкою ${res.status}`;
 }
 
+// ---------- Токен у кожному запиті до /api ----------
+
+/** Запит іде на наш бекенд (/api/…, той самий origin)? */
+function isApiUrl(input: RequestInfo | URL): boolean {
+	try {
+		const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+		const u = new URL(raw, location.href);
+		return u.origin === location.origin && u.pathname.startsWith('/api/') && !u.pathname.startsWith('/api/auth/login');
+	} catch {
+		return false;
+	}
+}
+
+/** Сесія прострочена (токен був, бекенд відповів 401) → виходимо і ведемо на /login */
+function sessionExpired(): void {
+	logout();
+	const back = location.pathname + location.search;
+	if (location.pathname !== '/login') {
+		goto('/login' + (back !== '/' ? `?next=${encodeURIComponent(back)}` : ''), { replace: true, reset: false });
+	}
+}
+
+// Обгортка fetch, встановлюється один раз для всього застосунку — тож і «сирі» fetch('/api/…')
+// з інших модулів несуть токен. На 401 із токеном — вихід і /login; у публічному режимі
+// 401 просто повертається сторінці (getJSON кидає ApiError 401) — вона сама вирішує, що показати.
+const nativeFetch: typeof fetch | undefined = typeof window !== 'undefined' ? window.fetch.bind(window) : undefined;
+if (nativeFetch && !(window as unknown as { __energoFetch?: boolean }).__energoFetch) {
+	(window as unknown as { __energoFetch?: boolean }).__energoFetch = true;
+	window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+		if (!isApiUrl(input)) return nativeFetch(input, init);
+		const token = auth.user?.token ?? null;
+		let sent = false;
+		if (token) {
+			const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+			if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+			sent = headers.get('Authorization') === `Bearer ${token}`;
+			init = { ...init, headers };
+		}
+		const res = await nativeFetch(input, init);
+		if (res.status === 401 && sent && auth.user?.token === token) sessionExpired();
+		return res;
+	};
+}
+
 export async function getJSON<T>(url: string): Promise<T> {
 	let res: Response;
 	try {
@@ -295,6 +343,8 @@ export async function getJSON<T>(url: string): Promise<T> {
 	} catch {
 		throw new ApiError(0, NO_SERVER);
 	}
+	if (res.status === 401) throw new ApiError(401, 'Доступно після входу');
+	if (res.status === 403) throw new ApiError(403, 'Недостатньо прав для цих даних');
 	if (!res.ok) throw new ApiError(res.status, await errorText(res));
 	const type = res.headers.get('content-type') ?? '';
 	// Якщо ендпоінту ще немає, сервер може віддати index.html SPA — вважаємо це як 404

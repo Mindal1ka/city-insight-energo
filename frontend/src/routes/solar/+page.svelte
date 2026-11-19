@@ -21,6 +21,10 @@
 	import Reveal from '#lib/Reveal.svelte';
 	import Term from '#lib/Term.svelte';
 	import { simulate, plural, paybackWords } from '#lib/SolarScenario.svelte';
+	import { auth } from '#lib/auth.svelte.ts';
+	import { canSeeSensitive } from '#lib/roles.ts';
+	/** Наявна СЕС конкретного об'єкта — чутлива інформація (публічний режим її не бачить) */
+	const seeExisting = (it: { id: number; category_short: string }) => canSeeSensitive(auth.user, it.category_short, it.id);
 
 	type Excluded = { id: number; name: string; category_short: string; reason: string };
 	type ListX = SolarList & {
@@ -340,7 +344,7 @@
 			['№', 'ID', 'Будівля', 'Категорія', 'Наявна СЕС, кВт', 'Нова / додаткова потужність, кВт', 'Рекомендована сумарна потужність, кВт', 'Генерація рекомендованої станції, кВт·год/рік', 'Додаткове власне сонце, кВт·год/рік', 'Покриття потреби після встановлення, %', 'Вартість, грн', 'Наростаючим підсумком, грн', 'Економія, грн/рік', 'Окупність, років']
 		];
 		const rows = plan.picked.map((it, i) => [
-			i + 1, it.id, it.name, it.category_short, it.existingKw ?? '', +it.kw.toFixed(1), it.kw_recommended, it.gen_kwh_year,
+			i + 1, it.id, it.name, it.category_short, seeExisting(it) ? (it.existingKw ?? '') : '', +it.kw.toFixed(1), it.kw_recommended, it.gen_kwh_year,
 			Math.round(it.gain), it.cover, Math.round(it.cost), Math.round(it.cum), Math.round(it.save), it.pb !== null ? +it.pb.toFixed(1) : ''
 		]);
 		const tot = [['', '', 'Разом', `${sel.n} об’єктів`, '', +sel.kw.toFixed(1), '', '', Math.round(sel.gain), '', Math.round(sel.cost), '', Math.round(sel.save), sel.med !== null ? +sel.med.toFixed(1) : '']];
@@ -366,7 +370,7 @@
 	const budgetLabel = $derived(num(budgetM ?? 0, (budgetM ?? 0) % 1 ? 1 : 0));
 </script>
 
-<svelte:head><title>Де ставити СЕС · City Insight Map · Енергія</title></svelte:head>
+<svelte:head><title>Нові СЕС · City Insight Map · Енергія</title></svelte:head>
 
 <!-- Шапка для друку -->
 <div class="print-only print-head">
@@ -379,9 +383,9 @@
 
 <!-- ——— Головне питання ——— -->
 <section class="ask no-print" aria-labelledby="ask-h">
-	<p class="kicker"><span class="sundot" aria-hidden="true"></span> Де ставити сонячні станції</p>
+	<p class="kicker"><span class="sundot" aria-hidden="true"></span> Нові <Term key="СЕС" plain>СЕС</Term></p>
 	<h1 id="ask-h" class="ask-h">
-		Скільки сонячних станцій поставимо за
+		Скільки СЕС поставимо за
 		<span class="ask-sum"><span class="ask-num">{budgetLabel}</span> млн грн</span>?
 	</h1>
 
@@ -420,14 +424,13 @@
 	</div>
 
 	<fieldset class="prio">
-		<legend>Кого ставимо першими?</legend>
+		<legend>Пріоритет</legend>
 		<div class="prio-opts">
 			<label class="opt" class:on={priority === 'payback'}>
 				<input type="radio" name="prio" value="payback" bind:group={priority} />
 				<span class="opt-mark" aria-hidden="true"></span>
 				<span class="opt-txt">
 					<strong>Найшвидша окупність</strong>
-					<small>Спершу там, де гроші повернуться найшвидше.</small>
 				</span>
 			</label>
 			<label class="opt" class:on={priority === 'critical'}>
@@ -435,13 +438,12 @@
 				<span class="opt-mark" aria-hidden="true"></span>
 				<span class="opt-txt">
 					<strong>Спершу лікарні й школи</strong>
-					<small>Критичні заклади першими, далі — усі інші.</small>
 				</span>
 			</label>
 		</div>
 	</fieldset>
 
-	<Disclosure summary="Налаштування розрахунку" hint="тариф {num(P.tariff, 2)} грн · монтаж {num(P.capex)} грн/кВт{settingsChanged ? ' · змінено' : ''}">
+	<Disclosure summary="Ціни" hint="тариф {num(P.tariff, 2)} грн · монтаж {num(P.capex)} грн/кВт{settingsChanged ? ' · змінено' : ''}">
 		<div class="settings">
 			<div class="field">
 				<label for="s-tariff">Тариф, грн за 1 кВт·год</label>
@@ -459,7 +461,7 @@
 			<button type="button" class="btn btn-secondary" onclick={resetSettings} disabled={!settingsChanged}>Скинути до типових</button>
 		</div>
 		<p class="muted small sc-status" aria-live="polite">
-			{#if refreshing}Перераховуємо…{:else if data}Розрахунок оновлено для цих цін.{/if}
+			{#if refreshing}Перераховуємо…{:else if data}✓ оновлено{/if}
 		</p>
 	</Disclosure>
 </section>
@@ -468,7 +470,7 @@
 
 {#if notReady && !loading}
 	<div class="notice notice-warn" role="status">
-		<p><strong>Розрахунок ще не готовий.</strong> Модуль оцінки сонячних станцій зараз доробляється. Спробуйте трохи пізніше.</p>
+		<p><strong>Розрахунок ще не готовий.</strong> Спробуйте пізніше.</p>
 	</div>
 {/if}
 
@@ -484,8 +486,8 @@
 					unit={buildings(sel.n)}
 					icon="building"
 					hint={sel.n
-						? `${num(sel.kw)} кВт панелей. Серед них ${sel.health} ${plural(sel.health, 'медзаклад', 'медзаклади', 'медзакладів')} і ${sel.edu} ${plural(sel.edu, 'заклад освіти', 'заклади освіти', 'закладів освіти')}.`
-						: 'Бюджету поки не вистачає на жодну станцію.'}
+						? `${num(sel.kw)} кВт · медичних ${sel.health} · освіти ${sel.edu}`
+						: 'Бюджету не вистачає.'}
 				/>
 			</Reveal>
 			<Reveal delay={80} class="stat-cell">
@@ -498,7 +500,7 @@
 					demo
 					tone={sel.n ? 'good' : 'neutral'}
 					toneLabel="зросте"
-					hint="Зараз {num(basePct, 1)} %. Уся програма дасть {num(potPct, 1)} %."
+					hint="Зараз {num(basePct, 1)} % → уся програма {num(potPct, 1)} %."
 				>
 					<span class="ibar" aria-hidden="true">
 						<span class="ib-pot" style:width="{(potPct / Math.max(potPct, 1)) * 100}%"></span>
@@ -519,7 +521,7 @@
 					decimals={2}
 					unit="млн грн"
 					icon="wallet"
-					hint={sel.med !== null ? `Менше платимо за світло щороку. Типова станція ${paybackWords(sel.med)}.` : 'Менше платимо за світло щороку.'}
+					hint={sel.med !== null ? `Типова станція ${paybackWords(sel.med)}.` : undefined}
 				/>
 			</Reveal>
 		</div>
@@ -530,22 +532,18 @@
 		<section class="card list" aria-labelledby="list-h">
 			<div class="list-head">
 				<div>
-					<h2 id="list-h">Що встигнемо за {mln(budget)} млн грн</h2>
-					<p class="muted small">
-						{priority === 'critical' ? 'Спершу лікарні, потім школи й садки, далі решта.' : 'Від найшвидшої окупності.'}
-						Натисніть на будівлю, щоб побачити розрахунок.
-					</p>
+					<h2 id="list-h">Перелік · {mln(budget)} млн грн</h2>
 				</div>
 				<div class="list-actions no-print">
-					<button type="button" class="btn press" onclick={exportCsv} disabled={!plan.picked.length}>Завантажити CSV</button>
-					<button type="button" class="btn btn-secondary press" onclick={() => window.print()}><span class="hide-phone">Друк / PDF</span><span class="only-phone">Зберегти PDF</span></button>
+					<button type="button" class="btn press" onclick={exportCsv} disabled={!plan.picked.length}>CSV</button>
+					<button type="button" class="btn btn-secondary press" onclick={() => window.print()}>PDF</button>
 				</div>
 			</div>
 
 			<div class="used">
 				<div class="used-txt small">
-					<span>Використано <strong>{mln(twCost.current, 2)}</strong> з {mln(budget, budget % 1e6 ? 1 : 0)} млн грн</span>
-					{#if plan.left >= 10000 && plan.picked.length}<span class="muted">залишок {mln(plan.left, 2)} млн — на наступну станцію не вистачає</span>{/if}
+					<span><strong>{mln(twCost.current, 2)}</strong> з {mln(budget, budget % 1e6 ? 1 : 0)} млн грн</span>
+					{#if plan.left >= 10000 && plan.picked.length}<span class="muted">залишок {mln(plan.left, 2)} млн</span>{/if}
 				</div>
 				<div class="used-bar" aria-hidden="true">
 					<span style:width="{budget > 0 ? Math.min(100, (twCost.current / budget) * 100) : 0}%"></span>
@@ -565,21 +563,16 @@
 								<span class="r-type">
 									{catLabel(it.category_short)}
 									{#if tier(it) === 0}<span class="tag crit"><span aria-hidden="true">✚</span> критичний</span>{/if}
-									{#if it.existingKw}<span class="tag ext">доповнення до наявної {num(it.existingKw, 1)} кВт</span>{/if}
+									{#if it.existingKw && seeExisting(it)}<span class="tag ext">+ до наявної {num(it.existingKw, 1)} кВт</span>{/if}
 									{#if it.fill}<span class="tag fill" title="Наступна за чергою станція не вмістилася в залишок бюджету, тому добрали цю, меншу">у залишок бюджету</span>{/if}
 								</span>
 							</span>
-							<span class="r-kw r"><span class="lbl">Станція: </span><b>{it.existingKw ? '+' : ''}{num(it.kw, it.kw < 10 ? 1 : 0)}</b> кВт</span>
+							<span class="r-kw r"><span class="lbl">Станція: </span><b>{it.existingKw && seeExisting(it) ? '+' : ''}{num(it.kw, it.kw < 10 ? 1 : 0)}</b> кВт</span>
 							<span class="r-cost r"><span class="lbl">Вартість: </span>{money(it.cost)}</span>
 							<span class="r-pb"><span class="pb-ico" aria-hidden="true"></span>{paybackWords(it.pb)}</span>
 						</li>
 					{/each}
 				</ol>
-				{#if fills}
-					<p class="small muted fill-note">
-						<span class="tag fill">у залишок бюджету</span> — наступна за чергою станція не вміщалася в залишок, тому добрали меншу, що вмістилася. Порядок черги від цього не змінюється.
-					</p>
-				{/if}
 				<p class="total">
 					<strong>Разом: {num(sel.n)} {buildings(sel.n)}</strong> · {num(sel.kw)} кВт · {money(sel.cost)} · економія {money(sel.save)} на рік
 				</p>
@@ -591,7 +584,7 @@
 
 			{#if plan.rest.length}
 				<div class="no-print">
-					<Disclosure summary="Наступні в черзі — не вмістилися в бюджет" hint="{num(plan.rest.length)} {buildings(plan.rest.length)}">
+					<Disclosure summary="Наступні в черзі" hint="{num(plan.rest.length)} {buildings(plan.rest.length)}">
 						<ol class="rows rest" aria-label="Будівлі, що не вмістилися в бюджет">
 							{#each plan.rest as it (it.id)}
 								<li class="row">
@@ -600,7 +593,7 @@
 										<a href="/solar/{it.id}{detailQs}" title={it.name}>{it.name}</a>
 										<span class="r-type">{catLabel(it.category_short)}{#if tier(it) === 0}<span class="tag crit"><span aria-hidden="true">✚</span> критичний</span>{/if}</span>
 									</span>
-									<span class="r-kw r"><span class="lbl">Станція: </span><b>{it.existingKw ? '+' : ''}{num(it.kw, it.kw < 10 ? 1 : 0)}</b> кВт</span>
+									<span class="r-kw r"><span class="lbl">Станція: </span><b>{it.existingKw && seeExisting(it) ? '+' : ''}{num(it.kw, it.kw < 10 ? 1 : 0)}</b> кВт</span>
 									<span class="r-cost r"><span class="lbl">Вартість: </span>{money(it.cost)}</span>
 									<span class="r-pb">{paybackWords(it.pb)}</span>
 								</li>
@@ -617,8 +610,7 @@
 		<Reveal class="duo-main">
 			<figure class="card curve">
 				<figcaption>
-					<h2>Як росте енергонезалежність із кожним мільйоном</h2>
-					<p class="muted small">Будівлі додаються в тому самому порядку, що й у переліку. Пунктир — ваш бюджет.</p>
+					<h2>Ефект кожного мільйона</h2>
 				</figcaption>
 				<div class="cv-box" bind:clientWidth={curveW}>
 				<svg
@@ -653,11 +645,7 @@
 	<!-- ——— Чому станції не більші ——— -->
 	<Reveal>
 		<section class="card why no-print" aria-labelledby="why-h">
-			<h2 id="why-h">Чому станції не більші?</h2>
-			<p class="why-lead">
-				Школа чи лікарня <strong>не може вигідно продати зайву електроенергію</strong> в мережу. Тому ми ставимо рівно стільки
-				панелей, скільки будівля сама спожиє вдень. Більша станція коштує дорожче, а заощаджує майже стільки ж.
-			</p>
+			<h2 id="why-h">Розмір станції → окупність</h2>
 			{#if sizes.length}
 				<div class="sizes" role="img" aria-label="Окупність на прикладі однієї будівлі: {sizes.map((s) => `${s.label} — ${s.payback !== null ? num(s.payback, 1) : '—'} року`).join('; ')}">
 					{#each sizes as s (s.k)}
@@ -667,7 +655,7 @@
 							<span class="sv"><strong>{paybackWords(s.payback)}</strong>{#if s.surplusShare > 0.01}<br /><small class="muted">{num(s.surplusShare * 100)} % енергії пропадає</small>{/if}</span>
 						</div>
 					{/each}
-					<p class="small muted">Приклад: {example?.item.name.length && example.item.name.length > 80 ? example.item.name.slice(0, 78) + '…' : example?.item.name}. Коротша смуга — швидше окупиться.</p>
+					<p class="small muted">Приклад: {example?.item.name.length && example.item.name.length > 80 ? example.item.name.slice(0, 78) + '…' : example?.item.name}</p>
 				</div>
 			{/if}
 		</section>
@@ -675,10 +663,15 @@
 
 	<!-- ——— Методика ——— -->
 	<section class="card notes" aria-labelledby="notes-h">
-		<h2 id="notes-h">Як ми рахуємо</h2>
-		<p class="muted small">Це аналітична оцінка для планування, а не проєкт станцій.</p>
-		<Disclosure summary="Як рахуємо енергонезалежність громади">
+		<h2 id="notes-h" class="visually-hidden">Як рахуємо</h2>
+		<Disclosure summary="Як рахуємо">
 			<ul>
+				<li>Аналітична оцінка для планування, а не проєкт станцій.</li>
+				<li>
+					Школа чи лікарня не може вигідно продати надлишок у мережу, тож станція — рівно під денне споживання будівлі:
+					більша коштує дорожче, а заощаджує майже стільки ж.
+				</li>
+				<li>Графік: будівлі додаються в порядку переліку, пунктир — ваш бюджет. «У залишок бюджету» — наступна станція не вмістилася, тож добрали меншу.</li>
 				<li>
 					<Term key="енергонезалежність">Енергонезалежність</Term> громади тут — яку частку всієї електроенергії
 					{comm ? num((comm as { sites_with_data?: number }).sites_with_data ?? comm.sites) : ''} комунальних будівель за рік дає власне сонце
@@ -997,10 +990,6 @@
 		flex-direction: column;
 		gap: 0.1rem;
 	}
-	.opt-txt small {
-		color: var(--muted);
-		font-size: 0.875rem;
-	}
 	.settings {
 		display: flex;
 		flex-wrap: wrap;
@@ -1108,9 +1097,6 @@
 	}
 	.list-head h2 {
 		margin-bottom: 0.25rem;
-	}
-	.list-head p {
-		margin: 0;
 	}
 	.list-actions {
 		display: flex;
@@ -1243,9 +1229,6 @@
 		color: var(--sun-ink);
 		border: 1px solid #f0d7a6;
 	}
-	.fill-note {
-		margin: 0.6rem 0 0;
-	}
 	.tag.ext {
 		background: var(--accent-soft);
 		color: var(--navy-3);
@@ -1334,9 +1317,6 @@
 	.curve figcaption h2 {
 		margin-bottom: 0.15rem;
 	}
-	.curve figcaption p {
-		margin: 0;
-	}
 	.cv-box {
 		width: 100%;
 		min-width: 0;
@@ -1400,9 +1380,6 @@
 	}
 
 	/* ——— Чому не більші ——— */
-	.why-lead {
-		max-width: 75ch;
-	}
 	.sizes {
 		margin-top: 0.75rem;
 		display: flex;

@@ -12,6 +12,8 @@ from pathlib import Path
 
 from .geocode import load_cache as load_geocode_cache, umuni_ok
 from .import_umuni import AnnualReport, Building, detect_kind, key, read_annual, read_buildings
+from .meters import METERS_CSV, load_meters, meters_summary, meters_view
+from .sem import SEM_CSV, load_sem, match_sem, sem_summary, sem_view
 
 # --- Коефіцієнти перерахунку (METHODOLOGY.md, розділ 1) ---
 GCAL_TO_MWH = 1.163  # 1 Гкал = 1,163 МВт·год (вимога ТЗ Ф2.1-01)
@@ -105,6 +107,9 @@ class Store:
         self.reports: dict[int, AnnualReport] = {}
         self.base_year: int | None = None
         self.sources: list[dict] = []
+        self.meters: dict[int, list[dict]] = {}  # D2-04, знеособлений data/meters.csv
+        self.sem_rows: list[dict] = []  # D2-05, знеособлений data/sem_status.csv
+        self.sem_by_bid: dict[int, dict] = {}
         self.reload()
 
     # ---------- завантаження ----------
@@ -125,11 +130,21 @@ class Store:
                     reports[rep.year] = rep
                 sources.append({"file": p.name, "kind": f"Річне споживання {rep.year}", "rows": len(rep.rows),
                                 "created": rep.created.isoformat() if rep.created else None})
+        # лічильники та стан СЕнМ — лише зі знеособлених CSV (готує scripts/sanitize_sources.py)
+        self.meters = load_meters(self.data_dir / METERS_CSV)
+        if self.meters:
+            sources.append({"file": METERS_CSV, "kind": "Лічильники (без заводських номерів)",
+                            "rows": sum(len(v) for v in self.meters.values())})
+        self.sem_rows = load_sem(self.data_dir / SEM_CSV)
+        if self.sem_rows:
+            sources.append({"file": SEM_CSV, "kind": "Стан впровадження СЕнМ (без ПІБ і телефонів)",
+                            "rows": len(self.sem_rows)})
         self.reports = reports
         self.sources = sources
         full_years = [y for y, r in reports.items() if not self._partial(r)[0]]
         self.base_year = max(full_years) if full_years else (min(reports) if reports else None)
         self._build(reg, reports)
+        self.sem_by_bid = match_sem(self.sem_rows, self.buildings) if self.sem_rows else {}
 
     @staticmethod
     def _partial(rep: AnnualReport) -> tuple[bool, float]:
@@ -247,6 +262,22 @@ class Store:
                                f"Неповний {b} рік уже перевищив весь {a} рік (+{(ratio - 1) * 100:.0f}%)",
                                "Перевірити: зміна споживання чи помилка вводу", kind="аномалія споживання")
 
+        # --- Ф2.3-01: узгодженість лічильників (D2-04) і споживання електроенергії за базовий рік ---
+        if self.meters and self.base_year:
+            y = self.base_year
+            for bv in views.values():
+                n_el = meters_view(self.meters.get(bv.id))["electricity"]
+                yd = bv.years.get(y)
+                el = yd.elec_kwh if yd else None
+                if n_el and not el:
+                    defect(bv, "Лічильники", "електроенергія", f"лічильників е/е: {n_el}; споживання {y}: немає",
+                           f"Лічильник електроенергії є, а споживання е/е за {y} немає",
+                           "Внести показники лічильника в UMUNI або позначити лічильник як неактивний")
+                elif el and not n_el:
+                    defect(bv, "Лічильники", "електроенергія", f"споживання {y}: {el:g} кВт·год; лічильників е/е: 0",
+                           f"Споживання е/е за {y} є, а лічильника електроенергії немає",
+                           "Додати лічильник у UMUNI або перевірити, чи споживання не належить іншій будівлі")
+
         # --- рейтинг у межах категорії за базовим роком ---
         by: dict[str, list[BuildingView]] = {}
         for bv in views.values():
@@ -313,7 +344,17 @@ class Store:
                 "base_year": self.base_year, "years": by_year, "categories": cats,
                 "classes": dict(sorted(classes.items())), "defects": len(self.defects),
                 "defect_buildings": len({d["будівля_id"] for d in self.defects}), "sources": self.sources,
-                "coefficients": {"GCAL_TO_MWH": GCAL_TO_MWH, "GAS_KWH_PER_M3": GAS_KWH_PER_M3}}
+                "coefficients": {"GCAL_TO_MWH": GCAL_TO_MWH, "GAS_KWH_PER_M3": GAS_KWH_PER_M3},
+                "meters_summary": meters_summary(self.meters, {b.id for b in self.buildings}) if self.meters else None,
+                "sem_summary": sem_summary(self.sem_rows, self.sem_by_bid, len(self.buildings)) if self.sem_rows else None}
+
+    def meters_for(self, bid: int) -> dict | None:
+        """Лічильники будівлі (без заводських номерів); None — якщо даних про лічильники немає взагалі."""
+        return meters_view(self.meters.get(bid)) if self.meters else None
+
+    def sem_for(self, bid: int) -> dict | None:
+        """Стан СЕнМ суб'єкта, до якого впевнено зіставлено будівлю; None — не зіставлено."""
+        return sem_view(self.sem_by_bid.get(bid))
 
     def view(self, b: BuildingView, full: bool = False) -> dict:
         d = asdict(b)
@@ -321,4 +362,7 @@ class Store:
         if not full:
             d.pop("defects")
             d["defects_count"] = len(b.defects)
+        else:
+            d["meters"] = self.meters_for(b.id)
+            d["sem"] = self.sem_for(b.id)
         return d

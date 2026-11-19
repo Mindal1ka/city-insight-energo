@@ -93,10 +93,9 @@
 			<p class="kicker">Паспорт даних · {catLabel(b.category_short)}</p>
 			<h1>{b.name}</h1>
 			<p class="lead">{b.address}</p>
-			<p class="lead plain hide-phone">Усе, що відомо про будівлю з даних <Term key="UMUNI" plain />: скільки електрики вона витрачає і як це порівняно зі схожими будівлями.</p>
 		</div>
 		<div class="actions no-print">
-			<a class="btn" href="/object/{b.id}"><Icon name="sun" size={18} /> Сонце й автономність</a>
+			<a class="btn" href="/object/{b.id}"><Icon name="sun" size={18} /> Картка об’єкта</a>
 			<button type="button" class="btn btn-secondary hide-phone" onclick={() => window.print()}>Друк / PDF</button>
 		</div>
 	</div>
@@ -109,7 +108,7 @@
 				decimals={kwhScaled.decimals}
 				unit={kwhScaled.unit}
 				icon="bolt"
-				hint={kwhBase ? 'Усі лічильники будівлі за повний рік.' : 'Немає даних за цей рік.'}
+				hint={kwhBase ? 'Усі лічильники за повний рік.' : 'Немає даних.'}
 			/>
 		</Reveal>
 		<Reveal delay={70}>
@@ -123,9 +122,9 @@
 				toneLabel={cmpTone === 'good' ? 'економніше за типову' : cmpTone === 'neutral' ? undefined : 'більше за типову'}
 				hint={er?.ratio != null
 					? ratioWords(er.ratio) === LEVEL_WORDS
-						? `Приблизно як у типової будівлі категорії (${num(er.median, 1)}).`
-						: `Це ${ratioWords(er.ratio)}, ніж у типової будівлі категорії (${num(er.median, 1)}).`
-					: 'Не рахується: бракує даних.'}
+						? `Як типова (${num(er.median, 1)}).`
+						: `${ratioWords(er.ratio)}, ніж типова (${num(er.median, 1)}).`
+					: 'Бракує даних.'}
 			/>
 		</Reveal>
 		<Reveal delay={140}>
@@ -136,8 +135,8 @@
 				unit={er && !er.excluded ? `з ${er.rankOf}` : ''}
 				href={er && !er.excluded ? `/rating?cat=${encodeURIComponent(b.category_short)}` : undefined}
 				hint={er && !er.excluded
-					? '№ 1 — та, що витрачає найбільше на 1 м² серед схожих: її перевіряють першою.'
-					: 'Будівля поки не в рейтингу — причина нижче.'}
+					? '№ 1 — найбільше на 1 м² серед схожих.'
+					: 'Поза рейтингом.'}
 			/>
 		</Reveal>
 		<Reveal delay={210}>
@@ -149,10 +148,10 @@
 				toneLabel={serious ? 'треба виправити' : 'все гаразд'}
 				href={elecDefects.length ? '#def-h' : undefined}
 				hint={serious
-					? 'Впливають на розрахунок. Що саме і як виправити — внизу сторінки.'
+					? 'Впливають на розрахунок.'
 					: elecDefects.length
-						? 'Лише довідкові поля — на розрахунок електрики не впливають.'
-						: 'Дані про електрику без помилок.'}
+						? 'Лише довідкові поля.'
+						: 'Без помилок.'}
 			/>
 		</Reveal>
 	</section>
@@ -167,23 +166,10 @@
 						<span class="muted">категорія «{b.category_short}», {BASE_YEAR} рік</span>
 					</p>
 					<CompareBar value={er.kwhM2} median={er.median} category={b.category_short} year={BASE_YEAR} />
-					<p>
-						На кожен квадратний метр будівля витрачає <strong>{ratioWords(er.ratio)}</strong>{#if ratioWords(er.ratio) !== LEVEL_WORDS}, ніж
-							<Term key="медіана категорії">типова будівля</Term> цієї категорії{/if}.
-					</p>
-					<Disclosure summary="Що означає клас {info?.letter ?? ''}">
-						<p class="small">
-							{#if info}<Term key="умовний клас">Клас</Term> <strong>{info.letter}</strong> — «{info.text}» ({info.range}).{/if}
-							Клас — <strong>аналітична оцінка</strong> відносно схожих будівель громади, а
-							<strong>не офіційний енергетичний сертифікат</strong>.
-						</p>
-					</Disclosure>
+					<p><strong>{ratioWords(er.ratio)}</strong>{#if ratioWords(er.ratio) !== LEVEL_WORDS} за <Term key="медіана категорії">типову</Term>{/if} на 1 м²</p>
 				{:else if er}
 					<div class="notice notice-warn">
-						<p>
-							<strong>Будівля поки не в рейтингу.</strong> Причина: {er.excluded}. Після виправлення даних в
-							UMUNI вона з’явиться в рейтингу автоматично.
-						</p>
+						<p><strong>Поза рейтингом:</strong> {er.excluded}</p>
 					</div>
 				{/if}
 			</section>
@@ -207,9 +193,6 @@
 						</li>
 					{/each}
 				</ul>
-				<p class="muted small">
-					Неповний рік не можна напряму порівнювати з повним: у ньому менше місяців.
-				</p>
 				<Disclosure summary="Характеристики будівлі">
 					<dl class="attrs">
 						<dt>Категорія</dt>
@@ -237,14 +220,8 @@
 	<Reveal>
 		<section class="card defs" aria-labelledby="def-h">
 			<h2 id="def-h">Що виправити в даних</h2>
-			{#if hiddenDefects > 0}
-				<label class="toggle no-print">
-					<input type="checkbox" bind:checked={showAllDefects} />
-					Показати також тепло, газ і воду ({hiddenDefects})
-				</label>
-			{/if}
 			{#if defects.length === 0}
-				<p class="all-ok"><Icon name="check" size={20} /> Проблем у даних про електроенергію не знайдено.</p>
+				<p class="all-ok"><Icon name="check" size={20} /> Без проблем</p>
 			{:else}
 				<ul class="dgroups">
 					{#each groups as g (g.key)}
@@ -255,7 +232,7 @@
 						</li>
 					{/each}
 				</ul>
-				<Disclosure summary="Технічні подробиці для фахівця з даних" hint="{defects.length} {plural(defects.length, ['запис', 'записи', 'записів'])}">
+				<Disclosure summary="Технічні подробиці" hint="{defects.length} {plural(defects.length, ['запис', 'записи', 'записів'])}">
 					<div class="table-wrap">
 						<table>
 							<caption class="visually-hidden">Записи про проблеми в даних цієї будівлі</caption>
@@ -284,9 +261,13 @@
 		</section>
 	</Reveal>
 
-	<p class="muted small print-only">
-		Аналітична оцінка на даних UMUNI. Не є офіційним енергосертифікатом.
-	</p>
+	<Disclosure summary="Як рахуємо" class="card soft">
+		<ul class="muted small">
+			<li>Дані — <Term key="UMUNI" plain />, лише електроенергія; порівнюємо зі схожими будівлями категорії «{b.category_short}» за {BASE_YEAR} рік.</li>
+			{#if info}<li><Term key="умовний клас">Клас</Term> {info.letter} — «{info.text}» ({info.range}).</li>{/if}
+			<li>Клас — аналітична оцінка, а не офіційний енергосертифікат. Неповний рік напряму з повним не порівнюємо.</li>
+		</ul>
+	</Disclosure>
 {/if}
 
 <style>
@@ -410,10 +391,6 @@
 		font-weight: 500;
 		margin-bottom: 0.75rem;
 		cursor: pointer;
-	}
-	.toggle input {
-		width: 1.1rem;
-		height: 1.1rem;
 	}
 	.all-ok {
 		display: flex;
