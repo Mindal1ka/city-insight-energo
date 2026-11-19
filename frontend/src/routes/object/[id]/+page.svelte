@@ -209,7 +209,7 @@
 		[
 			{ k: 'cons', icon: 'plug', pre: 'Споживає ≈', v: consMonth, unit: 'кВт·год/міс', d: 0 },
 			{ k: 'gen', icon: 'sun', pre: 'Панелі дають ≈', v: ses ? genMonth : null, unit: 'кВт·год/міс', d: 0 },
-			{ k: 'bat', icon: 'battery', pre: 'Акумулятор', v: batKwh, unit: 'кВт·год', d: 1 },
+			{ k: 'bat', icon: 'battery', pre: 'Акумулятор', v: batKwh || null, unit: 'кВт·год', d: 1 },
 			{ k: 'sav', icon: 'wallet', pre: 'Заощаджує', v: savedYear, unit: 'грн/рік', d: 0 }
 		].filter((x) => x.v != null && !(noCons && x.k !== 'bat')) as { k: string; icon: 'plug'; pre: string; v: number; unit: string; d: number }[]
 	);

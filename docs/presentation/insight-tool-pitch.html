@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Insight Tool · Полтавська громада</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+	@page { size: 1600px 900px; margin: 0; }
+	:root {
+		--navy: #0f2f52; --navy-deep: #0a1f38; --navy-ink: #c9d6e6;
+		--sun: #f5a524; --sun-ink: #8a4f00; --sun-soft: #fff4dc;
+		--ok: #1a6b35; --ok-soft: #e3f4ea;
+		--demo: #b25e00; --demo-soft: #fdeedf;
+		--miss: #b3261e; --miss-soft: #fbe6e4;
+		--info: #1f5fa8; --info-soft: #e3eefb;
+		--ink: #142236; --muted: #5a6880; --line: #dde3ea; --bg: #f4f6f8;
+	}
+	* { box-sizing: border-box; }
+	html, body { margin: 0; padding: 0; background: #fff; }
+	body { font-family: Inter, 'Segoe UI', Arial, sans-serif; color: var(--ink); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+	.slide { width: 1600px; height: 900px; position: relative; overflow: hidden; break-after: page; page-break-after: always; background: var(--bg); padding: 56px 72px 48px; display: flex; flex-direction: column; }
+	.slide:last-child { break-after: auto; page-break-after: auto; }
+
+	/* шапка слайда */
+	.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+	.brand { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; font-size: 16px; }
+	.logo { width: 28px; height: 28px; border-radius: 6px; background: var(--navy); color: var(--sun); display: grid; place-items: center; font-weight: 800; font-size: 15px; }
+	.sec { font-size: 14px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+	.pg { font-size: 16px; font-weight: 700; color: var(--muted); min-width: 28px; text-align: right; }
+	h1 { font-size: 46px; line-height: 1.08; margin: 0 0 10px; letter-spacing: -0.02em; }
+	h2 { font-size: 40px; line-height: 1.1; margin: 0 0 8px; letter-spacing: -0.02em; }
+	.lead { font-size: 21px; color: var(--muted); margin: 0 0 26px; max-width: 1250px; line-height: 1.4; }
+	b { font-weight: 700; }
+
+	.tag { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 4px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+	.t-real { background: var(--ok-soft); color: var(--ok); }
+	.t-par { background: var(--info-soft); color: var(--info); }
+	.t-demo { background: var(--demo-soft); color: var(--demo); }
+	.t-miss { background: var(--miss-soft); color: var(--miss); }
+	.dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+
+	.card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 22px 24px; }
+	.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+	.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+	.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+	ul.clean { list-style: none; margin: 0; padding: 0; }
+	ul.clean li { position: relative; padding-left: 22px; margin: 0 0 11px; font-size: 19px; line-height: 1.4; }
+	ul.clean li::before { content: ''; position: absolute; left: 2px; top: 10px; width: 8px; height: 8px; border-radius: 2px; background: var(--navy); }
+	ul.q li::before { background: var(--miss); }
+	.h3 { font-size: 15px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+
+	/* смуга чисел */
+	.strip { display: grid; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+	.strip > div { padding: 18px 22px; border-left: 1px solid var(--line); }
+	.strip > div:first-child { border-left: 0; }
+	.strip .v { font-size: 42px; font-weight: 800; line-height: 1.05; color: var(--navy); letter-spacing: -0.01em; }
+	.strip .v small { font-size: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+	.strip .l { font-size: 16px; color: var(--muted); margin-top: 6px; line-height: 1.35; }
+	.strip .s { margin-top: 10px; }
+	.v.good { color: var(--ok); } .v.warn { color: var(--miss); } .v.sun { color: var(--sun-ink); }
+
+	/* таблиці */
+	table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); font-size: 18px; }
+	th { text-align: left; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 18px; background: #f8fafc; border-bottom: 1px solid var(--line); }
+	td { padding: 12px 18px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.35; }
+	tr:last-child td { border-bottom: 0; }
+	.src { color: var(--muted); font-size: 15px; }
+
+	/* скріншоти */
+	.shot { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 10px 30px -18px rgba(15,35,65,.35); }
+	.shot img { display: block; width: 100%; }
+	.callouts { display: grid; gap: 14px; align-content: start; }
+	.co { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
+	.co .n { width: 36px; height: 36px; border-radius: 6px; background: var(--navy); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 17px; }
+	.co b { display: block; font-size: 19px; margin-bottom: 2px; }
+	.co span { font-size: 16.5px; color: var(--muted); line-height: 1.4; }
+
+	/* титул */
+	.cover { background: var(--navy-deep); color: #fff; padding: 64px 80px; }
+	.cover .brand { color: var(--navy-ink); font-size: 20px; }
+	.cover .logo { width: 36px; height: 36px; font-size: 19px; background: var(--sun); color: var(--navy-deep); }
+	.cover h1 { font-size: 80px; margin: 120px 0 18px; }
+	.cover .lead { color: var(--navy-ink); font-size: 28px; max-width: 1150px; }
+	.cover .line { width: 120px; height: 6px; background: var(--sun); border-radius: 3px; margin: 8px 0 26px; }
+	.cover .partners { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; padding: 10px 40px; }
+	.cover .partners img { display: block; width: 100%; height: auto; }
+	.cover .meta { position: absolute; bottom: 250px; left: 80px; font-size: 20px; color: var(--navy-ink); }
+
+	/* архітектура */
+	.flow { display: grid; grid-template-columns: 1fr 40px 1.15fr 40px 1fr; align-items: stretch; }
+	.flow .arrow { display: grid; place-items: center; color: var(--muted); font-size: 30px; font-weight: 700; }
+	.flow .card h4 { margin: 0 0 12px; font-size: 20px; }
+	.flow .card li { font-size: 16.5px; margin-bottom: 7px; }
+
+	/* дорожня карта */
+	.road { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; position: relative; }
+	.road .st { padding: 0 18px 0 0; }
+	.road .bar { height: 6px; background: var(--line); margin: 16px 0 18px; position: relative; }
+	.road .st:first-child .bar { background: var(--ok); }
+	.road .bar::before { content: ''; position: absolute; left: 0; top: -9px; width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 5px solid var(--navy); box-sizing: border-box; }
+	.road .st:first-child .bar::before { border-color: var(--ok); }
+	.road .when { font-size: 15px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+	.road h4 { margin: 0 0 8px; font-size: 22px; }
+	.road li { font-size: 16.5px; }
+
+	.cover ul.clean li::before { background: var(--sun); }
+	.note { margin-top: auto; padding-top: 14px; font-size: 15px; color: var(--muted); }
+	.big-q { font-size: 30px; font-weight: 700; line-height: 1.3; }
+	.pill { display: inline-block; padding: 3px 10px; border-radius: 4px; background: var(--sun-soft); color: var(--sun-ink); font-weight: 700; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- 1. Титул -->
+<section class="slide cover">
+	<div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool · Полтавська громада</div>
+	<h1>Insight Tool</h1>
+	<div class="line"></div>
+	<p class="lead">Електроенергія комунальних закладів Полтави на одному екрані: скільки споживають, скільки дає сонце, скільки це коштує і хто протримається без світла.</p>
+	<div class="meta">Трек «Енергія» · листопад 2026</div>
+	<div class="partners"><img src="img/partners.png" alt="Партнери хакатону"></div>
+</section>
+
+<!-- 2. Проблема -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Проблема</div><div class="pg">2</div></div>
+	<h2>Місто платить за світло мільйони, але не бачить цілої картини</h2>
+	<p class="lead">Дані є — вони розкидані по чотирьох державних системах, а про сонячні станції й генератори немає ні реєстру, ні обліку.</p>
+	<div class="strip" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 22px;">
+		<div><div class="v">311</div><div class="l">комунальних будівель: школи, садки, лікарні, культура</div></div>
+		<div><div class="v">92,5 <small>млн грн</small></div><div class="l">бюджет громади на електроенергію у 2026 році <span class="src">(openbudget.gov.ua)</span></div></div>
+		<div><div class="v warn">до 13 <small>год</small></div><div class="l">без світла сьогодні за графіком Полтаваобленерго, 4,5 год поспіль</div></div>
+	</div>
+	<div class="grid2" style="flex:1">
+		<div class="card">
+			<p class="h3">Де лежать дані зараз</p>
+			<ul class="clean">
+				<li><b>Споживання</b> — UMUNI, річними сумами по будівлях</li>
+				<li><b>Бюджет</b> — openbudget, по програмах, а не по будівлях</li>
+				<li><b>Платежі</b> — Казначейство, одним рахунком на все управління</li>
+				<li><b>Відключення</b> — сайт Полтаваобленерго</li>
+				<li><b>Сонячні станції й генератори</b> — ніде</li>
+			</ul>
+		</div>
+		<div class="card">
+			<p class="h3">На що місто не може швидко відповісти</p>
+			<ul class="clean q">
+				<li>Скільки вкладено в сонячні станції — і чи вони окуповуються?</li>
+				<li>Де станції не вистачає і скільки доставити?</li>
+				<li>Хто з закладів виходить за ліміт бюджету?</li>
+				<li>Хто протримається, коли сьогодні вимкнуть світло?</li>
+				<li>Скільки йде на генератори й пальне?</li>
+			</ul>
+		</div>
+	</div>
+</section>
+
+<!-- 3. Для кого -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Для кого і яка користь</div><div class="pg">3</div></div>
+	<h2>Кожен бачить своє і відповідає за своє</h2>
+	<p class="lead">Вхід лише за логіном. Права розмежовані: чутливі дані (акумулятори, генератори) — тільки службам з повним доступом.</p>
+	<table>
+		<tr><th style="width:24%">Хто</th><th style="width:38%">Що бачить</th><th>Яку користь отримує</th></tr>
+		<tr><td><b>Енергоменеджер міста</b></td><td>Усі заклади, станції, генератори, блекаут</td><td>Знає, куди ставити панелі й акумулятори, і може це обґрунтувати цифрами</td></tr>
+		<tr><td><b>Фінансове управління</b></td><td>Бюджет, ліміти, платежі, окупність</td><td>Бачить перевитрати до кінця року, а не після нього</td></tr>
+		<tr><td><b>Управління освіти, охорони здоров'я</b></td><td>Повні дані своїх закладів</td><td>Порівнює свої школи чи лікарні та подає звернення на розширення</td></tr>
+		<tr><td><b>Керівник закладу</b></td><td>Свою будівлю</td><td>Вносить дані станції й генератора, веде журнал пального</td></tr>
+		<tr><td><b>Адміністратор даних</b></td><td>Усе на перегляд</td><td>Оновлює дані UMUNI, бачить помилки в даних</td></tr>
+	</table>
+	<p class="note">Користь для громади: менше переплат за електроенергію, обґрунтовані закупівлі СЕС, готовність закладів до відключень.</p>
+</section>
+
+<!-- 4. Рішення -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Рішення</div><div class="pg">4</div></div>
+	<h2>Один інструмент замість чотирьох систем і таблиць</h2>
+	<div style="display:grid; grid-template-columns: 1.55fr 1fr; gap: 28px; flex: 1; min-height: 0;">
+		<div class="shot" style="align-self:start"><img src="img/overview.png" alt="Огляд громади"></div>
+		<div class="callouts">
+			<div class="co"><div class="n">1</div><div><b>Огляд громади</b><span>Вкладено в СЕС, економія, окупність, бюджет і що зробити — на одному екрані</span></div></div>
+			<div class="co"><div class="n">2</div><div><b>Мапа об'єктів</b><span>311 будівель, колір — чи вистачає сонця; межі районів з ГІС міста</span></div></div>
+			<div class="co"><div class="n">3</div><div><b>Картка об'єкта</b><span>Споживання, станція, гроші, блекаут і рекомендація «скільки доставити»</span></div></div>
+			<div class="co"><div class="n">4</div><div><b>Бюджет і ліміти</b><span>Реальний бюджет і платежі, ліміт кожної будівлі</span></div></div>
+			<div class="co"><div class="n">5</div><div><b>Готовність до блекауту</b><span>Хто протримається сьогодні за графіком Полтаваобленерго</span></div></div>
+			<div class="co"><div class="n">6</div><div><b>Звернення</b><span>Заявки між закладом, управлінням і енергоменеджером</span></div></div>
+		</div>
+	</div>
+</section>
+
+<!-- 5. Мапа -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Як працює · мапа</div><div class="pg">5</div></div>
+	<h2>Вся громада на мапі: де сонця вистачає, а де ні</h2>
+	<div style="display:grid; grid-template-columns: 1.55fr 1fr; gap: 28px; flex: 1;">
+		<div class="shot" style="align-self:start"><img src="img/map.png" alt="Мапа"></div>
+		<div class="callouts">
+			<div class="co"><div class="n">●</div><div><b>Зелена точка — сонця вистачає</b><span>Станція покриває 80 % споживання і більше</span></div></div>
+			<div class="co"><div class="n" style="background:#d9680f">▼</div><div><b>Помаранчева — не вистачає</b><span>Менше 80 %: кандидат на розширення</span></div></div>
+			<div class="co"><div class="n" style="background:#7a8594">■</div><div><b>Сіра — станції немає</b><span>Кандидат на нову СЕС</span></div></div>
+			<div class="co"><div class="n">🔍</div><div><b>Фільтри і пошук</b><span>Розпорядник, тип закладу, сезон, день / місяць / рік</span></div></div>
+			<div class="co"><div class="n">▦</div><div><b>Межі районів і старостатів</b><span>Шари з ГІС Полтавської міської ради</span></div></div>
+		</div>
+	</div>
+</section>
+
+<!-- 6. Картка об'єкта -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Як працює · об'єкт</div><div class="pg">6</div></div>
+	<h2>Картка закладу: не просто цифри, а що робити</h2>
+	<div style="display:grid; grid-template-columns: 1.55fr 1fr; gap: 28px; flex: 1;">
+		<div class="shot" style="align-self:start"><img src="img/object.png" alt="Картка об'єкта"></div>
+		<div class="callouts">
+			<div class="co"><div class="n">1</div><div><b>Покриття сонцем: 78 %</b><span>Скільки споживання дає власна станція. Простий відсоток замість коефіцієнтів</span></div></div>
+			<div class="co"><div class="n">2</div><div><b>Реальне споживання з UMUNI</b><span>2025 і 2026 рік, тренд до минулого року</span></div></div>
+			<div class="co"><div class="n">3</div><div><b>«Доставити +15 кВт панелей і +60 кВт·год акумулятора»</b><span>Розрахунок у кВт·год за даними PVGIS для Полтави, з вартістю й окупністю</span></div></div>
+			<div class="co"><div class="n">4</div><div><b>Одна кнопка — звернення</b><span>Заявка йде енергоменеджеру й управлінню</span></div></div>
+			<div class="co"><div class="n">5</div><div><b>Вкладки</b><span>Станція, гроші (ліміт і оплата), блекаут і генератор з журналом пального</span></div></div>
+		</div>
+	</div>
+</section>
+
+<!-- 7. Гроші -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Як працює · гроші</div><div class="pg">7</div></div>
+	<h2>Гроші: реальний бюджет, реальні платежі, ліміт кожної будівлі</h2>
+	<p class="lead">Ліміт будівлі рахуємо з плану бюджету програми пропорційно її споживанню — не вигадуємо.</p>
+	<div class="strip" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 22px;">
+		<div><div class="v">41,9 <small>з 92,5 млн</small></div><div class="l">сплачено за електроенергію у 2026 (до вересня)</div><div class="s"><span class="tag t-real"><i class="dot"></i>openbudget.gov.ua</span></div></div>
+		<div><div class="v">11,57 <small>грн</small></div><div class="l">фактична ціна кВт·год у 2025: бюджет ÷ споживання</div><div class="s"><span class="tag t-real"><i class="dot"></i>openbudget + UMUNI</span></div></div>
+		<div><div class="v">23 %</div><div class="l">оплати освіти йде Полтаваобленерго за розподіл</div><div class="s"><span class="tag t-real"><i class="dot"></i>spending.gov.ua</span></div></div>
+		<div><div class="v good">3,8 <small>року</small></div><div class="l">окупність станцій: 40 млн вкладено, 10,5 млн економії на рік</div><div class="s"><span class="tag t-demo"><i class="dot"></i>ДЕМО: реєстру СЕС немає</span></div></div>
+	</div>
+	<div class="shot" style="flex:1; min-height:0;"><img src="img/finance.png" alt="Бюджет і ліміти" style="object-fit:cover; object-position: top; height:100%;"></div>
+</section>
+
+<!-- 8. Енергобезпека -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Як працює · енергобезпека</div><div class="pg">8</div></div>
+	<h2>Хто протримається, коли вимкнуть світло</h2>
+	<p class="lead">Сьогоднішній графік Полтаваобленерго порівнюємо з автономією кожного закладу: акумулятор, сонце й генератор, який заряджає акумулятор через інвертор.</p>
+	<div style="display:grid; grid-template-columns: 1.3fr 1fr; gap: 26px; flex:1; min-height:0;">
+		<div class="shot" style="align-self:start"><img src="img/blackout.png" alt="Готовність до блекауту"></div>
+		<div style="display:grid; gap:18px; align-content:start;">
+			<div class="strip" style="grid-template-columns: 1fr 1fr;">
+				<div><div class="v good">65 <small>з 89</small></div><div class="l">закладів з резервом витримають сьогоднішнє відключення</div></div>
+				<div><div class="v warn">19</div><div class="l">протримаються менше 4 годин</div></div>
+			</div>
+			<div class="card">
+				<p class="h3">Облік генераторів</p>
+				<ul class="clean">
+					<li><b>46 генераторів</b>, 549 кВт</li>
+					<li><b>8,7 млн грн</b> вкладено, <b>1,5 млн грн</b> на пальне за рік</li>
+					<li>Журнал пального по кожному закладу: дата, літри, гривні, накладна</li>
+					<li>Поруч для порівняння: сонце заощаджує 10,5 млн на рік</li>
+				</ul>
+				<p style="margin:12px 0 0"><span class="tag t-demo"><i class="dot"></i>генератори — ДЕМО, графік відключень — реальний</span></p>
+			</div>
+		</div>
+	</div>
+</section>
+
+<!-- 9. Відкриті дані -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Відкриті дані</div><div class="pg">9</div></div>
+	<h2>10 відкритих джерел, зведених до рівня будівлі</h2>
+	<p class="lead">Окремо ці дані відповідають на вузькі питання. Разом — показують, скільки коштує кожна будівля і що з цим робити.</p>
+	<table>
+		<tr><th style="width:30%">Джерело</th><th style="width:36%">Що беремо</th><th>Навіщо</th></tr>
+		<tr><td><b>UMUNI</b> <span class="src">· дані громади</span></td><td>311 будівель, споживання 2025 і 2026, лічильники</td><td>Основа всіх розрахунків</td></tr>
+		<tr><td><b>openbudget.gov.ua</b></td><td>Бюджет на е/е (КЕКВ 2273) по програмах, помісячно</td><td>Ліміт кожної будівлі, фактична ціна кВт·год</td></tr>
+		<tr><td><b>spending.gov.ua</b> <span class="src">· Казначейство</span></td><td>Платежі Департаменту освіти постачальнику й обленерго</td><td>Скільки йде за енергію, скільки — за розподіл</td></tr>
+		<tr><td><b>Полтаваобленерго</b></td><td>Графік погодинних відключень на сьогодні</td><td>Хто протримається без світла</td></tr>
+		<tr><td><b>PVGIS</b> <span class="src">· Єврокомісія</span>, <b>Open-Meteo</b></td><td>Генерація 1 кВт панелей у Полтаві, прогноз сонця</td><td>Скільки дасть станція і скільки доставити</td></tr>
+		<tr><td><b>ГІС міськради</b>, <b>OpenStreetMap</b></td><td>Межі громади, районів, старостатів; координати</td><td>Мапа</td></tr>
+		<tr><td><b>Prozorro</b>, <b>Суспільне</b>, ціни ринку</td><td>Тариф 12 грн, ціни панелей, інверторів, акумуляторів, генераторів, дизелю</td><td>Вартість і окупність</td></tr>
+	</table>
+</section>
+
+<!-- 10. Чесність даних -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Відкриті дані · чесність</div><div class="pg">10</div></div>
+	<h2>Кожне число має позначку: факт, параметр чи модель</h2>
+	<p class="lead">Ми не видаємо модель за факт. Де даних немає — моделюємо на реальному споживанні й цінах і позначаємо «ДЕМО». Щойно місто дасть дані — модель заміняється автоматично.</p>
+	<div class="grid3" style="flex:1">
+		<div class="card" style="border-top:6px solid var(--ok)">
+			<p style="margin:0 0 14px"><span class="tag t-real"><i class="dot"></i>Реальні</span></p>
+			<ul class="clean">
+				<li>Будівлі й споживання (UMUNI)</li>
+				<li>Бюджет і ліміти шкіл, садків, культури</li>
+				<li>Платежі освіти</li>
+				<li>Графік відключень</li>
+				<li>Генерація сонця в Полтаві</li>
+				<li>Ліцей №13: інвертор 50 кВт, 730 тис. грн</li>
+			</ul>
+		</div>
+		<div class="card" style="border-top:6px solid var(--demo)">
+			<p style="margin:0 0 14px"><span class="tag t-demo"><i class="dot"></i>ДЕМО — до отримання даних</span></p>
+			<ul class="clean">
+				<li>Решта сонячних станцій</li>
+				<li>Стан інверторів наживо</li>
+				<li>Генератори, їх вартість і пальне</li>
+				<li>Ліміти лікарень і спорту</li>
+				<li>Розподіл року по місяцях</li>
+			</ul>
+		</div>
+		<div class="card" style="border-top:6px solid var(--miss)">
+			<p style="margin:0 0 14px"><span class="tag t-miss"><i class="dot"></i>Що потрібно від міста</span></p>
+			<ul class="clean">
+				<li><b>Реєстр СЕС</b> — головне</li>
+				<li>Доступ до хмар інверторів (лише читання)</li>
+				<li>Помісячні дані UMUNI</li>
+				<li>Черга відключень кожного закладу</li>
+				<li>Реєстр генераторів</li>
+				<li>Рахунки за точками обліку (EIC)</li>
+			</ul>
+		</div>
+	</div>
+</section>
+
+<!-- 11. Новизна -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Що нового</div><div class="pg">11</div></div>
+	<h2>Чого не робить жодна з наявних систем</h2>
+	<p class="lead">UMUNI показує споживання, openbudget — бюджет, обленерго — графіки. Insight Tool з'єднує їх і відповідає на питання «що робити».</p>
+	<div class="grid3" style="flex:1; grid-auto-rows: 1fr;">
+		<div class="card"><p class="h3">01</p><b style="font-size:22px">Ліміт для кожної будівлі</b><p style="font-size:17px;color:var(--muted);margin:8px 0 0">З реального бюджету програми — хоча бюджет не розписаний по будівлях</p></div>
+		<div class="card"><p class="h3">02</p><b style="font-size:22px">«Скільки доставити»</b><p style="font-size:17px;color:var(--muted);margin:8px 0 0">кВт панелей і кВт·год акумулятора під реальне споживання, з вартістю й окупністю</p></div>
+		<div class="card"><p class="h3">03</p><b style="font-size:22px">Блекаут на реальному графіку</b><p style="font-size:17px;color:var(--muted);margin:8px 0 0">Автономія кожного закладу проти сьогоднішнього відключення, з генератором, що заряджає акумулятор</p></div>
+		<div class="card"><p class="h3">04</p><b style="font-size:22px">Облік генераторів і пального</b><p style="font-size:17px;color:var(--muted);margin:8px 0 0">Те, чого місто зараз не рахує взагалі — поруч з економією від сонця</p></div>
+		<div class="card"><p class="h3">05</p><b style="font-size:22px">Перевірка даних</b><p style="font-size:17px;color:var(--muted);margin:8px 0 0">Бюджет ÷ споживання = 11,57 грн/кВт·год — збігається з тарифом. Так ловимо помилки в даних</p></div>
+		<div class="card"><p class="h3">06</p><b style="font-size:22px">Простою мовою</b><p style="font-size:17px;color:var(--muted);margin:8px 0 0">«Сонце дає 78 %», «доставити +15 кВт» — замість коефіцієнтів, які треба пояснювати</p></div>
+	</div>
+</section>
+
+<!-- 12. Технічна реалізація -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Технічна реалізація</div><div class="pg">12</div></div>
+	<h2>Працюючий прототип, а не макет</h2>
+	<p class="lead">Усі екрани на слайдах — живий застосунок. Споживання, бюджет, платежі й відключення — реальні дані громади.</p>
+	<div class="flow" style="margin-bottom:24px">
+		<div class="card">
+			<h4>Джерела</h4>
+			<ul class="clean">
+				<li>Файли UMUNI (завантаження)</li>
+				<li>openbudget, spending.gov.ua</li>
+				<li>Графіки Полтаваобленерго (кожні 15 хв)</li>
+				<li>PVGIS, Open-Meteo, ГІС міста</li>
+				<li>Інвертори — лише читання (з пілоту)</li>
+			</ul>
+		</div>
+		<div class="arrow">→</div>
+		<div class="card">
+			<h4>Сервер (Python, FastAPI)</h4>
+			<ul class="clean">
+				<li>Погодинна модель: сонце, акумулятор, споживання</li>
+				<li>Ліміти з бюджету, окупність, «скільки доставити»</li>
+				<li>Модель блекауту на 48 год</li>
+				<li>Ролі й права на кожен запит</li>
+				<li>Кеш і останні збережені дані, якщо джерело недоступне</li>
+			</ul>
+		</div>
+		<div class="arrow">→</div>
+		<div class="card">
+			<h4>Інтерфейс (SvelteKit)</h4>
+			<ul class="clean">
+				<li>Огляд, мапа, картка об'єкта</li>
+				<li>Бюджет, звіт за місяць (CSV)</li>
+				<li>Блекаут, звернення</li>
+				<li>Працює на телефоні</li>
+			</ul>
+		</div>
+	</div>
+	<div class="strip" style="grid-template-columns: repeat(4, 1fr);">
+		<div><div class="v">100</div><div class="l">автотестів проходять</div></div>
+		<div><div class="v">5</div><div class="l">ролей з різними правами</div></div>
+		<div><div class="v">1</div><div class="l">Docker-контейнер — запуск однією командою</div></div>
+		<div><div class="v">0 <small>грн</small></div><div class="l">ліцензій: відкриті бібліотеки й дані</div></div>
+	</div>
+</section>
+
+<!-- 13. Впровадження -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Впровадження і розвиток</div><div class="pg">13</div></div>
+	<h2>Від прототипу до робочого інструменту міста</h2>
+	<p class="lead">Кожен етап прибирає одну ДЕМО-модель і замінює її реальними даними.</p>
+	<div class="road">
+		<div class="st">
+			<div class="when">Зроблено</div><div class="bar"></div>
+			<h4>Прототип</h4>
+			<ul class="clean"><li>311 будівель, реальне споживання й бюджет</li><li>Графіки відключень</li><li>Ролі, звернення, облік генераторів</li></ul>
+		</div>
+		<div class="st">
+			<div class="when">Місяць 1–2</div><div class="bar"></div>
+			<h4>Пілот</h4>
+			<ul class="clean"><li>Реєстр СЕС від міста</li><li>10 закладів, 3 інвертори наживо</li><li>Помісячні дані UMUNI</li></ul>
+		</div>
+		<div class="st">
+			<div class="when">Місяць 3–6</div><div class="bar"></div>
+			<h4>Робоча версія</h4>
+			<ul class="clean"><li>Усі заклади з СЕС</li><li>Черги відключень, реєстр генераторів</li><li>Рахунки за точками обліку</li></ul>
+		</div>
+		<div class="st">
+			<div class="when">Далі</div><div class="bar"></div>
+			<h4>Масштаб</h4>
+			<ul class="clean"><li>Інші громади: інший файл будівель і код бюджету</li><li>Тепло й газ тим самим підходом</li><li>Обмін надлишком між будівлями</li></ul>
+		</div>
+	</div>
+	<p class="h3" style="margin-top:34px">Що місто отримає після пілоту</p>
+	<div class="strip" style="grid-template-columns: repeat(3,1fr);">
+		<div><div class="v" style="font-size:30px">Фактична окупність</div><div class="l">наявних станцій на реальних даних інверторів — замість моделі</div></div>
+		<div><div class="v" style="font-size:30px">Кошторис розширення</div><div class="l">для станцій, яким не вистачає потужності: кВт, кВт·год, гривні</div></div>
+		<div><div class="v" style="font-size:30px">План на зиму</div><div class="l">хто не протримається відключення і що йому потрібно: акумулятор чи генератор</div></div>
+	</div>
+</section>
+
+<!-- 14. Ресурси -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Ресурси і підтримка</div><div class="pg">14</div></div>
+	<h2>Що потрібно, щоб це працювало</h2>
+	<div class="grid2" style="flex:1; margin-top: 10px;">
+		<div class="card">
+			<p class="h3">Від міста</p>
+			<ul class="clean">
+				<li><b>Дані:</b> реєстр СЕС, доступ до хмар інверторів (лише читання), помісячні дані UMUNI</li>
+				<li><b>Люди:</b> енергоменеджер — головний користувач; відповідальний у кожному управлінні</li>
+				<li><b>Інфраструктура:</b> один сервер або хмарна машина з Docker</li>
+				<li><b>Пілотні заклади:</b> 10 шкіл, садків і лікарень зі станціями</li>
+			</ul>
+		</div>
+		<div class="card">
+			<p class="h3">Модель підтримки</p>
+			<ul class="clean">
+				<li><b>Гранти:</b> програми енергостійкості та відновлення</li>
+				<li><b>Бюджет громади:</b> пілот і впровадження</li>
+				<li><b>Підписка:</b> супровід, оновлення даних, нові модулі</li>
+				<li><b>Масштаб:</b> той самий продукт для інших громад — інші дані, той самий код</li>
+			</ul>
+			<p class="src" style="margin:16px 0 0">Права на попередні напрацювання авторки залишаються за нею; умови співпраці фіксує окрема письмова домовленість.</p>
+		</div>
+	</div>
+	<div class="strip" style="grid-template-columns: repeat(3,1fr); margin-top: 20px;">
+		<div><div class="v good">10,5 <small>млн грн/рік</small></div><div class="l">економія від наявних станцій, яку тепер видно (ДЕМО)</div></div>
+		<div><div class="v">30</div><div class="l">станцій, яким не вистачає потужності — перелік готовий</div></div>
+		<div><div class="v warn">19</div><div class="l">закладів, що не протримаються 4 години — перелік готовий</div></div>
+	</div>
+</section>
+
+<!-- 15. Команда -->
+<section class="slide">
+	<div class="top"><div class="brand"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool</div><div class="sec">Команда</div><div class="pg">15</div></div>
+	<h2>Команда</h2>
+	<p class="lead">[Заповнити: ім'я, роль і досвід кожного учасника]</p>
+	<div class="grid3" style="flex:1; grid-auto-rows: min-content;">
+		<div class="card"><b style="font-size:22px">[Ім'я Прізвище]</b><p style="color:var(--muted);margin:8px 0 0;font-size:18px">[роль: продукт, енергетика]</p></div>
+		<div class="card"><b style="font-size:22px">[Ім'я Прізвище]</b><p style="color:var(--muted);margin:8px 0 0;font-size:18px">[роль: розробка]</p></div>
+		<div class="card"><b style="font-size:22px">[Ім'я Прізвище]</b><p style="color:var(--muted);margin:8px 0 0;font-size:18px">[роль: дані, аналітика]</p></div>
+	</div>
+</section>
+
+<!-- 16. Фінал -->
+<section class="slide cover" style="justify-content:center;">
+	<div class="brand" style="position:absolute; top:64px; left:80px;"><span class="logo"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> Insight Tool · Полтавська громада</div>
+	<p class="big-q" style="font-size:44px; max-width:1250px; margin:0 0 34px;">Місто вже має дані. Insight Tool перетворює їх на рішення: де ставити сонце, де економити і хто протримається без світла.</p>
+	<div class="line"></div>
+	<p class="lead" style="font-size:26px; margin:0 0 16px;">Для пілоту потрібно три речі:</p>
+	<ul class="clean" style="color:#fff;">
+		<li style="font-size:24px">Реєстр сонячних станцій комунальних закладів</li>
+		<li style="font-size:24px">Доступ на читання до 3 інверторів</li>
+		<li style="font-size:24px">10 пілотних закладів і енергоменеджер</li>
+	</ul>
+	<p style="position:absolute; bottom:56px; left:80px; font-size:22px; color:var(--navy-ink);">Дякуємо! Покажемо застосунок наживо.</p>
+</section>
+
+
+<script>
+	// ?slide=N — показати лише один слайд (для експорту в зображення)
+	const n = Number(new URLSearchParams(location.search).get('slide'));
+	if (n) document.querySelectorAll('.slide').forEach((el, i) => { if (i !== n - 1) el.style.display = 'none'; });
+</script>
+</body>
+</html>
