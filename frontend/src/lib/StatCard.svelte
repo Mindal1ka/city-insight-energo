@@ -334,6 +334,10 @@
 			padding: 0 0.35rem;
 			letter-spacing: 0.04em;
 		}
+		/* На вузькій картці і іконка, і «ДЕМО» не вміщуються поруч із підписом — лишаємо підпис і позначку */
+		.sc-top:has(.sc-demo) .sc-ico {
+			display: none;
+		}
 		.sc-num {
 			font-size: var(--fs-stat, 1.6rem);
 		}
