@@ -25,12 +25,50 @@
 	const xc = (i: number) => m.l + bw * i + bw / 2;
 	const y = (mwh: number) => m.t + ih - (mwh / yMax) * ih;
 
-	const g = new Tween<number[]>(Array(12).fill(0), { duration: 700, easing: cubicOut });
-	const c = new Tween<number[]>(Array(12).fill(0), { duration: 700, easing: cubicOut });
+	// Анімація (svelte/motion): стартує, коли графік з'являється на екрані.
+	// Стовпці виростають по черзі (затримка 45 мс), лінія споживання промальовується слідом.
+	const g = new Tween<number[]>(Array(12).fill(0), { duration: 650, easing: cubicOut });
+	const c = new Tween<number[]>(Array(12).fill(0), { duration: 0 });
+	const draw = new Tween(0, { duration: 1100, easing: cubicOut });
+	let el = $state<HTMLDivElement>();
+	let seen = $state(false);
 	$effect(() => {
-		const d = isReduced() ? 0 : 700;
-		g.set(rows.map((r) => r.gen_kwh / 1000), { duration: d });
-		c.set(rows.map((r) => r.cons_kwh / 1000), { duration: d });
+		if (!el || seen) return;
+		if (isReduced() || typeof IntersectionObserver === 'undefined') {
+			seen = true;
+			return;
+		}
+		const io = new IntersectionObserver(
+			(es) => {
+				if (es.some((e) => e.isIntersecting)) {
+					seen = true;
+					io.disconnect();
+				}
+			},
+			{ threshold: 0.25 }
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	});
+	let bars = $state<number[]>(Array(12).fill(0));
+	$effect(() => {
+		if (!seen) return;
+		const gv = rows.map((r) => r.gen_kwh / 1000);
+		c.set(rows.map((r) => r.cons_kwh / 1000), { duration: 0 });
+		if (isReduced()) {
+			bars = gv;
+			draw.set(1, { duration: 0 });
+			return;
+		}
+		const timers = gv.map((v, i) => setTimeout(() => (bars[i] = v), i * 45));
+		const t2 = setTimeout(() => draw.set(1), 250);
+		return () => {
+			timers.forEach(clearTimeout);
+			clearTimeout(t2);
+		};
+	});
+	$effect(() => {
+		g.set([...bars], { duration: isReduced() ? 0 : 650 });
 	});
 	const line = $derived(c.current.map((v, i) => `${i ? 'L' : 'M'}${xc(i).toFixed(1)},${y(v).toFixed(1)}`).join(''));
 	let hover = $state<number | null>(null);
@@ -38,7 +76,7 @@
 	const desc = $derived(rows.map((r) => `${MN[r.month - 1]}: ${f1(r.gen_kwh / 1000)} / ${f1(r.cons_kwh / 1000)}`).join('; '));
 </script>
 
-<div class="dm" bind:clientWidth={w}>
+<div class="dm" bind:clientWidth={w} bind:this={el}>
 	<svg viewBox="0 0 {w} {H}" width={w} height={H} role="img" aria-label="Помісячно, МВт·год, генерація / споживання. {desc}">
 		{#each Array.from({ length: Math.round(yMax / step) + 1 }, (_, i) => i * step) as t (t)}
 			<line x1={m.l} x2={m.l + iw} y1={y(t)} y2={y(t)} class="grid" />
@@ -48,13 +86,13 @@
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<g onpointerenter={() => (hover = i)} onpointerleave={() => (hover = null)}>
 				<rect x={m.l + bw * i} y={m.t} width={bw} height={ih} fill={hover === i ? 'var(--neutral-soft)' : 'transparent'} />
-				<rect x={xc(i) - bw * 0.3} y={y(g.current[i] ?? 0)} width={bw * 0.6} height={Math.max(0, m.t + ih - y(g.current[i] ?? 0))} rx="3" fill="var(--sun)" />
+				<rect x={xc(i) - bw * 0.3} y={y(g.current[i] ?? 0)} width={bw * 0.6} height={Math.max(0, m.t + ih - y(g.current[i] ?? 0))} rx="2" fill={hover === i ? 'var(--sun-strong)' : 'var(--sun)'} class="bar" />
 				<text class="ax" x={xc(i)} y={H - 10} text-anchor="middle">{w < 480 ? MN[r.month - 1][0] : MN[r.month - 1]}</text>
 			</g>
 		{/each}
-		<path d={line} fill="none" stroke="var(--cons)" stroke-width="2.4" stroke-linejoin="round" />
+		<path d={line} fill="none" stroke="var(--cons)" stroke-width="2.4" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset={1 - draw.current} />
 		{#each c.current as v, i (i)}
-			<circle cx={xc(i)} cy={y(v)} r="3.6" fill="var(--surface)" stroke="var(--cons)" stroke-width="2" pointer-events="none" />
+			<circle cx={xc(i)} cy={y(v)} r={hover === i ? 5 : 3.6} fill="var(--surface)" stroke="var(--cons)" stroke-width="2" pointer-events="none" opacity={Math.min(1, Math.max(0, draw.current * 12 - i))} class="pt" />
 		{/each}
 		<line x1={m.l} x2={m.l + iw} y1={m.t + ih} y2={m.t + ih} class="axis" />
 		{#if hover !== null}
@@ -83,6 +121,10 @@
 	}
 	.grid {
 		stroke: var(--line-soft);
+	}
+	.bar,
+	.pt {
+		transition: fill 0.15s, r 0.15s;
 	}
 	.axis {
 		stroke: var(--line-strong);

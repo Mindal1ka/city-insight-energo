@@ -25,7 +25,7 @@
 
 :root {
 	/* Поверхні й текст */
-	--bg: #f3f5f9;
+	--bg: #f4f6f8;
 	--bg-2: #eaeef4;
 	--surface: #ffffff;
 	--surface-2: #f8fafc;
@@ -36,7 +36,7 @@
 	--line: #d6dce4;
 	--line-soft: #e6ebf1;
 	--line-strong: #9aa6b4;
-	--card-line: #e2e7ee;
+	--card-line: #dde3ea;
 	--card-line-hover: #cfd8e3;
 
 	/* Дія й стани */
@@ -52,16 +52,16 @@
 	--focus: #ffbf47;
 
 	/* Радіуси */
-	--radius-sm: 8px;
-	--radius: 12px;
-	--radius-lg: 16px;
-	--radius-xl: 22px;
+	--radius-sm: 4px;
+	--radius: 6px;
+	--radius-lg: 8px;
+	--radius-xl: 8px;
 
 	/* Тіні: багатошарові, з легким синім відтінком */
-	--shadow: 0 1px 2px rgba(15, 35, 65, 0.05), 0 1px 3px rgba(15, 35, 65, 0.04);
-	--shadow-md: 0 1px 2px rgba(15, 35, 65, 0.04), 0 8px 24px -10px rgba(15, 35, 65, 0.16);
+	--shadow: none;
+	--shadow-md: none;
 	--shadow-lg: 0 2px 6px rgba(15, 35, 65, 0.05), 0 24px 48px -18px rgba(15, 35, 65, 0.28);
-	--shadow-glow: 0 10px 30px -10px rgba(245, 165, 36, 0.55);
+	--shadow-glow: none;
 
 	/* Відступи (4-піксельна шкала) */
 	--sp-1: 0.25rem;
@@ -178,13 +178,7 @@ body {
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
 	font-feature-settings: 'cv11', 'ss01';
-	/* Легкий «світанок»: тепле сяйво справа вгорі, холодне — зліва */
-	background:
-		radial-gradient(1100px 520px at 105% -8%, rgba(245, 165, 36, 0.075), transparent 62%),
-		radial-gradient(900px 600px at -12% 8%, rgba(31, 79, 132, 0.07), transparent 60%),
-		linear-gradient(180deg, #f6f8fb 0%, var(--bg) 40%, #eff2f7 100%);
-	background-attachment: fixed;
-	background-color: var(--bg);
+	background: var(--bg);
 }
 
 h1,
@@ -197,9 +191,9 @@ h3 {
 	text-wrap: balance;
 }
 h1 {
-	font-size: var(--fs-2xl);
+	font-size: 1.6rem;
 	font-weight: 700;
-	letter-spacing: -0.02em;
+	letter-spacing: -0.01em;
 }
 h2 {
 	font-size: var(--fs-xl);
@@ -554,9 +548,9 @@ input[type='radio'] {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
-	min-height: 36px;
-	padding: 0.3rem 0.85rem;
-	border-radius: 999px;
+	min-height: 34px;
+	padding: 0.3rem 0.75rem;
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--line);
 	background: var(--surface);
 	color: var(--text-2);
@@ -574,11 +568,6 @@ input[type='radio'] {
 }
 .chip:hover {
 	border-color: var(--line-strong);
-	box-shadow: var(--shadow);
-}
-.chip:active {
-	transform: scale(0.96);
-	transition-duration: 60ms;
 }
 .chip[aria-pressed='true'] {
 	background: var(--navy);
@@ -646,8 +635,8 @@ input[type='radio'] {
 
 .pill {
 	display: inline-block;
-	padding: 0.08rem 0.55rem;
-	border-radius: 999px;
+	padding: 0.08rem 0.5rem;
+	border-radius: var(--radius-sm);
 	font-size: 0.8125rem;
 	font-weight: 500;
 	border: 1px solid var(--line);
@@ -734,10 +723,10 @@ td.name {
 }
 .seg {
 	display: inline-flex;
-	padding: 4px;
-	gap: 4px;
-	border-radius: 13px;
-	background: #e6ebf2;
+	padding: 2px;
+	gap: 2px;
+	border-radius: var(--radius);
+	background: #e9edf2;
 	border: 1px solid #dbe2ea;
 }
 .seg a,
@@ -745,8 +734,8 @@ td.name {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.45rem;
-	padding: 0.5rem 1rem;
-	border-radius: 9px;
+	padding: 0.4rem 0.9rem;
+	border-radius: var(--radius-sm);
 	border: 0;
 	background: transparent;
 	color: var(--text-2);
@@ -774,9 +763,7 @@ td.name {
 .seg [aria-pressed='true'] {
 	background: #fff;
 	color: var(--navy);
-	box-shadow:
-		0 1px 2px rgba(16, 24, 40, 0.1),
-		0 2px 6px -2px rgba(16, 24, 40, 0.15);
+	box-shadow: 0 0 0 1px #d3dae3;
 }
 
 /* --- Моушн-утиліти --- */
@@ -787,8 +774,7 @@ td.name {
 		border-color var(--dur-base);
 }
 .lift:hover {
-	transform: translateY(-2px);
-	box-shadow: var(--shadow-md);
+	border-color: var(--card-line-hover);
 }
 .press:active {
 	transform: scale(0.98);
@@ -806,7 +792,7 @@ td.name {
 	}
 	/* Діти з'являються драбинкою (до 10 штук), напр. <div class="stat-grid stagger"> */
 	.stagger > * {
-		animation: fade-in 0.4s var(--ease-out) backwards;
+		animation: none;
 	}
 	.stagger > :nth-child(2) {
 		animation-delay: 30ms;

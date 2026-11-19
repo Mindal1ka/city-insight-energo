@@ -335,8 +335,9 @@
 	/* Повна ширина вікна, навіть якщо layout обгортає сторінку у .wrap */
 	.home {
 		position: relative;
-		width: 100vw;
-		margin-left: calc(50% - 50vw);
+		/* ширина області вмісту праворуч від бокового меню */
+		width: calc(100vw - var(--side-offset, 0px));
+		margin-left: calc(50% - (100vw - var(--side-offset, 0px)) / 2);
 		overflow: hidden;
 		background: #e8edf2;
 		isolation: isolate;

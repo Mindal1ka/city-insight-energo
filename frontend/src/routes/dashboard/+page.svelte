@@ -1,12 +1,11 @@
 <script lang="ts">
-	// «Огляд громади»: ефективність міста на одному екрані — 4 головні показники, один графік, три короткі списки дій.
+	// «Огляд громади»: три розділи — ефект СЕС, споживання й бюджет 2026, що зробити.
 	import { errMessage } from '#lib/api.ts';
-	import { fetchSes, uah, kwh, kText, type SesList, type SesItem } from '#lib/api-ses.ts';
-	import { fetchDepartments, fetchNetwork, fetchTrend, fetchBudgetReal, type Departments, type Network, type Trend, type BudgetReal } from '#lib/api-v2.ts';
+	import { fetchSes, kText, type SesList, type SesItem } from '#lib/api-ses.ts';
+	import { fetchDepartments, fetchTrend, fetchBudgetReal, type Departments, type Trend, type BudgetReal } from '#lib/api-v2.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
 	import SourceTag from '#lib/SourceTag.svelte';
 	import { moneyShort } from '#lib/dash/DashData.ts';
-	import StatCard from '#lib/StatCard.svelte';
 	import Status from '#lib/Status.svelte';
 	import DemoPill from '#lib/DemoPill.svelte';
 	import CountUp from '#lib/CountUp.svelte';
@@ -14,7 +13,6 @@
 
 	let ses = $state<SesList | null>(null);
 	let dept = $state<Departments | null>(null);
-	let net = $state<Network | null>(null);
 	let trend = $state<Trend | null>(null);
 	let bud = $state<BudgetReal | null>(null);
 	let error = $state<string | null>(null);
@@ -25,11 +23,10 @@
 		error = null;
 		try {
 			// Основні дані обов'язкові; решта (залежить від ролі) — якщо є
-			const [s, d, n, tr, br] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchNetwork('year'), fetchTrend(), fetchBudgetReal()]);
+			const [s, d, tr, br] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchTrend(), fetchBudgetReal()]);
 			if (s.status === 'rejected') throw s.reason;
 			ses = s.value;
 			dept = d.status === 'fulfilled' ? d.value : null;
-			net = n.status === 'fulfilled' ? n.value : null;
 			trend = tr.status === 'fulfilled' ? tr.value : null;
 			bud = br.status === 'fulfilled' ? br.value : null;
 		} catch (e) {
@@ -50,12 +47,8 @@
 	const savedS = $derived(moneyShort(saved ?? 0));
 	const coverPct = $derived(t?.gen_kwh != null && t?.cons_kwh ? (t.gen_kwh / t.cons_kwh) * 100 : null);
 
-	const surplusKwh = $derived(net?.totals.surplus_kwh ?? null);
-	const surplusUah = $derived(net?.totals.surplus_uah ?? null);
-
 	const usedPct = $derived(dept?.totals.used_pct_year ?? null);
 	const overLimit = $derived(dept?.totals.over_limit ?? null);
-	const limitTone = $derived(overLimit ? 'warn' : 'good');
 
 	const trendPct = $derived(trend?.trend_pct ?? null);
 	const bt = $derived(bud?.totals ?? null);
@@ -70,376 +63,373 @@
 	});
 
 	const withK = (i: SesItem) => i.has_ses && i.k != null && Number.isFinite(i.k);
-	const needExpand = $derived(
-		(ses?.items ?? [])
-			.filter((i) => withK(i) && i.k_class === 'Не вистачає')
-			.sort((a, b) => (a.k as number) - (b.k as number))
-			.slice(0, 5)
-	);
-	const hasLists = $derived(needExpand.length > 0);
+	const needAll = $derived((ses?.items ?? []).filter((i) => withK(i) && i.k_class === 'Не вистачає'));
+	const needExpand = $derived([...needAll].sort((a, b) => (a.k as number) - (b.k as number)).slice(0, 8));
+	const withSes = $derived(t?.with_ses ?? null);
 </script>
 
 <svelte:head><title>Огляд · Insight Tool</title></svelte:head>
 
-<header class="page-head">
-	<h1>Огляд громади</h1>
+<header class="ph">
+	<div>
+		<h1>Огляд громади</h1>
+		<p class="ph-sub">Комунальні заклади Полтавської громади · електроенергія</p>
+	</div>
 	{#if ses?.demo}
-		<DemoPill text={ses.mock ? 'Макет: наявність СЕС і K змодельовані на клієнті, доки бекенд не віддає /api/ses.' : 'Дані про СЕС змодельовані (у місті немає реєстру СЕС).'} />
+		<DemoPill text="Станції змодельовані: у міста немає відкритого реєстру СЕС. Споживання й бюджет — реальні." />
 	{/if}
 </header>
 
 <Status loading={loading && !ses} {error} retry={load} />
 
 {#if ses}
-	<div class="ov">
-		<section class="hero" aria-label="Головні показники">
-			<div class="card money">
-				<div class="m-item">
-					<span class="m-label">Вкладено в СЕС</span>
-					<span class="m-val"><CountUp value={capexS.v} decimals={capexS.d} /> <small>{capexS.unit}</small></span>
-				</div>
-				<span class="arrow" aria-hidden="true">→</span>
-				<div class="m-item good">
-					<span class="m-label">Заощаджує</span>
-					<span class="m-val"><CountUp value={savedS.v} decimals={savedS.d} /> <small>{savedS.unit}/рік</small></span>
-				</div>
-				<span class="arrow" aria-hidden="true">→</span>
-				<div class="m-item">
-					<span class="m-label">Окупність</span>
-					<span class="m-val">{#if payback == null}—{:else}<CountUp value={payback} decimals={1} /> <small>років</small>{/if}</span>
-				</div>
+	<!-- 1. Ефект СЕС -->
+	<section class="sec" aria-labelledby="s1">
+		<div class="sec-h">
+			<h2 id="s1"><span class="n">1</span>Ефект сонячних станцій</h2>
+			<span class="sec-note">{withSes ?? '—'} об’єктів зі станцією · за рік</span>
+		</div>
+		<div class="strip">
+			<div class="cell">
+				<span class="l">Вкладено</span>
+				<span class="v"><CountUp value={capexS.v} decimals={capexS.d} /><small>{capexS.unit}</small></span>
 			</div>
+			<div class="cell">
+				<span class="l">Заощаджує</span>
+				<span class="v good"><CountUp value={savedS.v} decimals={savedS.d} /><small>{savedS.unit} на рік</small></span>
+			</div>
+			<div class="cell">
+				<span class="l">Окупність</span>
+				<span class="v">{#if payback == null}—{:else}<CountUp value={payback} decimals={1} /><small>років</small>{/if}</span>
+			</div>
+			<div class="cell">
+				<span class="l">Сонце покриває</span>
+				<span class="v">{#if coverPct == null}—{:else}<CountUp value={coverPct} decimals={0} /><small>% споживання об’єктів зі СЕС</small>{/if}</span>
+			</div>
+		</div>
+	</section>
 
-			<div class="cards">
-				<StatCard label="Сонце покриває" value={coverPct} decimals={0} unit="% споживання" icon="sun" tone="good" toneLabel="економія" />
-				<StatCard
-					label="Не використано надлишку"
-					value={surplusKwh == null ? null : surplusKwh / 1000}
-					decimals={0}
-					unit="тис. кВт·год{surplusUah == null ? '' : ' ≈ ' + uah(surplusUah)}"
-					icon="bolt"
-					tone={surplusKwh ? 'warn' : 'neutral'}
-					href="/network"
-				/>
-				<StatCard
-					label="Ліміти (школи, садки та ін.)"
-					value={usedPct}
-					decimals={0}
-					unit="% використано{overLimit == null ? '' : ' · понад ліміт: ' + overLimit}"
-					icon="wallet"
-					tone={limitTone}
-					href="/finance"
-				/>
+	<!-- 2. Споживання і бюджет -->
+	<section class="sec" aria-labelledby="s2">
+		<div class="sec-h">
+			<h2 id="s2"><span class="n">2</span>Споживання і бюджет 2026</h2>
+		</div>
+		<div class="strip three">
+			<div class="cell">
+				<span class="l">Споживання за рік (оцінка) <SourceTag kind="umuni" /></span>
+				{#if trend?.kwh_2026_est}
+					<span class="v">{mln(trend.kwh_2026_est)}<small>млн кВт·год</small></span>
+					{#if trendPct != null}
+						<span class="d" class:down={trendPct < 0} class:up={trendPct > 0}>{trendPct > 0 ? '+' : ''}{num(trendPct, 1)} % до 2025</span>
+					{/if}
+				{:else}<span class="v">—</span>{/if}
+			</div>
+			<a class="cell link" href="/finance">
+				<span class="l">Бюджет на електроенергію <SourceTag kind="openbudget" /></span>
+				{#if bt}
+					<span class="v">{mln(bt.fact_2026)}<small>з {mln(bt.plan_2026)} млн грн сплачено</small></span>
+					<span class="bar" aria-hidden="true"><i style="width:{budPct}%"></i></span>
+					<span class="d">дані по {budMonth ? MONTHS_FULL[budMonth - 1].toLowerCase() : '—'} · ціна 2025: {bt.price_2025 ? num(bt.price_2025, 2) : '—'} грн/кВт·год</span>
+				{:else}<span class="v">—</span>{/if}
+			</a>
+			<a class="cell link" href="/finance">
+				<span class="l">Ліміти закладів</span>
+				<span class="v">{usedPct == null ? '—' : num(usedPct, 0)}<small>% річного ліміту використано</small></span>
+				{#if overLimit != null}
+					<span class="d" class:up={overLimit > 0}>{overLimit > 0 ? `${overLimit} об’єктів понад ліміт` : 'усі в межах ліміту'}</span>
+				{/if}
+			</a>
+		</div>
+		{#if monthly}
+			<div class="panel-x">
+				<h3>Помісячно: генерація СЕС і споживання</h3>
+				<DashMonthly months={monthly} />
+			</div>
+		{/if}
+	</section>
+
+	<!-- 3. Що зробити -->
+	{#if needExpand.length}
+		<section class="sec" aria-labelledby="s3">
+			<div class="sec-h">
+				<h2 id="s3"><span class="n">3</span>Що зробити: станції, яким не вистачає потужності</h2>
+				<a class="sec-link" href="/objects">Усі об’єкти ({needAll.length}) →</a>
+			</div>
+			<div class="tbl">
+				<table>
+					<thead>
+						<tr>
+							<th>Об’єкт</th>
+							<th>Розпорядник</th>
+							<th class="r">Споживання, кВт·год/міс</th>
+							<th class="r">Сонце дає</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each needExpand as i (i.id)}
+							<tr>
+								<td><a href="/object/{i.id}">{i.name}</a></td>
+								<td class="muted">{i.department ?? '—'}</td>
+								<td class="r tnum">{i.cons_kwh_month_avg != null ? num(i.cons_kwh_month_avg, 0) : '—'}</td>
+								<td class="r tnum"><b class="low">{kText(i.k)}</b></td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		</section>
-
-		{#if trend || bt}
-			<section class="real" aria-label="Реальні дані">
-				{#if trend && trend.kwh_2026_est}
-					<div class="card rc">
-						<div class="rc-h"><span>Споживання 2026</span><SourceTag kind="umuni" /></div>
-						<div class="rc-v"><b>{mln(trend.kwh_2026_est)}</b> млн кВт·год
-							{#if trendPct != null}<span class="tr" class:down={trendPct < 0} class:up={trendPct > 0}>{trendPct > 0 ? '+' : ''}{num(trendPct, 1)}% до 2025</span>{/if}
-						</div>
-						<p class="rc-n">оцінка з даних UMUNI до {trend.to_date ? new Date(trend.to_date).toLocaleDateString('uk-UA') : '—'} · ↑ {trend.growing} · ↓ {trend.falling} об’єктів</p>
-					</div>
-				{/if}
-				{#if bt}
-					<a class="card rc" href="/finance">
-						<div class="rc-h"><span>Бюджет на е/е 2026</span><SourceTag kind="openbudget" /></div>
-						<div class="rc-v"><b>{mln(bt.fact_2026)}</b> з {mln(bt.plan_2026)} млн грн сплачено{budMonth ? ` (${MONTHS_FULL[budMonth - 1].toLowerCase()})` : ''}</div>
-						<span class="pb"><i style="width:{budPct}%"></i></span>
-						{#if bt.price_2025}<p class="rc-n">фактична ціна 2025: <b>{num(bt.price_2025, 2)} грн/кВт·год</b></p>{/if}
-					</a>
-				{/if}
-			</section>
-		{/if}
-
-		{#if monthly}
-			<section class="card" aria-labelledby="h-mon">
-				<h2 id="h-mon">Громада помісячно</h2>
-				<DashMonthly months={monthly} />
-			</section>
-		{/if}
-
-		{#if hasLists}
-			<div class="lists">
-				{#snippet list(title: string, rows: { href: string; name: string; num: string }[])}
-					<section class="card lst" aria-label={title}>
-						<h2>{title}</h2>
-						{#if rows.length}
-							<ul>
-								{#each rows as r (r.href + r.name)}
-									<li>
-										<a href={r.href}><span class="nm">{r.name}</span><b>{r.num}</b></a>
-									</li>
-								{/each}
-							</ul>
-						{:else}
-							<p class="empty">—</p>
-						{/if}
-					</section>
-				{/snippet}
-				{@render list(
-					'Потрібне розширення',
-					needExpand.map((i) => ({ href: `/object/${i.id}`, name: i.name, num: 'сонце дає ' + kText(i.k) }))
-				)}
-			</div>
-		{/if}
-	</div>
+	{/if}
 {/if}
 
 <style>
-	.page-head {
+	.ph {
 		display: flex;
-		align-items: center;
-		gap: 0.8rem;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
 		flex-wrap: wrap;
+		padding-bottom: 1.25rem;
 		margin-bottom: 1.5rem;
+		border-bottom: 1px solid var(--card-line);
 	}
-	.page-head h1 {
+	.ph h1 {
 		margin: 0;
 	}
-	.ov {
-		display: grid;
-		gap: 1.5rem;
-	}
-	.hero {
-		display: grid;
-		gap: 1rem;
-	}
-	.cards {
-		--fs-stat: 2rem;
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-		gap: 1rem;
-	}
-	.real {
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-	}
-	.rc {
-		display: grid;
-		gap: 0.35rem;
-		margin: 0;
-		min-width: 0;
-		align-content: start;
-	}
-	.rl {
-		font-weight: 600;
+	.ph-sub {
+		margin: 0.25rem 0 0;
 		color: var(--muted);
-	}
-	.rv {
-		font-family: var(--font-display);
-		font-size: 2rem;
-		font-weight: 700;
-		color: var(--ink);
-		line-height: 1.1;
-	}
-	.rv small {
-		font-family: inherit;
-		font-size: 0.95rem;
-		color: var(--muted);
-	}
-	.rs {
-		font-weight: 700;
-		color: var(--text-2);
-	}
-	.rs.up {
-		color: var(--warn);
-	}
-	.rs.down {
-		color: var(--ok);
-	}
-	.rn {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.3rem 0.5rem;
-		font-size: 0.8rem;
-		color: var(--muted);
-	}
-	.pbar {
-		height: 0.55rem;
-		border-radius: 999px;
-		background: var(--neutral-soft);
-		overflow: hidden;
-	}
-	.pbar i {
-		display: block;
-		height: 100%;
-		background: var(--ok);
-	}
-	.money {
-		display: flex;
-		align-items: center;
-		justify-content: space-around;
-		flex-wrap: wrap;
-		gap: 1rem 1.5rem;
-		margin: 0;
-		padding: 1.5rem;
-	}
-	.m-item {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-		min-width: 0;
-	}
-	.m-label {
-		font-size: 0.95rem;
-		font-weight: 600;
-		color: var(--muted);
-	}
-	.m-val {
-		font-family: var(--font-display);
-		font-size: clamp(1.8rem, 4vw, 2.6rem);
-		font-weight: 700;
-		color: var(--ink);
-		font-variant-numeric: tabular-nums;
-		line-height: 1.1;
-	}
-	.m-val small {
-		font-family: inherit;
-		font-size: 0.95rem;
-		font-weight: 600;
-		color: var(--muted);
-	}
-	.m-item.good .m-val {
-		color: var(--ok);
-	}
-	.arrow {
-		font-size: 1.6rem;
-		color: var(--line-strong);
-	}
-	.ov > .card,
-	.lists > .card {
-		margin: 0;
-		min-width: 0;
-	}
-	h2 {
-		margin: 0 0 0.9rem;
-		font-size: 1.1rem;
-	}
-	.lists {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-		gap: 1rem;
-	}
-	.lst {
-		min-width: 0;
-	}
-	.lst ul {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		gap: 0.15rem;
-	}
-	.lst a {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.8rem;
-		padding: 0.55rem 0.5rem;
-		border-radius: 10px;
-		color: var(--text);
-		text-decoration: none;
-		transition: background var(--dur-fast);
-	}
-	.lst a:hover {
-		background: var(--neutral-soft);
-	}
-	.nm {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-weight: 600;
-		font-size: 0.92rem;
-	}
-	.lst b {
-		flex: none;
-		font-variant-numeric: tabular-nums;
-		color: var(--text-2);
-		font-size: 0.92rem;
-	}
-	.empty {
-		margin: 0;
-		color: var(--muted);
-	}
-	@media (max-width: 1000px) {
-		.lists {
-			grid-template-columns: 1fr;
-		}
-	}
-	@media (max-width: 600px) {
-		.arrow {
-			display: none;
-		}
-		.money {
-			flex-direction: column;
-			align-items: flex-start;
-		}
-	}
-	.real {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1rem;
-	}
-	.rc {
-		display: grid;
-		gap: 0.45rem;
-		color: var(--text);
-		text-decoration: none;
-	}
-	.rc-h {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		color: var(--text-2);
-		font-weight: 600;
-	}
-	.rc-v {
-		font-size: 0.95rem;
-		color: var(--text-2);
-	}
-	.rc-v b {
-		font-size: 1.9rem;
-		color: var(--text);
-		font-variant-numeric: tabular-nums;
-	}
-	.tr {
-		margin-left: 0.5rem;
-		font-weight: 700;
 		font-size: 0.9rem;
 	}
-	.tr.down {
-		color: var(--ok, #1f8a4c);
+	.sec {
+		margin-bottom: 2rem;
 	}
-	.tr.up {
-		color: #d9680f;
+	.sec-h {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
+		flex-wrap: wrap;
+		margin-bottom: 0.75rem;
 	}
-	.rc-n {
+	.sec-h h2 {
 		margin: 0;
+		font-size: 1.1rem;
+		display: flex;
+		align-items: baseline;
+		gap: 0.6rem;
+	}
+	.n {
+		display: inline-grid;
+		place-items: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: var(--radius-sm);
+		background: var(--navy);
+		color: #fff;
+		font-size: 0.8rem;
+		font-weight: 700;
+		transform: translateY(-1px);
+	}
+	.sec-note {
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+	.sec-link {
+		font-size: 0.9rem;
+		font-weight: 600;
+	}
+
+	/* смуга показників: одна рамка, комірки розділені лініями */
+	.strip {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		background: var(--surface);
+		border: 1px solid var(--card-line);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+	}
+	.strip.three {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.cell {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		padding: 1rem 1.25rem 1.1rem;
+		border-left: 1px solid var(--card-line);
+		color: inherit;
+		text-decoration: none;
+		min-width: 0;
+	}
+	.cell:first-child {
+		border-left: 0;
+	}
+	.cell.link:hover {
+		background: var(--surface-2);
+	}
+	.l {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--muted);
+	}
+	.v {
+		font-size: 1.9rem;
+		font-weight: 700;
+		color: var(--ink);
+		line-height: 1.1;
+		font-variant-numeric: tabular-nums;
+		display: flex;
+		align-items: baseline;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+	.v small {
+		font-size: 0.85rem;
+		font-weight: 500;
+		color: var(--muted);
+	}
+	.v.good {
+		color: var(--ok);
+	}
+	.d {
 		font-size: 0.82rem;
 		color: var(--muted);
 	}
-	.pb {
+	.d.down {
+		color: var(--ok);
+		font-weight: 600;
+	}
+	.d.up {
+		color: var(--bad);
+		font-weight: 600;
+	}
+	.bar {
 		display: block;
-		height: 8px;
-		border-radius: 99px;
-		background: var(--neutral-soft, #eef0f3);
+		height: 6px;
+		background: var(--neutral-soft);
+		border-radius: 3px;
 		overflow: hidden;
 	}
-	.pb i {
+	.bar i {
 		display: block;
 		height: 100%;
-		background: #1f8a4c;
+		background: var(--ok);
+		border-radius: 3px;
+		transform-origin: left;
 	}
-	@media (max-width: 700px) {
-		.real {
+	@media (prefers-reduced-motion: no-preference) {
+		.bar i {
+			animation: grow 0.9s var(--ease-out) both;
+		}
+	}
+	@keyframes grow {
+		from {
+			transform: scaleX(0);
+		}
+	}
+
+	.panel-x {
+		margin-top: 0.75rem;
+		background: var(--surface);
+		border: 1px solid var(--card-line);
+		border-radius: var(--radius-lg);
+		padding: 1rem 1.25rem;
+	}
+	.panel-x h3 {
+		margin: 0 0 0.5rem;
+		font-size: 0.95rem;
+		color: var(--text-2);
+	}
+
+	.tbl {
+		background: var(--surface);
+		border: 1px solid var(--card-line);
+		border-radius: var(--radius-lg);
+		overflow-x: auto;
+	}
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.9rem;
+	}
+	th {
+		text-align: left;
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--muted);
+		background: var(--surface-2);
+		padding: 0.6rem 1rem;
+		border-bottom: 1px solid var(--card-line);
+		white-space: nowrap;
+	}
+	td {
+		padding: 0.6rem 1rem;
+		border-bottom: 1px solid var(--line-soft);
+		vertical-align: top;
+	}
+	tr:last-child td {
+		border-bottom: 0;
+	}
+	tbody tr:hover {
+		background: var(--surface-2);
+	}
+	td a {
+		color: var(--ink);
+		font-weight: 500;
+		text-decoration: none;
+	}
+	td a:hover {
+		color: var(--accent);
+		text-decoration: underline;
+	}
+	.r {
+		text-align: right;
+	}
+	.muted {
+		color: var(--muted);
+		white-space: nowrap;
+	}
+	.low {
+		color: var(--deficit-ink);
+	}
+	@media (max-width: 1100px) {
+		.strip {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.strip .cell:nth-child(3) {
+			border-left: 0;
+		}
+		.strip .cell:nth-child(n + 3) {
+			border-top: 1px solid var(--card-line);
+		}
+		.strip.three {
 			grid-template-columns: 1fr;
+		}
+		.strip.three .cell {
+			border-left: 0;
+		}
+		.strip.three .cell + .cell {
+			border-top: 1px solid var(--card-line);
+		}
+	}
+	@media (max-width: 560px) {
+		.strip {
+			grid-template-columns: 1fr;
+		}
+		.strip .cell {
+			border-left: 0;
+		}
+		.strip .cell + .cell {
+			border-top: 1px solid var(--card-line);
+		}
+		.muted {
+			white-space: normal;
 		}
 	}
 </style>

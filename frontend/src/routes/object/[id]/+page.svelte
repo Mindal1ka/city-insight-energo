@@ -203,13 +203,15 @@
 	});
 	const batKwh = $derived(bat && ses ? (ins?.battery_capacity_kwh ?? ses.battery_kwh ?? null) : null);
 	const savedYear = $derived(fin && ses ? (sumM('saved_uah') ?? d?.finance?.saved_uah.year ?? null) : null);
+	// Немає споживання в UMUNI → не показуємо нулі й висновки, лише «немає даних»
+	const noCons = $derived(!consMonth);
 	const bigNums = $derived(
 		[
 			{ k: 'cons', icon: 'plug', pre: 'Споживає ≈', v: consMonth, unit: 'кВт·год/міс', d: 0 },
 			{ k: 'gen', icon: 'sun', pre: 'Панелі дають ≈', v: ses ? genMonth : null, unit: 'кВт·год/міс', d: 0 },
 			{ k: 'bat', icon: 'battery', pre: 'Акумулятор', v: batKwh, unit: 'кВт·год', d: 1 },
 			{ k: 'sav', icon: 'wallet', pre: 'Заощаджує', v: savedYear, unit: 'грн/рік', d: 0 }
-		].filter((x) => x.v != null) as { k: string; icon: 'plug'; pre: string; v: number; unit: string; d: number }[]
+		].filter((x) => x.v != null && !(noCons && x.k !== 'bat')) as { k: string; icon: 'plug'; pre: string; v: number; unit: string; d: number }[]
 	);
 
 	const y26 = $derived(ins?.y2026 ?? null);
@@ -289,7 +291,9 @@
 				</p>
 			{/if}
 
-			{#if sens && ins?.sizing}
+			{#if noCons}
+				<p class="nodata"><Icon name="info" size={16} /> Немає даних про споживання в UMUNI — покриття, економію й рекомендації порахувати неможливо.</p>
+			{:else if sens && ins?.sizing}
 				<V2Reco s={ins.sizing} id={b.id} hasStation={!!ses} surplus={false} />
 			{/if}
 		</header>
@@ -324,7 +328,7 @@
 
 		<!-- ---- Огляд ---- -->
 		<div class="tp" id="tp-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={cur !== 'overview'}>
-			{#if ins?.months?.length}
+			{#if ins?.months?.length && !noCons}
 				<div class="panel pad"><V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} months2026={ins.y2026?.months_2026 ?? null} /></div>
 			{:else if !hasCons && !(ses && e?.gen_kwh)}
 				<div class="empty"><span class="e-ic" aria-hidden="true">?</span><p><b>Немає даних про споживання</b></p></div>
@@ -420,6 +424,18 @@
 {/if}
 
 <style>
+	.nodata {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.75rem 0 0;
+		padding: 0.6rem 0.9rem;
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		background: var(--surface-2);
+		color: var(--text-2);
+		font-size: 0.92rem;
+	}
 	.back {
 		margin: 0 0 0.75rem;
 	}
