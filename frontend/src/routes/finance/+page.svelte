@@ -2,7 +2,7 @@
 	// «Фінанси»: ліміт vs оплачено (з мережі), заощадження від СЕС, окупність. Ліміти — МОК.
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
-	import { fetchDepartments, fetchBudgetReal, fetchSpending, type Departments, type BudgetReal, type Spending } from '#lib/api-v2.ts';
+	import { fetchDepartments, fetchBudgetReal, fetchSpending, fetchGenerators, type Departments, type BudgetReal, type Spending, type GenSummary } from '#lib/api-v2.ts';
 	import { uah } from '#lib/api-ses.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
 	import StatCard from '#lib/StatCard.svelte';
@@ -14,6 +14,7 @@
 	let data = $state<Departments | null>(null);
 	let real = $state<BudgetReal | null>(null);
 	let sp = $state<Spending | null>(null);
+	let gens = $state<GenSummary | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 
@@ -23,6 +24,7 @@
 		try {
 			fetchBudgetReal().then((r) => (real = r), () => (real = null));
 			fetchSpending().then((r) => (sp = r), () => (sp = null));
+			fetchGenerators().then((r) => (gens = r), () => (gens = null));
 			data = await fetchDepartments();
 		} catch (e) {
 			error = errMessage(e);
@@ -145,6 +147,29 @@
 		<StatCard label="Перевищують ліміт" value={t.over_limit} unit="об'єктів" icon="alert" tone={t.over_limit > 0 ? 'bad' : 'good'} />
 	</div>
 
+	{#if gens && gens.totals.count}
+		{@const g = gens.totals}
+		<section class="card list" aria-label="Генератори">
+			<h2>Резервне живлення: генератори</h2>
+			<p class="gnote">
+				Вкладено <b class="tnum">{uah(g.capex_uah)}</b> у {g.count} генераторів ({num(g.kw)} кВт) · пальне за {gens.year} —
+				<b class="tnum">{uah(g.fuel_year_uah)}</b> ({num(g.fuel_year_l)} л).
+				Фактична вартість введена для {g.capex_real} з {g.count}, журнал пального — для {g.fuel_real}; решта — оцінка
+				(ціна з АВР і монтажем, ~{gens.assumptions.hours_year} мотогодин на рік, {gens.assumptions.fuel_price_uah_l} грн/л).
+			</p>
+			<div class="scroll-x">
+				<table class="rt tnum">
+					<thead><tr><th>Розпорядник</th><th>Генераторів</th><th>кВт</th><th>Вкладено</th><th>Пальне за рік</th></tr></thead>
+					<tbody>
+						{#each gens.departments as d (d.department)}
+							<tr><td>{d.department}</td><td>{d.count}</td><td>{num(d.kw)}</td><td>{uah(d.capex_uah)}</td><td>{uah(d.fuel_year_uah)}</td></tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	{/if}
+
 	<section class="card list" aria-label="Розпорядники">
 		<h2>Розпорядники</h2>
 		{#each data.items as d (d.department)}
@@ -173,6 +198,12 @@
 {/if}
 
 <style>
+	.gnote {
+		margin: 0 0 0.75rem;
+		color: var(--text-2);
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
 	.page-head {
 		display: flex;
 		align-items: center;

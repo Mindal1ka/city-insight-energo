@@ -2,7 +2,7 @@
 	// «Огляд громади»: три розділи — ефект СЕС, споживання й бюджет 2026, що зробити.
 	import { errMessage } from '#lib/api.ts';
 	import { fetchSes, kText, type SesList, type SesItem } from '#lib/api-ses.ts';
-	import { fetchDepartments, fetchTrend, fetchBudgetReal, type Departments, type Trend, type BudgetReal } from '#lib/api-v2.ts';
+	import { fetchDepartments, fetchTrend, fetchBudgetReal, fetchGenerators, type Departments, type Trend, type BudgetReal, type GenSummary } from '#lib/api-v2.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
 	import SourceTag from '#lib/SourceTag.svelte';
 	import { moneyShort } from '#lib/dash/DashData.ts';
@@ -15,6 +15,7 @@
 	let dept = $state<Departments | null>(null);
 	let trend = $state<Trend | null>(null);
 	let bud = $state<BudgetReal | null>(null);
+	let gens = $state<GenSummary | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 
@@ -23,12 +24,13 @@
 		error = null;
 		try {
 			// Основні дані обов'язкові; решта (залежить від ролі) — якщо є
-			const [s, d, tr, br] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchTrend(), fetchBudgetReal()]);
+			const [s, d, tr, br, gn] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchTrend(), fetchBudgetReal(), fetchGenerators()]);
 			if (s.status === 'rejected') throw s.reason;
 			ses = s.value;
 			dept = d.status === 'fulfilled' ? d.value : null;
 			trend = tr.status === 'fulfilled' ? tr.value : null;
 			bud = br.status === 'fulfilled' ? br.value : null;
+			gens = gn.status === 'fulfilled' ? gn.value : null; // 403 для управлінь і закладів
 		} catch (e) {
 			error = errMessage(e);
 		} finally {
@@ -66,6 +68,9 @@
 	const needAll = $derived((ses?.items ?? []).filter((i) => withK(i) && i.k_class === 'Не вистачає'));
 	const needExpand = $derived([...needAll].sort((a, b) => (a.k as number) - (b.k as number)).slice(0, 8));
 	const withSes = $derived(t?.with_ses ?? null);
+	const gt = $derived(gens?.totals ?? null);
+	const gCapex = $derived(moneyShort(gt?.capex_uah ?? 0));
+	const gFuel = $derived(moneyShort(gt?.fuel_year_uah ?? 0));
 </script>
 
 <svelte:head><title>Огляд · Insight Tool</title></svelte:head>
@@ -148,11 +153,41 @@
 		{/if}
 	</section>
 
-	<!-- 3. Що зробити -->
-	{#if needExpand.length}
+	<!-- 3. Резервне живлення -->
+	{#if gt && gt.count}
 		<section class="sec" aria-labelledby="s3">
 			<div class="sec-h">
-				<h2 id="s3"><span class="n">3</span>Що зробити: станції, яким не вистачає потужності</h2>
+				<h2 id="s3"><span class="n">3</span>Резервне живлення: генератори</h2>
+				<span class="sec-note">
+					фактичні дані: вартість — {gt.capex_real} з {gt.count}, пальне — {gt.fuel_real} з {gt.count}; решта — оцінка
+				</span>
+			</div>
+			<div class="strip">
+				<div class="cell">
+					<span class="l">Генераторів</span>
+					<span class="v">{gt.count}<small>сумарно {num(gt.kw, 0)} кВт</small></span>
+				</div>
+				<div class="cell">
+					<span class="l">Вкладено в генератори</span>
+					<span class="v">{num(gCapex.v, gCapex.d)}<small>{gCapex.unit}</small></span>
+				</div>
+				<div class="cell">
+					<span class="l">Пальне за {gens?.year}</span>
+					<span class="v bad">{num(gFuel.v, gFuel.d)}<small>{gFuel.unit} · {num(gt.fuel_year_l / 1000, 1)} тис. л</small></span>
+				</div>
+				<div class="cell">
+					<span class="l">Для порівняння: сонце заощаджує</span>
+					<span class="v good">{num(savedS.v, savedS.d)}<small>{savedS.unit} на рік</small></span>
+				</div>
+			</div>
+		</section>
+	{/if}
+
+	<!-- 4. Що зробити -->
+	{#if needExpand.length}
+		<section class="sec" aria-labelledby="s4">
+			<div class="sec-h">
+				<h2 id="s4"><span class="n">{gt && gt.count ? 4 : 3}</span>Що зробити: станції, яким не вистачає потужності</h2>
 				<a class="sec-link" href="/objects">Усі об’єкти ({needAll.length}) →</a>
 			</div>
 			<div class="tbl">
@@ -294,6 +329,9 @@
 	}
 	.v.good {
 		color: var(--ok);
+	}
+	.v.bad {
+		color: var(--deficit-ink);
 	}
 	.d {
 		font-size: 0.82rem;

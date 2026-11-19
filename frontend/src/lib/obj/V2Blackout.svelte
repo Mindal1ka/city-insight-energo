@@ -1,6 +1,6 @@
 <!-- Блекаут: години автономії (акумулятор / + сонце / + генератор) і генератор. 403 — блок не показується. -->
 <script lang="ts">
-	import { fetchBlackout, updateGenerator, type Blackout } from '#lib/api-v2.ts';
+	import { fetchBlackout, updateGenerator, addFuel, deleteFuel, type Blackout } from '#lib/api-v2.ts';
 	import { errMessage, ApiError } from '#lib/api.ts';
 	import { uah } from '#lib/api-ses.ts';
 	import { num } from '#lib/format.ts';
@@ -54,12 +54,18 @@
 	let kw = $state('');
 	let tank = $state('');
 	let fuel = $state('');
+	let cost = $state('');
+	let bought = $state('');
+	let doc = $state('');
 	let saving = $state(false);
 	let err = $state<string | null>(null);
 	function openForm() {
 		kw = b?.generator ? String(b.generator.generator_kw) : '';
 		tank = b?.generator ? String(b.generator.tank_l) : '';
 		fuel = b?.generator?.fuel ?? 'дизель';
+		cost = b?.generator?.cost_uah != null ? String(b.generator.cost_uah) : '';
+		bought = b?.generator?.bought ?? '';
+		doc = b?.generator?.doc ?? '';
 		err = null;
 		editing = true;
 	}
@@ -74,7 +80,20 @@
 		saving = true;
 		err = null;
 		try {
-			await updateGenerator(id, { generator_kw: k, tank_l: t, fuel: fuel.trim() || undefined });
+			const c = cost.trim() ? Number(cost.replace(/\s/g, '').replace(',', '.')) : null;
+			if (c != null && !(c >= 0)) {
+				err = 'Вартість — число';
+				saving = false;
+				return;
+			}
+			await updateGenerator(id, {
+				generator_kw: k,
+				tank_l: t,
+				fuel: fuel.trim() || undefined,
+				cost_uah: c,
+				bought: bought || null,
+				doc: doc.trim() || null
+			});
 			await load(id);
 			editing = false;
 		} catch (e) {
@@ -83,6 +102,44 @@
 			saving = false;
 		}
 	}
+
+	// --- журнал пального ---
+	const today = new Date().toISOString().slice(0, 10);
+	let fDate = $state(today);
+	let fLit = $state('');
+	let fUah = $state('');
+	let fNote = $state('');
+	let fBusy = $state(false);
+	let fErr = $state<string | null>(null);
+	const fuelPrice = $derived((b?.assumptions?.fuel_price_uah_l as number | undefined) ?? 101);
+	async function addEntry(ev: SubmitEvent) {
+		ev.preventDefault();
+		const l = Number(fLit.replace(',', '.'));
+		const u = fUah.trim() ? Number(fUah.replace(/\s/g, '').replace(',', '.')) : 0;
+		if (!(l > 0) || !(u >= 0)) {
+			fErr = 'Вкажіть літри (і суму, якщо знаєте)';
+			return;
+		}
+		fBusy = true;
+		fErr = null;
+		try {
+			b = await addFuel(id, { date: fDate, liters: l, uah: u || undefined, note: fNote.trim() || undefined });
+			fLit = fUah = fNote = '';
+		} catch (e) {
+			fErr = errMessage(e);
+		} finally {
+			fBusy = false;
+		}
+	}
+	async function removeEntry(eid: number) {
+		if (!confirm('Видалити запис про пальне?')) return;
+		try {
+			b = await deleteFuel(id, eid);
+		} catch (e) {
+			fErr = errMessage(e);
+		}
+	}
+	const dmy = (d: string) => d.split('-').reverse().join('.');
 </script>
 
 {#if !hidden && loaded && b}
@@ -118,6 +175,57 @@
 						{#if b.generator_full_charge_h != null}<span class="tnum">· повний заряд ≈ {num(b.generator_full_charge_h, 1)} год</span>{/if}
 					</p>
 				{/if}
+				{#if b.money}
+					{@const m = b.money}
+					<div class="money">
+						<div class="mc">
+							<span class="ml">Вкладено в генератор {#if m.capex_source === 'МОК'}<span class="mok sm" title="Оцінка за ринковими цінами: введіть фактичну вартість">оцінка</span>{/if}</span>
+							<b class="tnum">{uah(m.capex_uah)}</b>
+							<span class="mn">
+								{#if m.bought}куплено {dmy(m.bought)}{/if}
+								{#if m.doc}{m.bought ? ' · ' : ''}{m.doc}{/if}
+								{#if !m.bought && !m.doc && m.capex_source === 'МОК'}ціна з АВР і монтажем, листопад 2026{/if}
+							</span>
+						</div>
+						<div class="mc">
+							<span class="ml">Пальне за {m.fuel_year} {#if m.fuel_source === 'МОК'}<span class="mok sm" title="Оцінка: {b.assumptions?.fuel_price_uah_l ?? 101} грн/л, ~150 мотогодин на рік">оцінка</span>{/if}</span>
+							<b class="tnum">{uah(m.fuel_year_uah)}</b>
+							<span class="mn tnum">{num(m.fuel_year_l)} л{m.fuel_source === 'журнал' ? ` · ${m.fuel_entries} ${m.fuel_entries === 1 ? 'запис' : 'записи(ів)'} у журналі` : ' · журнал порожній'}</span>
+						</div>
+					</div>
+
+					<div class="log">
+						<h4>Журнал пального</h4>
+						{#if b.fuel_log.length}
+							<table>
+								<thead><tr><th>Дата</th><th class="r">Літри</th><th class="r">Сума</th><th>Примітка</th>{#if canEdit}<th></th>{/if}</tr></thead>
+								<tbody>
+									{#each b.fuel_log as e (e.id)}
+										<tr>
+											<td class="tnum">{dmy(e.date)}</td>
+											<td class="r tnum">{num(e.liters)}</td>
+											<td class="r tnum">{uah(e.uah)}</td>
+											<td class="note">{e.note}</td>
+											{#if canEdit}<td class="r"><button type="button" class="x" aria-label="Видалити запис" onclick={() => removeEntry(e.id)}>×</button></td>{/if}
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						{:else}
+							<p class="log-empty">Записів немає — витрати на пальне показано оцінкою.</p>
+						{/if}
+						{#if canEdit}
+							<form class="form" onsubmit={addEntry}>
+								<label>Дата<input type="date" bind:value={fDate} max={today} required /></label>
+								<label>Літри<input inputmode="decimal" bind:value={fLit} required /></label>
+								<label>Сума, грн<input inputmode="decimal" bind:value={fUah} placeholder={fLit ? String(Math.round(Number(fLit.replace(',', '.')) * fuelPrice)) : ''} /></label>
+								<label class="wide">Примітка<input bind:value={fNote} placeholder="напр. накладна №…" /></label>
+								<button class="btn btn-sm" type="submit" disabled={fBusy}>{fBusy ? '…' : 'Додати'}</button>
+								{#if fErr}<p class="err" role="alert">{fErr}</p>{/if}
+							</form>
+						{/if}
+					</div>
+				{/if}
 			{:else}
 				<div class="g-head">
 					<span class="g-t none"><Icon name="bolt" size={16} /> Генератора немає</span>
@@ -130,6 +238,9 @@
 					<label>кВт<input inputmode="decimal" bind:value={kw} required /></label>
 					<label>Бак, л<input inputmode="decimal" bind:value={tank} required /></label>
 					<label>Паливо<input bind:value={fuel} /></label>
+					<label>Вартість, грн<input inputmode="decimal" bind:value={cost} placeholder="оцінка, якщо порожньо" /></label>
+					<label>Дата покупки<input type="date" bind:value={bought} /></label>
+					<label class="wide">Документ<input bind:value={doc} placeholder="Prozorro UA-… або рахунок" /></label>
 					<button class="btn btn-sm" type="submit" disabled={saving}>{saving ? '…' : 'Зберегти'}</button>
 					<button class="btn btn-secondary btn-sm" type="button" onclick={() => (editing = false)}>Скасувати</button>
 					{#if err}<p class="err" role="alert">{err}</p>{/if}
@@ -265,6 +376,90 @@
 		background: var(--surface);
 		color: var(--ink);
 	}
+	.money {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		border: 1px solid var(--card-line);
+		border-radius: var(--radius);
+		overflow: hidden;
+	}
+	.mc {
+		display: grid;
+		gap: 0.2rem;
+		padding: 0.7rem 0.9rem;
+	}
+	.mc + .mc {
+		border-left: 1px solid var(--card-line);
+	}
+	.ml {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: var(--fs-sm);
+		color: var(--muted);
+		font-weight: 600;
+	}
+	.mc b {
+		font-size: 1.35rem;
+		color: var(--ink);
+	}
+	.mn {
+		font-size: var(--fs-xs);
+		color: var(--muted);
+	}
+	.mok.sm {
+		font-size: 0.68rem;
+		padding: 0 0.4rem;
+		letter-spacing: 0;
+	}
+	.log h4 {
+		margin: 0.3rem 0 0.4rem;
+		font-size: var(--fs-sm);
+		color: var(--text-2);
+	}
+	.log table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: var(--fs-sm);
+		margin-bottom: 0.6rem;
+	}
+	.log th {
+		text-align: left;
+		font-size: var(--fs-xs);
+		color: var(--muted);
+		font-weight: 600;
+		padding: 0.3rem 0.4rem;
+		border-bottom: 1px solid var(--line);
+	}
+	.log td {
+		padding: 0.35rem 0.4rem;
+		border-bottom: 1px solid var(--line-soft);
+	}
+	.log .r {
+		text-align: right;
+	}
+	.log .note {
+		color: var(--muted);
+	}
+	.x {
+		border: 0;
+		background: none;
+		color: var(--muted);
+		font-size: 1.1rem;
+		cursor: pointer;
+		line-height: 1;
+	}
+	.x:hover {
+		color: var(--bad);
+	}
+	.log-empty {
+		margin: 0 0 0.6rem;
+		font-size: var(--fs-sm);
+		color: var(--muted);
+	}
+	.form .wide input {
+		width: 13rem;
+	}
 	.err {
 		flex-basis: 100%;
 		margin: 0;
@@ -272,6 +467,13 @@
 		font-size: var(--fs-sm);
 	}
 	@media (max-width: 640px) {
+		.money {
+			grid-template-columns: 1fr;
+		}
+		.mc + .mc {
+			border-left: 0;
+			border-top: 1px solid var(--card-line);
+		}
 		.line {
 			grid-template-columns: 1fr 4rem;
 		}

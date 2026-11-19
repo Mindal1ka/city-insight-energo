@@ -413,6 +413,31 @@ export interface Generator {
 	fuel: string;
 	tank_l: number;
 	source: 'МОК' | 'введено';
+	cost_uah?: number | null;
+	bought?: string | null;
+	doc?: string | null;
+}
+
+/** Витрати на генератор: вкладено (введено або оцінка) і пальне за рік (журнал або оцінка) */
+export interface GenMoney {
+	capex_uah: number;
+	capex_source: 'МОК' | 'введено';
+	bought: string | null;
+	doc: string | null;
+	fuel_year: number;
+	fuel_year_l: number;
+	fuel_year_uah: number;
+	fuel_source: 'МОК' | 'журнал';
+	fuel_entries: number;
+}
+
+export interface FuelEntry {
+	id: number;
+	building_id: number;
+	date: string;
+	liters: number;
+	uah: number;
+	note: string;
 }
 
 export interface Blackout {
@@ -436,11 +461,17 @@ export interface Blackout {
 	fuel_l_per_day: number | null;
 	fuel_used_l: number | null;
 	assumptions: Record<string, number>;
+	money: GenMoney | null;
+	fuel_log: FuelEntry[];
+	can_edit: boolean;
 }
 
 export const fetchBlackout = (id: number) => req<Blackout>(`/api/blackout/${id}`);
 
-export const updateGenerator = (id: number, body: { generator_kw: number; tank_l: number; fuel?: string }) =>
+export const updateGenerator = (
+	id: number,
+	body: { generator_kw: number; tank_l: number; fuel?: string; cost_uah?: number | null; bought?: string | null; doc?: string | null }
+) =>
 	req<Blackout>(`/api/generator/${id}`, {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
@@ -577,3 +608,39 @@ export interface Spending {
 }
 
 export const fetchSpending = () => req<Spending>('/api/spending');
+
+// ---------- облік генераторів: пальне і зведення витрат ----------
+
+export const addFuel = (id: number, body: { date: string; liters: number; uah?: number; note?: string }) =>
+	req<Blackout>(`/api/generator/${id}/fuel`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
+	});
+
+export const deleteFuel = (id: number, eid: number) => req<Blackout>(`/api/generator/${id}/fuel/${eid}`, { method: 'DELETE' });
+
+export interface GenSummaryItem extends GenMoney {
+	id: number;
+	name: string;
+	department: string;
+	generator_kw: number;
+	generator_source: 'МОК' | 'введено';
+}
+export interface GenSummary {
+	year: number;
+	totals: {
+		count: number;
+		kw: number;
+		capex_uah: number;
+		capex_real: number;
+		fuel_year_uah: number;
+		fuel_year_l: number;
+		fuel_real: number;
+	};
+	departments: { department: string; count: number; kw: number; capex_uah: number; fuel_year_uah: number }[];
+	items: GenSummaryItem[];
+	assumptions: Record<string, number | number[]>;
+}
+/** Зведення витрат на генератори (енергоменеджер, адміністратор даних, фінанси; інакше 403) */
+export const fetchGenerators = () => req<GenSummary>('/api/generators');
