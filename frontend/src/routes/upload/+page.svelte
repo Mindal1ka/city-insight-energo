@@ -6,7 +6,7 @@
 	import Term from '#lib/Term.svelte';
 	import StatCard from '#lib/StatCard.svelte';
 	import Icon from '#lib/Icon.svelte';
-	import { fadeUp, scaleIn, stagger } from '#lib/motion.ts';
+	import { fadeUp, scaleIn } from '#lib/motion.ts';
 	import Disclosure from '#lib/Disclosure.svelte';
 	import DataStatus from '#lib/DataStatus.svelte';
 	import { auth } from '#lib/auth.svelte.ts';
@@ -227,10 +227,10 @@
 						</div>
 					</div>
 					<div class="done-stats">
-						<div in:fadeUp|global={{ delay: stagger(1, 90) }}>
+						<div>
 							<StatCard label="Будівель у базі" value={result.summary.buildings} icon="building" hint="Усі будівлі з реєстру." />
 						</div>
-						<div in:fadeUp|global={{ delay: stagger(2, 90) }}>
+						<div>
 							<StatCard
 								label="У рейтингу"
 								value={result.summary.in_rating}
@@ -239,7 +239,7 @@
 								hint="Мають повні дані для порівняння."
 							/>
 						</div>
-						<div in:fadeUp|global={{ delay: stagger(3, 90) }}>
+						<div>
 							<StatCard
 								label="Проблем у даних"
 								value={result.summary.defects}
@@ -447,7 +447,7 @@
 		position: relative;
 		height: 8px;
 		margin-top: 0.75rem;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 	}
@@ -455,7 +455,7 @@
 		position: absolute;
 		inset: 0;
 		width: 40%;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: linear-gradient(90deg, var(--accent), var(--sun));
 	}
 	@media (prefers-reduced-motion: no-preference) {
@@ -640,7 +640,7 @@
 			width: 100%;
 			min-height: 60px;
 			padding: 0.9rem 1.25rem;
-			border-radius: 14px;
+			border-radius: var(--r-btn);
 			background: var(--accent);
 			color: #fff;
 			font-size: 1.125rem;

@@ -25,8 +25,8 @@
 	};
 	const totals = $derived(
 		[
-			{ l: 'Σ спожито', v: sum('cons_kwh'), cls: 'cons' },
-			{ l: 'Σ згенеровано', v: sum('gen_kwh'), cls: 'gen' },
+			{ l: 'Спожито', v: sum('cons_kwh'), cls: 'cons' },
+			{ l: 'Згенеровано', v: sum('gen_kwh'), cls: 'gen' },
 			{ l: 'Не використано', v: sum('surplus_kwh'), cls: 'sur' },
 			{ l: 'З мережі', v: sum('grid_kwh'), cls: 'grid' }
 		].filter((t) => t.v != null)
@@ -42,7 +42,12 @@
 		{ key: 'grid_kwh', label: 'З мережі', cls: 'c-grid' },
 		{ key: 'saved_uah', label: 'Заощаджено, грн', cls: 'c-sav' }
 	];
-	const shown = $derived(defs.filter((d) => rows.some((r) => r[d.key] != null)));
+	// «Спожито» показуємо завжди: порожній рядок = «немає даних», а не нулі
+	const shown = $derived(defs.filter((d) => d.key === 'cons_kwh' || rows.some((r) => r[d.key] != null)));
+	// бекенд віддає null для акумулятора, коли роль його не бачить (finance) — тоді без серії й легенди
+	const hasBat = $derived(!is26 && rows.some((r) => r.battery_kwh != null));
+	// немає даних споживання за 2025 (UMUNI) — показуємо це явно
+	const noCons = $derived(!is26 && rows.length > 0 && rows.every((r) => r.cons_kwh == null));
 	const h = (v: number | null | undefined) => `${Math.max(v ? 2 : 0, ((v ?? 0) / max) * 100)}%`;
 </script>
 
@@ -59,6 +64,9 @@
 		{#if is26}
 			<p class="cons"><span class="l">≈ за 2026 рік</span> <b>{num(m26.reduce((a, x) => a + (x?.kwh ?? 0), 0))}</b> <small>кВт·год</small></p>
 		{:else}
+		{#if noCons}
+			<p class="cons"><span class="l">Спожито, за рік</span> <b class="nd">немає даних</b> <small>UMUNI за 2025 рік</small></p>
+		{/if}
 		{#each totals as t (t.l)}
 			<p class={t.cls}><span class="l">{t.l}, за рік</span> <b>{num(t.v)}</b> <small>кВт·год</small></p>
 		{/each}
@@ -67,8 +75,8 @@
 
 	<div class="bars" role="img" aria-label="Споживання та генерація по місяцях, кВт·год">
 		{#each rows as r, i (r.month)}
-			{@const bat = Math.min(r.battery_kwh ?? 0, r.gen_kwh ?? 0)}
-			<div class="col" class:cur={i === curMonth} title="{MONTHS[i]}: спожито {num(consOf(r, i))}{is26 && m26[i] ? ` (${m26[i]?.kind})` : ''}{!is26 && r.gen_kwh != null ? `, згенеровано ${num(r.gen_kwh)}` : ''} кВт·год">
+			{@const bat = hasBat ? Math.min(r.battery_kwh ?? 0, r.gen_kwh ?? 0) : 0}
+			<div class="col" class:cur={i === curMonth} title="{MONTHS[i]}: спожито {consOf(r, i) == null ? 'немає даних' : num(consOf(r, i))}{is26 && m26[i] ? ` (${m26[i]?.kind})` : ''}{!is26 && r.gen_kwh != null ? `, згенеровано ${num(r.gen_kwh)}` : ''} кВт·год">
 				<div class="pair">
 					<span class="b cons" class:fc={is26 && m26[i]?.kind === 'прогноз'} style="height: {h(consOf(r, i))}"></span>
 					{#if hasGen}
@@ -84,7 +92,8 @@
 	<p class="legend">
 		<span><i class="sw cons"></i>Спожито</span>
 		{#if is26}<span><i class="sw cons fc"></i>Прогноз</span>{/if}
-		{#if hasGen}<span><i class="sw gen"></i>Згенеровано</span><span><i class="sw bt"></i>Через акумулятор</span>{/if}
+		{#if hasGen}<span><i class="sw gen"></i>Згенеровано</span>{/if}
+		{#if hasGen && hasBat}<span><i class="sw bt"></i>Через акумулятор</span>{/if}
 	</p>
 
 	{#if !is26}
@@ -101,10 +110,14 @@
 				{#each shown as d (d.key)}
 					<tr class={d.cls}>
 						<th scope="row">{d.label}</th>
+						{#if d.key === 'cons_kwh' && noCons}
+							<td class="nd" colspan={rows.length}>немає даних</td>
+						{:else}
 						{#each rows as r, i (r.month)}
 							{@const v = r[d.key] as number | null}
-							<td class:cur={i === curMonth}>{v == null ? '—' : num(v)}</td>
+							<td class:cur={i === curMonth} title={v == null ? 'немає даних' : undefined}>{v == null ? '—' : num(v)}</td>
 						{/each}
+						{/if}
 					</tr>
 				{/each}
 			</tbody>
@@ -131,6 +144,13 @@
 		gap: 0.1rem;
 		color: var(--muted);
 	}
+	.nd,
+	.head b.nd {
+		color: var(--muted);
+		font-weight: 500;
+		font-size: var(--fs-sm, 0.9rem);
+		text-align: left;
+	}
 	.head b {
 		font-size: var(--fs-xl);
 		color: var(--ink);
@@ -150,8 +170,6 @@
 		align-items: center;
 		gap: 0.25rem;
 		font-size: var(--fs-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 	}
 	small {
 		color: var(--muted);
@@ -179,7 +197,7 @@
 	.b {
 		flex: 1 1 0;
 		max-width: 14px;
-		border-radius: 3px 3px 0 0;
+		border-radius: var(--r-sm) var(--r-sm) 0 0;
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
@@ -205,7 +223,7 @@
 	.yr button {
 		border: 1px solid var(--line);
 		background: transparent;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		padding: 0.1rem 0.7rem;
 		font: inherit;
 		font-size: var(--fs-xs);
@@ -257,7 +275,7 @@
 		display: inline-block;
 		width: 0.7rem;
 		height: 0.7rem;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.scroll-x {
 		overflow-x: auto;

@@ -30,8 +30,8 @@
 		p === null ? 'none' : over || p > 100 ? 'over' : p >= 85 ? 'near' : 'ok'
 	);
 
-	// Смуга заповнюється, коли шкала з'являється на екрані
-	let seen = $state(false);
+	// Значення й смуга видно одразу (без «набігання» при прокрутці)
+	let seen = $state(true);
 	function onView(node: HTMLElement) {
 		if (isReduced() || typeof IntersectionObserver === 'undefined') {
 			seen = true;
@@ -116,16 +116,15 @@
 	.bar {
 		position: relative;
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #e8edf3;
 		overflow: hidden;
 	}
 	.fill {
 		position: absolute;
 		inset: 0 auto 0 0;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: linear-gradient(90deg, #2f6db0, #1f4f84);
-		transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.fill {

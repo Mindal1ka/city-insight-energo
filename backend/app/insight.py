@@ -123,8 +123,9 @@ def _write_limits(lim: dict[int, float]) -> None:
     os.replace(tmp, LIMITS_FILE)
 
 
-def limit_year(b, tariff: float, overrides: dict[int, float]) -> tuple[float, str]:
-    """Ліміт на рік: введений вручну → реальний план програми 2026 (openbudget) → МОК (лікарні тощо)."""
+def limit_year(b, tariff: float, overrides: dict[int, float]) -> tuple[float | None, str]:
+    """Ліміт на рік: введений вручну → реальний план програми 2026 (openbudget) → МОК (лікарні тощо).
+    Без даних споживання 2025 МОК-ліміт не рахуємо (None — «немає даних», а не 0)."""
     if b.id in overrides:
         return overrides[b.id], "введено"
     from . import budget_real
@@ -132,6 +133,8 @@ def limit_year(b, tariff: float, overrides: dict[int, float]) -> tuple[float, st
     real = budget_real.limit_year(b, store)
     if real:
         return real, budget_real.SOURCE
+    if eff.elec_2025(b) <= 0:
+        return None, MOCK
     f = random.Random(f"limit-{b.id}").uniform(*LIMIT_FACTOR)
     return eff.elec_2025(b) * tariff * f, MOCK
 
@@ -142,15 +145,20 @@ def budget(b, ev: dict, d: date, tariff: float, overrides: dict[int, float]) -> 
     shares = solar.profile_shares(b.category_short)
     m = d.month - 1
     dim = _days_in_month(d)
-    lm = ly * shares[m]
-    paid_m = ev["monthly"][m]["grid_kwh"] * tariff
-    paid_y = ev["energy"]["year"]["grid_kwh"] * tariff
-    no_ses_y = ev["energy"]["year"]["cons_kwh"] * tariff  # скільки коштувало б без СЕС
-    return {"source": src, "limit_uah": {"year": ly, "month": lm, "day": lm / dim},
-            "paid_uah": {"year": paid_y, "month": paid_m, "day": paid_m / dim},
+    lm = ly * shares[m] if ly is not None else None
+    # немає даних споживання 2025 → оплата/витрати невідомі (None), а не 0
+    has_data = ev.get("has_data", True)
+    paid_m = ev["monthly"][m]["grid_kwh"] * tariff if has_data else None
+    paid_y = ev["energy"]["year"]["grid_kwh"] * tariff if has_data else None
+    no_ses_y = ev["energy"]["year"]["cons_kwh"] * tariff if has_data else None  # скільки коштувало б без СЕС
+    ok_y, ok_m = ly is not None and paid_y is not None, lm is not None and paid_m is not None
+    return {"source": src, "has_data": has_data,
+            "limit_uah": {"year": ly, "month": lm, "day": lm / dim if lm is not None else None},
+            "paid_uah": {"year": paid_y, "month": paid_m, "day": paid_m / dim if paid_m is not None else None},
             "without_ses_uah_year": no_ses_y,
-            "used_pct": {"year": 100 * paid_y / ly if ly else None, "month": 100 * paid_m / lm if lm else None},
-            "balance_uah": {"year": ly - paid_y, "month": lm - paid_m}}
+            "used_pct": {"year": 100 * paid_y / ly if ok_y and ly else None,
+                         "month": 100 * paid_m / lm if ok_m and lm else None},
+            "balance_uah": {"year": ly - paid_y if ok_y else None, "month": lm - paid_m if ok_m else None}}
 
 
 def _days_in_month(d: date) -> int:
@@ -165,7 +173,7 @@ def _r(x, n=0):
 
 
 def budget_out(bu: dict) -> dict:
-    return {"source": bu["source"],
+    return {"source": bu["source"], "has_data": bu.get("has_data", True),
             "limit_uah": {k: _r(v) for k, v in bu["limit_uah"].items()},
             "paid_uah": {k: _r(v) for k, v in bu["paid_uah"].items()},
             "without_ses_uah_year": _r(bu["without_ses_uah_year"]),
@@ -216,6 +224,9 @@ def sizing(b, ses: dict | None, ev: dict, tariff: float) -> dict:
             "k_after": gen_after / cons if cons else None,
             "capex_uah": capex, "saved_uah_year": saved,
             "payback_years": capex / saved if need and saved > 0 else None}
+
+
+SIZING_BATTERY_FIELDS = ("current_battery_kwh", "need_battery_kwh", "add_battery_kwh")
 
 
 def sizing_out(s: dict) -> dict:
@@ -302,16 +313,20 @@ def insight_item(bid: int, day: str | None = None, tariff: float = Query(eff.TAR
     lvl = access_level(user, b)
     fin = lvl != PUBLIC and can_see_finance(user, b.category_short, b.id)
     sens = can_see_sensitive(user, b.category_short, b.id)
+    nd = bool(ev["has_data"])
+    cn = lambda v: round(v) if nd else None  # величини, що залежать від споживання
     out = {"demo": True, "id": b.id, "department": department_of(b), "day": d.isoformat(),
-           "monthly_kwh": [round(m["cons_kwh"]) for m in ev["monthly"]],
+           # немає даних споживання 2025 → null (порожня клітинка), а не дванадцять нулів
+           "has_data": nd,
+           "monthly_kwh": [round(m["cons_kwh"]) if nd else None for m in ev["monthly"]],
            # помісячно: спожито, згенеровано, через акумулятор, надлишок, з мережі, заощаджено
-           "months": [{"month": m["month"], "cons_kwh": round(m["cons_kwh"]),
+           "months": [{"month": m["month"], "cons_kwh": cn(m["cons_kwh"]),
                        "gen_kwh": round(m["gen_kwh"]) if lvl != PUBLIC else None,
-                       "self_kwh": round(m["self_kwh"]) if lvl != PUBLIC else None,
-                       "battery_kwh": round(m.get("battery_kwh", 0)) if sens else None,
-                       "surplus_kwh": round(m["surplus_kwh"]) if lvl != PUBLIC else None,
-                       "grid_kwh": round(m["grid_kwh"]) if lvl != PUBLIC else None,
-                       "saved_uah": round(m["self_kwh"] * tariff) if fin else None} for m in ev["monthly"]],
+                       "self_kwh": cn(m["self_kwh"]) if lvl != PUBLIC else None,
+                       "battery_kwh": cn(m.get("battery_kwh", 0)) if sens else None,
+                       "surplus_kwh": cn(m["surplus_kwh"]) if lvl != PUBLIC else None,
+                       "grid_kwh": cn(m["grid_kwh"]) if lvl != PUBLIC else None,
+                       "saved_uah": cn(m["self_kwh"] * tariff) if fin else None} for m in ev["monthly"]],
            "battery_capacity_kwh": ((ses or {}).get("battery_kwh") or 0) if sens and ev["has_ses"] else None,
            # реальні дані UMUNI: 2025 повний рік, 2026 до дати вивантаження → оцінка 2026 і тренд
            "y2026": calib.estimate_out(calib.estimate(b, store)),
@@ -324,6 +339,12 @@ def insight_item(bid: int, day: str | None = None, tariff: float = Query(eff.TAR
     if out["distribution"] and not sens:
         for k in ("battery_kwh_now", "battery_capacity_kwh", "battery_usable_kwh"):
             out["distribution"][k] = None
+        for h in out["distribution"].get("hourly") or []:
+            h["soc_pct"] = None
+    if out["sizing"] and not sens:  # роль finance: без акумуляторів у «скільки доставити»
+        for k in SIZING_BATTERY_FIELDS:
+            if k in out["sizing"]:
+                out["sizing"][k] = None
     return out
 
 
@@ -382,10 +403,11 @@ def live_all(user: User = Depends(current_user)):
                       "peak_kw": _r(ds["peak_kw"], 1), "balance_kwh": _r(ds["balance_kwh"], 1),
                       "enough": ds["enough"]})
     bal = tot["available_kwh"] - tot["demand_left_kwh"]
-    return {"source": MOCK, "updated_at": now.isoformat(timespec="seconds"),
-            "totals": {**{k: _r(v, 1) if isinstance(v, float) else v for k, v in tot.items()},
-                       "balance_kwh": _r(bal, 1), "enough": bal >= 0},
-            "items": items}
+    totals = {**{k: _r(v, 1) if isinstance(v, float) else v for k, v in tot.items()},
+              "balance_kwh": _r(bal, 1), "enough": bal >= 0}
+    if user.role == "finance":  # без акумуляторів навіть у зведенні
+        totals["battery_kwh_now"] = None
+    return {"source": MOCK, "updated_at": now.isoformat(timespec="seconds"), "totals": totals, "items": items}
 
 
 # ---------------- GET /api/departments ----------------
@@ -399,18 +421,22 @@ def departments(day: str | None = None, tariff: float = Query(eff.TARIFF_UAH_KWH
     agg = {n: {"department": n, "objects": 0, "with_ses": 0, "deficit": 0, "surplus": 0, "over_limit": 0,
                "cons_kwh_year": 0.0, "gen_kwh_year": 0.0, "limit_uah_year": 0.0, "paid_uah_year": 0.0,
                "without_ses_uah_year": 0.0, "saved_uah_year": 0.0, "invested_uah": 0.0,
-               "limit_uah_month": 0.0, "paid_uah_month": 0.0} for n in DEPARTMENTS}
+               "limit_uah_month": 0.0, "paid_uah_month": 0.0, "no_data_count": 0} for n in DEPARTMENTS}
     for b, ses, ev in _evaluations(store, sites, d, tariff, eff.SURPLUS_PRICE_UAH_KWH):
         a = agg[department_of(b)]
         bu = budget(b, ev, d, tariff, lim)
         a["objects"] += 1
-        a["cons_kwh_year"] += ev["energy"]["year"]["cons_kwh"]
-        a["limit_uah_year"] += bu["limit_uah"]["year"]
-        a["paid_uah_year"] += bu["paid_uah"]["year"]
-        a["limit_uah_month"] += bu["limit_uah"]["month"]
-        a["paid_uah_month"] += bu["paid_uah"]["month"]
-        a["without_ses_uah_year"] += bu["without_ses_uah_year"]
-        a["over_limit"] += bu["balance_uah"]["year"] < 0
+        if not ev["has_data"]:  # без даних споживання — не додаємо нулі в суми (рахуємо окремо)
+            a["no_data_count"] += 1
+        else:
+            a["cons_kwh_year"] += ev["energy"]["year"]["cons_kwh"]
+            a["paid_uah_year"] += bu["paid_uah"]["year"]
+            a["paid_uah_month"] += bu["paid_uah"]["month"]
+            a["without_ses_uah_year"] += bu["without_ses_uah_year"]
+        if bu["limit_uah"]["year"] is not None:
+            a["limit_uah_year"] += bu["limit_uah"]["year"]
+            a["limit_uah_month"] += bu["limit_uah"]["month"]
+        a["over_limit"] += (bu["balance_uah"]["year"] or 0) < 0
         if ev["has_ses"]:
             a["with_ses"] += 1
             a["gen_kwh_year"] += ev["energy"]["year"]["gen_kwh"]
@@ -430,7 +456,7 @@ def departments(day: str | None = None, tariff: float = Query(eff.TARIFF_UAH_KWH
     rows.sort(key=lambda r: -r["paid_uah_year"])
     keys = ("objects", "with_ses", "deficit", "surplus", "over_limit", "cons_kwh_year", "gen_kwh_year",
             "limit_uah_year", "paid_uah_year", "without_ses_uah_year", "saved_uah_year", "invested_uah",
-            "balance_uah_year", "limit_uah_month", "paid_uah_month")
+            "balance_uah_year", "limit_uah_month", "paid_uah_month", "no_data_count")
     tot = {k: sum(r[k] or 0 for r in rows) for k in keys}
     tot["used_pct_year"] = _r(100 * tot["paid_uah_year"] / tot["limit_uah_year"], 1) if tot["limit_uah_year"] else None
     return {"source": MOCK, "tariff_uah_kwh": tariff, "month": d.month, "totals": tot, "items": rows}
@@ -493,6 +519,10 @@ def network(period: Literal["day", "month", "year"] = "year", day: str | None = 
             t[1] -= mv
             takers = [x for x in takers if x[1] >= 1]
     public = user.role == "public"
+    bmap = {b.id: b for b in store.buildings}
+    # пара розкриває СЕС/K обох об'єктів → лише якщо роль має непублічний доступ до ОБОХ
+    pairs = [p for p in pairs if access_level(user, bmap[p["from_id"]]) != PUBLIC
+             and access_level(user, bmap[p["to_id"]]) != PUBLIC]
     return {"demo": True, "period": period, "day": d.isoformat(),
             "totals": {"gen_kwh": round(gen), "cons_kwh": round(cons), "diff_kwh": round(gen - cons),
                        "k": eff.r2(gen / cons) if cons else None, "surplus_kwh": round(surplus),
@@ -506,6 +536,11 @@ def network(period: Literal["day", "month", "year"] = "year", day: str | None = 
 
 # ---------------- звіт за місяць (вікно 7) ----------------
 
+# поля звіту, які без даних споживання невідомі (null / порожня клітинка CSV)
+REPORT_NODATA_NULL = ("cons_kwh", "self_kwh", "surplus_kwh", "grid_kwh", "cost_uah", "saved_uah", "limit_uah",
+                      "saved_uah_year", "saved_since_launch_uah")
+
+
 def _report(user: User, month: str | None, tariff: float):
     store, sites = _ctx()
     today = _now().date()
@@ -518,12 +553,14 @@ def _report(user: User, month: str | None, tariff: float):
     else:
         d = today.replace(day=1)
     lim = _read_limits()
+    no_data = 0
     rows, tot = [], {k: 0.0 for k in ("cons_kwh", "gen_kwh", "self_kwh", "surplus_kwh", "grid_kwh", "cost_uah",
                                       "saved_uah", "limit_uah", "saved_uah_year", "invested_uah",
                                       "saved_since_launch_uah")}
     for b, ses, ev in _evaluations(store, sites, d, tariff, eff.SURPLUS_PRICE_UAH_KWH):
         mm = ev["monthly"][d.month - 1]
         bu = budget(b, ev, d, tariff, lim)
+        nd = bool(ev["has_data"])
         r = {"id": b.id, "name": b.name, "department": department_of(b), "has_ses": ev["has_ses"],
              "cons_kwh": mm["cons_kwh"], "gen_kwh": mm["gen_kwh"], "self_kwh": mm["self_kwh"],
              "surplus_kwh": mm["surplus_kwh"], "grid_kwh": mm["grid_kwh"], "cost_uah": mm["grid_kwh"] * tariff,
@@ -531,14 +568,20 @@ def _report(user: User, month: str | None, tariff: float):
              "saved_uah_year": ev["finance"]["saved_uah"]["year"],
              "invested_uah": ev["finance"]["invested_uah"] or 0.0,
              "saved_since_launch_uah": ev["finance"]["saved_uah"]["since_launch"]}
-        for k in tot:
-            tot[k] += r[k]
+        if not nd:  # немає даних споживання 2025: порожні клітинки, а не нулі; у суми не входить
+            for k in REPORT_NODATA_NULL:
+                r[k] = None
+            no_data += 1
+        else:
+            for k in tot:
+                tot[k] += r[k] if r[k] is not None else 0.0
         if access_level(user, b) == PUBLIC or not can_see_finance(user, b.category_short, b.id):
             continue
         rows.append({k: (_r(v) if isinstance(v, float) else v) for k, v in r.items()})
     t = {k: _r(v) for k, v in tot.items()}
     t["over_limit_uah"] = max(0, t["cost_uah"] - t["limit_uah"])
     t["k"] = eff.r2(tot["gen_kwh"] / tot["cons_kwh"]) if tot["cons_kwh"] else None
+    t["no_data_count"] = no_data  # об'єкти без даних споживання 2025 (не входять у суми)
     return d, t, rows
 
 
@@ -596,13 +639,22 @@ def _save_appeals(items: list[dict]) -> None:
     os.replace(tmp, APPEALS_FILE)
 
 
+# управління з ролі (auth.DEPARTMENT_CATEGORIES) → адресат звернення (поле "to")
+ROLE_DEPARTMENT = {"освіта": D_EDU, "здоров'я": D_HEALTH}
+
+
+def _user_dept(user: User) -> str | None:
+    return ROLE_DEPARTMENT.get(user.department or "") if user.role == "department" else None
+
+
 def _visible(user: User, a: dict, store) -> bool:
     if user.role in ("energy_manager", "data_admin", "finance"):
         return True
     if user.role == "facility_head":
-        return a["building_id"] == user.building_id
+        return a.get("building_id") == user.building_id
     if user.role == "department":
-        return True  # управління бачить звернення, адресовані йому (фільтр на фронті за to)
+        dep = _user_dept(user)
+        return dep is not None and a.get("to") == dep  # лише звернення, адресовані цьому управлінню
     return False
 
 
@@ -628,6 +680,8 @@ def appeals_create(body: dict = Body(...), user: User = Depends(current_user)):
     b = _find(store, bid)
     if user.role == "facility_head" and user.building_id != b.id:
         raise HTTPException(403, "Керівник закладу подає звернення лише від свого об'єкта")
+    if user.role == "department" and not can_see_sensitive(user, b.category_short, b.id):
+        raise HTTPException(403, "Управління подає звернення лише щодо об'єктів своїх категорій")
     typ = body.get("type") or "other"
     if typ not in APPEAL_TYPES:
         raise HTTPException(422, "Невідомий тип звернення")
@@ -653,15 +707,18 @@ def appeals_create(body: dict = Body(...), user: User = Depends(current_user)):
 
 @router.patch("/api/appeals/{aid}")
 def appeals_update(aid: int, body: dict = Body(...), user: User = Depends(current_user)):
-    if user.role not in ("energy_manager", "department", "finance"):
-        raise HTTPException(403, "Статус змінюють енергоменеджер, управління або фінансовий орган")
+    if user.role not in ("energy_manager", "department"):
+        raise HTTPException(403, "Статус змінюють енергоменеджер або управління-адресат")
     st = body.get("status")
     if st not in APPEAL_STATUSES:
         raise HTTPException(422, "Невідомий статус")
+    store, _ = _ctx()
     with _lock:
         items = _load_appeals()
         for a in items:
             if a["id"] == aid:
+                if not _visible(user, a, store):
+                    raise HTTPException(403, "Звернення адресоване іншому управлінню")
                 a["status"] = st
                 a["updated_at"] = _now().isoformat(timespec="seconds")
                 if body.get("answer"):
@@ -673,6 +730,8 @@ def appeals_update(aid: int, body: dict = Body(...), user: User = Depends(curren
 
 # ---------------- GET /api/zones (зони мапи) ----------------
 
+ZONE_SES_FIELDS = ("status", "k", "with_ses", "gen_kwh", "surplus_kwh", "self_kwh", "grid_kwh",
+                   "shareable_kwh", "shareable_uah")
 ZONE_RADIUS_KM = 0.35  # сусіди в радіусі 350 м від «якоря» (школа / об'єкт зі СЕС)
 
 
@@ -737,22 +796,24 @@ def zones(period: Literal["day", "month", "year"] = "month", day: str | None = N
         k = tot["gen_kwh"] / tot["cons_kwh"] if tot["cons_kwh"] else None
         status = ("surplus" if k and k > eff.HIGH else "balanced" if k and k >= eff.LOW
                   else "deficit" if tot["gen_kwh"] else "no_ses")
-        out.append({"id": anchor["id"], "name": anchor["name"], "lat": round(clat, 6), "lon": round(clon, 6),
-                    "radius_m": round(rad * 1000), "members": mem, "count": len(mem),
-                    "with_ses": sum(1 for b, _, _ in g if evmap[b.id][1]["has_ses"]),
-                    "status": status, "k": eff.r2(k),
-                    **{k_: round(v) for k_, v in tot.items()},
-                    "shareable_kwh": round(share), "shareable_uah": round(share * tariff)})
-    out.sort(key=lambda z: -z["shareable_kwh"])
+        z = {"id": anchor["id"], "name": anchor["name"], "lat": round(clat, 6), "lon": round(clon, 6),
+             "radius_m": round(rad * 1000), "members": mem, "count": len(mem),
+             "with_ses": sum(1 for b, _, _ in g if evmap[b.id][1]["has_ses"]),
+             "status": status, "k": eff.r2(k),
+             **{k_: round(v) for k_, v in tot.items()},
+             "shareable_kwh": round(share), "shareable_uah": round(share * tariff)}
+        # зведення зони по СЕС розкриває станції її членів → лише якщо доступ до ВСІХ членів непублічний
+        if any(m["has_ses"] is None for m in mem):
+            for k_ in ZONE_SES_FIELDS:
+                z[k_] = None
+        out.append(z)
+    out.sort(key=lambda z: -(z["shareable_kwh"] or 0))
     public = user.role == "public"
-    if public:
-        for z in out:
-            z["status"] = z["k"] = None
-            z["gen_kwh"] = z["surplus_kwh"] = z["shareable_kwh"] = z["shareable_uah"] = z["with_ses"] = None
+    known = [z for z in out if z["shareable_kwh"] is not None]
     return {"demo": True, "period": period, "day": d.isoformat(), "radius_m": round(ZONE_RADIUS_KM * 1000),
             "totals": {"zones": len(out), "buildings": sum(z["count"] for z in out),
-                       "shareable_kwh": None if public else sum(z["shareable_kwh"] for z in out),
-                       "with_share": None if public else sum(1 for z in out if z["shareable_kwh"] > 0)},
+                       "shareable_kwh": None if public else sum(z["shareable_kwh"] for z in known),
+                       "with_share": None if public else sum(1 for z in known if z["shareable_kwh"] > 0)},
             "items": out}
 
 

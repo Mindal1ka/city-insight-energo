@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Бічна картка зони: якір, суми, «Можна поділитися», учасники (донори першими).
 	import { kwh, uah, kText, type KClass } from './api-ses.ts';
+	import Icon from './Icon.svelte';
 	import type { Zone, ZoneMember } from './api-v2.ts';
 	import KBadge from './KBadge.svelte';
 	import { ZONE_COLORS, ZONE_LABELS } from './zone-meta.ts';
@@ -30,10 +31,10 @@
 </script>
 
 <section class="zp" aria-labelledby="zp-title" style="--c: {color}">
-	<button type="button" class="x" onclick={onclose} aria-label="Закрити картку зони">✕</button>
+	<button type="button" class="x" onclick={onclose} aria-label="Закрити картку зони"><Icon name="x" size={18} /></button>
 	<div class="hd">
 		<span class="st" title={zone.status ? ZONE_LABELS[zone.status] : ''}>{zone.status ? ZONE_LABELS[zone.status] : '—'}</span>
-		<span class="cnt">{zone.count} · ☀ {zone.with_ses ?? 0}{#if zone.k != null} · K {kText(zone.k)}{/if}</span>
+		<span class="cnt">{zone.count} · <Icon name="sun" size={13} /><span class="visually-hidden">зі СЕС:</span> {zone.with_ses ?? 0}{#if zone.k != null} · K {kText(zone.k)}{/if}</span>
 	</div>
 	<h2 id="zp-title">{zone.name}</h2>
 
@@ -75,7 +76,7 @@
 		max-height: calc(100% - 200px);
 		overflow-y: auto;
 		padding: 16px 16px 14px;
-		border-radius: 16px;
+		border-radius: var(--r-modal);
 		background: rgba(255, 255, 255, 0.96);
 		-webkit-backdrop-filter: saturate(1.5) blur(12px);
 		backdrop-filter: saturate(1.5) blur(12px);
@@ -108,7 +109,7 @@
 	}
 	.st {
 		padding: 2px 10px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--c);
 		color: #fff;
 		font-weight: 700;
@@ -130,7 +131,7 @@
 	}
 	.nums div {
 		background: #f3f6fa;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		padding: 7px 8px;
 	}
 	.nums dt {
@@ -154,7 +155,7 @@
 	.share {
 		margin-top: 8px;
 		padding: 10px 12px;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		background: #e3eefb;
 		color: #0b3f7a;
 		display: flex;
@@ -226,7 +227,7 @@
 		justify-content: center;
 		gap: 6px;
 		padding: 10px;
-		border-radius: 12px;
+		border-radius: var(--r-btn);
 		background: #0b5cad;
 		color: #fff;
 		font-weight: 700;
@@ -247,7 +248,7 @@
 			bottom: 8px;
 			width: auto;
 			max-height: 55%;
-			border-radius: 18px;
+			border-radius: var(--r-modal);
 		}
 	}
 </style>

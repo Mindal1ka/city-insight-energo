@@ -126,19 +126,76 @@
 		});
 	}
 
+	/** Роль і підпис для клавіатури; викликати після кожного setIcon (Leaflet створює новий елемент) */
+	function a11y(m: Leaflet.Marker, id: number) {
+		const icon = m.getElement();
+		const it = byId.get(id);
+		if (!icon || !it || icon.dataset.a11y) return;
+		icon.dataset.a11y = '1';
+		icon.setAttribute('role', 'button');
+		icon.setAttribute('aria-label', title(it));
+		icon.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				e.stopPropagation();
+				onselect?.(id);
+			}
+		});
+	}
+
+	/** Ключ вигляду маркера: якщо не змінився — маркер не чіпаємо (без setIcon і перемальовування) */
+	const lookKey = new Map<number, string>();
+	function keyOf(it: SesItem): string {
+		const l = look(it);
+		return `${l.color}|${l.glyph}|${isMute(it) ? 1 : 0}|${title(it)}`;
+	}
+
+	/**
+	 * Маркери оновлюються різницею за id: нові додаються пакетом, зниклі — пакетом прибираються,
+	 * наявні лише змінюють іконку, якщо змінився колір/значок. Раніше кожна зміна фільтра чи режиму
+	 * знищувала й створювала всі ~300 маркерів (clearLayers) і заново кластеризувала мапу.
+	 */
 	function render() {
 		if (!L || !map || !layer) return;
 		const wave = !reduced && waveKey !== lastWave;
 		lastWave = waveKey;
-		layer.clearLayers();
-		markers.clear();
-		byId.clear();
 		const pts = items.filter((i) => i.lat != null && i.lon != null) as (SesItem & { lat: number; lon: number })[];
+		const keep = new Set(pts.map((p) => p.id));
+		const gone: Leaflet.Marker[] = [];
+		for (const [id, m] of markers) {
+			if (!keep.has(id)) {
+				gone.push(m);
+				markers.delete(id);
+				byId.delete(id);
+				lookKey.delete(id);
+			}
+		}
+		const cl = layer as Leaflet.MarkerClusterGroup;
+		if (gone.length) {
+			if (typeof cl.removeLayers === 'function') cl.removeLayers(gone);
+			else for (const m of gone) layer.removeLayer(m);
+		}
 		const c = map.getCenter();
+		// Перша поява — «хвиля» від центру міста, розтягнута не більше ніж на 360 мс
+		const far = wave ? Math.max(1e-6, ...pts.map((it) => Math.hypot(it.lat - c.lat, (it.lon - c.lng) * 0.65))) : 1;
+		const fresh: Leaflet.Marker[] = [];
 		for (const it of pts) {
-			const dist = Math.hypot(it.lat - c.lat, (it.lon - c.lng) * 0.65);
-			const delay = wave ? Math.min(700, Math.round(dist * 9000)) : 0;
+			const key = keyOf(it);
+			const old = markers.get(it.id);
+			byId.set(it.id, it);
 			const mute = colorBy === 'class' && (it.k_class === 'Без СЕС' || it.k_class === 'Немає даних');
+			if (old) {
+				if (lookKey.get(it.id) !== key) {
+					old.setIcon(L.divIcon({ className: 'sm-icon', html: mkHtml(it, it.id === selectedId), iconSize: [22, 22], iconAnchor: [11, 11] }));
+					a11y(old, it.id);
+					(old.options as { kcls?: string }).kcls = clsKey(it);
+					old.setZIndexOffset(it.id === selectedId ? 1000 : mute ? -500 : 0);
+					lookKey.set(it.id, key);
+				}
+				continue;
+			}
+			const dist = Math.hypot(it.lat - c.lat, (it.lon - c.lng) * 0.65);
+			const delay = wave ? Math.round((dist / far) * 360) : 0;
 			const m = L.marker([it.lat, it.lon], {
 				icon: L.divIcon({ className: 'sm-icon', html: mkHtml(it, it.id === selectedId, wave, delay), iconSize: [22, 22], iconAnchor: [11, 11] }),
 				title: esc(title(it)),
@@ -148,24 +205,19 @@
 				zIndexOffset: it.id === selectedId ? 1000 : mute ? -500 : 0,
 				kcls: clsKey(it)
 			} as Leaflet.MarkerOptions);
-			m.on('click', () => onselect?.(it.id));
-			m.on('add', () => {
-				const icon = m.getElement();
-				if (!icon) return;
-				icon.setAttribute('role', 'button');
-				icon.setAttribute('aria-label', title(it));
-				icon.addEventListener('keydown', (e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						e.preventDefault();
-						e.stopPropagation();
-						onselect?.(it.id);
-					}
-				});
-			});
-			byId.set(it.id, it);
-			layer.addLayer(m);
+			const id = it.id;
+			m.on('click', () => onselect?.(id));
+			m.on('add', () => a11y(m, id));
 			markers.set(it.id, m);
+			lookKey.set(it.id, key);
+			fresh.push(m);
 		}
+		if (fresh.length) {
+			if (typeof cl.addLayers === 'function') cl.addLayers(fresh);
+			else for (const m of fresh) layer.addLayer(m);
+		}
+		// Кольори кластерів залежать від режиму — оновлюємо їхні іконки
+		if (!fresh.length && !gone.length && typeof cl.refreshClusters === 'function') cl.refreshClusters();
 		prevSel = selectedId;
 		if (!fitted && pts.length) {
 			fitted = true;
@@ -222,6 +274,7 @@
 			if (!it || !m) continue;
 			const sel = mid === id;
 			m.setIcon(L.divIcon({ className: 'sm-icon', html: mkHtml(it, sel), iconSize: [22, 22], iconAnchor: [11, 11] }));
+			a11y(m, mid);
 			m.setZIndexOffset(sel ? 1000 : isMute(it) ? -500 : 0);
 		}
 		prevSel = id;
@@ -233,7 +286,7 @@
 		let target = m.getLatLng();
 		if (padBottom) target = map.unproject(map.project(target, z).add([0, padBottom / 2]), z);
 		if (reduced) map.setView(target, z, { animate: false });
-		else map.flyTo(target, z, { duration: 0.8, easeLinearity: 0.25 });
+		else map.flyTo(target, z, { duration: 0.45, easeLinearity: 0.25 });
 	}
 
 	export function resetView() {
@@ -411,6 +464,7 @@
 		box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--focus, #ffbf47);
 	}
 	.sm-root :global(.sm-mk) {
+		position: relative;
 		display: grid;
 		place-items: center;
 		width: 22px;
@@ -422,7 +476,7 @@
 		box-shadow:
 			0 0 0 1px rgba(15, 35, 65, 0.25),
 			0 2px 5px rgba(15, 35, 65, 0.35);
-		transition: transform 0.2s var(--ease-spring, ease);
+		transition: transform var(--dur-fast) var(--ease-out);
 	}
 	.sm-root :global(.sm-mk svg) {
 		width: 9px;
@@ -471,14 +525,36 @@
 			0 0 0 9px color-mix(in srgb, var(--c) 25%, transparent),
 			0 4px 12px rgba(15, 35, 65, 0.4);
 	}
+	/* Вибраний маркер: одне кільце-імпульс у момент вибору (елемент створюється заново при виборі) */
+	.sm-root :global(.sm-mk.sel::after) {
+		content: '';
+		position: absolute;
+		inset: -3px;
+		border-radius: 50%;
+		border: 2px solid var(--c);
+		pointer-events: none;
+		opacity: 0;
+		animation: sm-ping 600ms var(--ease-out) 1;
+	}
+	@keyframes -global-sm-ping {
+		from {
+			opacity: 0.8;
+			transform: scale(1);
+		}
+		to {
+			opacity: 0;
+			transform: scale(2.2);
+		}
+	}
 	.sm-root :global(.sm-mk.wave) {
-		animation: sm-in 0.45s var(--ease-spring, ease) backwards;
+		/* Єдиний «момент» мапи: перша поява маркерів хвилею від центру (≤ 360 мс затримки + 240 мс) */
+		animation: sm-in 240ms var(--ease-emph) backwards;
 		animation-delay: var(--d);
 	}
 	@keyframes -global-sm-in {
 		from {
 			opacity: 0;
-			transform: scale(0.2);
+			transform: scale(0.4);
 		}
 		to {
 			opacity: 1;
@@ -494,7 +570,7 @@
 		align-items: center;
 		gap: 6px;
 		border: 0;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		padding: 8px 12px;
 		background: #fff;
 		box-shadow: 0 2px 10px rgba(15, 35, 65, 0.18);
@@ -531,7 +607,7 @@
 	.bd {
 		width: 12px;
 		height: 12px;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		border: 2px dashed #6a4fb3;
 	}
 	.bmenu {
@@ -540,7 +616,7 @@
 		gap: 6px;
 		padding: 10px 12px;
 		background: #fff;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		box-shadow: 0 2px 10px rgba(15, 35, 65, 0.18);
 		font-size: 0.82rem;
 		font-weight: 600;
@@ -565,7 +641,7 @@
 	.sm-root :global(.leaflet-control-zoom) {
 		border: 0;
 		box-shadow: 0 2px 10px rgba(15, 35, 65, 0.18);
-		border-radius: 12px;
+		border-radius: var(--r-btn);
 		overflow: hidden;
 	}
 	.sm-root :global(.leaflet-control-attribution) {

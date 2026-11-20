@@ -2,6 +2,7 @@
 	// «Баланс мережі»: K мережі, різниця генерації/споживання і перерозподіл панелей між закладами.
 	import { page } from '$app/state';
 	import { errMessage } from '#lib/api.ts';
+	import { segIndicator } from '#lib/motion.ts';
 	import { fetchNetwork, type Network } from '#lib/api-v2.ts';
 	import { PERIODS, K_CLASSES, THRESHOLDS, classifyK, kText, kwh, uah, type Period } from '#lib/api-ses.ts';
 	import { num, signed } from '#lib/format.ts';
@@ -52,7 +53,7 @@
 		<h1>Баланс мережі</h1>
 		<p class="ph-sub">Скільки згенерували, скільки спожили і куди передати надлишок</p>
 	</div>
-	<div class="seg" role="radiogroup" aria-label="Період">
+	<div class="seg" role="radiogroup" aria-label="Період" use:segIndicator>
 		{#each PERIODS as p (p.id)}
 			<button type="button" role="radio" aria-checked={period === p.id} class:on={period === p.id} onclick={() => (period = p.id)}>
 				{p.label}
@@ -87,7 +88,7 @@
 						<span class="seg-b" style="left:{pos(THRESHOLDS.high)};right:0;background:{K_CLASSES[2].color}"></span>
 						{#if t.k != null}<span class="mark" style="left:{pos(t.k)}"></span>{/if}
 					</div>
-					<span class="kcls"><span aria-hidden="true">{cls.icon}</span> {cls.short} · {kText(t.k)}</span>
+					<span class="kcls"><span aria-hidden="true"><Icon name={cls.svg} size={12} stroke={2.6} /></span> {cls.short} · {kText(t.k)}</span>
 				</div>
 			</StatCard>
 		</div>
@@ -156,7 +157,7 @@
 	.seg {
 		display: inline-flex;
 		padding: 3px;
-		border-radius: 999px;
+		border-radius: var(--r-btn);
 		background: var(--surface);
 		border: 1px solid var(--line);
 	}
@@ -164,7 +165,7 @@
 		min-height: 32px;
 		padding: 0.2rem 0.9rem;
 		border: 0;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		background: none;
 		font: inherit;
 		font-size: 0.9rem;
@@ -175,6 +176,14 @@
 	.seg button.on {
 		background: var(--navy);
 		color: #fff;
+	}
+	.seg:global(.has-ind) button.on {
+		background: transparent;
+	}
+	.seg :global(.seg-ind) {
+		background: var(--navy);
+		box-shadow: none;
+		border-radius: var(--r-input);
 	}
 	.net {
 		transition: opacity var(--dur-base);
@@ -200,7 +209,7 @@
 	.scale {
 		position: relative;
 		height: 8px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 	}
 	.seg-b {
 		position: absolute;
@@ -208,10 +217,10 @@
 		bottom: 0;
 	}
 	.seg-b:first-child {
-		border-radius: 4px 0 0 4px;
+		border-radius: var(--r-sm) 0 0 var(--r-sm);
 	}
 	.seg-b:nth-child(3) {
-		border-radius: 0 4px 4px 0;
+		border-radius: 0 var(--r-sm) var(--r-sm) 0;
 	}
 	.mark {
 		position: absolute;
@@ -219,7 +228,7 @@
 		width: 4px;
 		height: 16px;
 		margin-left: -2px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: var(--ink);
 		box-shadow: 0 0 0 2px #fff;
 	}
@@ -285,7 +294,7 @@
 	.more {
 		margin-top: 0.5rem;
 		padding: 0.35rem 0.9rem;
-		border-radius: 999px;
+		border-radius: var(--r-btn);
 		border: 1px solid var(--line);
 		background: var(--surface);
 		font: inherit;
@@ -303,7 +312,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.5rem 1rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px dashed var(--line-strong);
 		background: var(--surface);
 		color: var(--text-2);

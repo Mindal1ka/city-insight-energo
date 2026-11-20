@@ -1,6 +1,8 @@
 <script lang="ts">
 	// «Огляд громади»: три розділи — ефект СЕС, споживання й бюджет 2026, що зробити.
 	import { errMessage } from '#lib/api.ts';
+	import { auth } from '#lib/auth.svelte.ts';
+	import { canSeeGenerators } from '#lib/roles.ts';
 	import { fetchSes, kText, type SesList, type SesItem } from '#lib/api-ses.ts';
 	import { fetchDepartments, fetchTrend, fetchBudgetReal, fetchGenerators, type Departments, type Trend, type BudgetReal, type GenSummary } from '#lib/api-v2.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
@@ -24,7 +26,7 @@
 		error = null;
 		try {
 			// Основні дані обов'язкові; решта (залежить від ролі) — якщо є
-			const [s, d, tr, br, gn] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchTrend(), fetchBudgetReal(), fetchGenerators()]);
+			const [s, d, tr, br, gn] = await Promise.allSettled([fetchSes('year'), fetchDepartments(), fetchTrend(), fetchBudgetReal(), canSeeGenerators(auth.user) ? fetchGenerators() : Promise.reject(null)]);
 			if (s.status === 'rejected') throw s.reason;
 			ses = s.value;
 			dept = d.status === 'fulfilled' ? d.value : null;
@@ -78,7 +80,7 @@
 <header class="ph">
 	<div>
 		<h1>Огляд громади</h1>
-		<p class="ph-sub">Комунальні заклади Полтавської громади · електроенергія</p>
+		<p class="ph-sub">Електроенергія в комунальних закладах Полтавської громади</p>
 	</div>
 	{#if ses?.demo}
 		<DemoPill text="Станції змодельовані: у міста немає відкритого реєстру СЕС. Споживання й бюджет — реальні." />
@@ -91,8 +93,8 @@
 	<!-- 1. Ефект СЕС -->
 	<section class="sec" aria-labelledby="s1">
 		<div class="sec-h">
-			<h2 id="s1"><span class="n">1</span>Ефект сонячних станцій</h2>
-			<span class="sec-note">{withSes ?? '—'} об’єктів зі станцією · за рік</span>
+			<h2 id="s1">Ефект сонячних станцій</h2>
+			<span class="sec-note">За рік, {withSes ?? '—'} об’єктів зі станцією</span>
 		</div>
 		<div class="strip">
 			<div class="cell">
@@ -117,7 +119,7 @@
 	<!-- 2. Споживання і бюджет -->
 	<section class="sec" aria-labelledby="s2">
 		<div class="sec-h">
-			<h2 id="s2"><span class="n">2</span>Споживання і бюджет 2026</h2>
+			<h2 id="s2">Споживання і бюджет 2026</h2>
 		</div>
 		<div class="strip three">
 			<div class="cell">
@@ -157,15 +159,20 @@
 	{#if gt && gt.count}
 		<section class="sec" aria-labelledby="s3">
 			<div class="sec-h">
-				<h2 id="s3"><span class="n">3</span>Резервне живлення: генератори</h2>
+				<h2 id="s3">Резервне живлення: генератори</h2>
+				<DemoPill align="left" text="Генератори й витрати на пальне — оцінка (ДЕМО), крім введених вручну фактичних даних." />
 				<span class="sec-note">
-					фактичні дані: вартість — {gt.capex_real} з {gt.count}, пальне — {gt.fuel_real} з {gt.count}; решта — оцінка
+					{#if gt.capex_real != null && gt.fuel_real != null}
+						фактичні дані: вартість — {gt.capex_real} з {gt.count}, пальне — {gt.fuel_real} з {gt.count}; решта — оцінка
+					{:else}
+						лише грошові суми, без переліку закладів
+					{/if}
 				</span>
 			</div>
 			<div class="strip">
 				<div class="cell">
 					<span class="l">Генераторів</span>
-					<span class="v">{gt.count}<small>сумарно {num(gt.kw, 0)} кВт</small></span>
+					<span class="v">{gt.count}{#if gt.kw != null}<small>сумарно {num(gt.kw, 0)} кВт</small>{/if}</span>
 				</div>
 				<div class="cell">
 					<span class="l">Вкладено в генератори</span>
@@ -187,7 +194,7 @@
 	{#if needExpand.length}
 		<section class="sec" aria-labelledby="s4">
 			<div class="sec-h">
-				<h2 id="s4"><span class="n">{gt && gt.count ? 4 : 3}</span>Що зробити: станції, яким не вистачає потужності</h2>
+				<h2 id="s4">Що зробити: станції, яким не вистачає потужності</h2>
 				<a class="sec-link" href="/objects">Усі об’єкти ({needAll.length}) →</a>
 			</div>
 			<div class="tbl">
@@ -252,18 +259,6 @@
 		display: flex;
 		align-items: baseline;
 		gap: 0.6rem;
-	}
-	.n {
-		display: inline-grid;
-		place-items: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: var(--radius-sm);
-		background: var(--navy);
-		color: #fff;
-		font-size: 0.8rem;
-		font-weight: 700;
-		transform: translateY(-1px);
 	}
 	.sec-note {
 		color: var(--muted);
@@ -349,19 +344,19 @@
 		display: block;
 		height: 6px;
 		background: var(--neutral-soft);
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		overflow: hidden;
 	}
 	.bar i {
 		display: block;
 		height: 100%;
 		background: var(--ok);
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		transform-origin: left;
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.bar i {
-			animation: grow 0.9s var(--ease-out) both;
+			animation: grow var(--dur-slow) var(--ease-emph) both;
 		}
 	}
 	@keyframes grow {
@@ -397,9 +392,7 @@
 	th {
 		text-align: left;
 		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
+		font-weight: 600;
 		color: var(--muted);
 		background: var(--surface-2);
 		padding: 0.6rem 1rem;

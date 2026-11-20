@@ -43,7 +43,7 @@
 		</div>
 		<a class="btn btn-sun btn-sm" href="/appeals?building={id}&type=expand&kw={s.add_kw}"><Icon name="sun" size={16} /> Подати звернення</a>
 	{:else if hasStation}
-		<p class="ok">✓ потужності достатньо</p>
+		<p class="ok"><Icon name="check" size={15} stroke={2.4} /> потужності достатньо</p>
 	{/if}
 	{#if surplus}
 		<a class="btn btn-secondary btn-sm" href="/appeals?building={id}&type=surplus"><Icon name="grid" size={16} /> Передати надлишок</a>
@@ -135,7 +135,7 @@
 		display: grid;
 		gap: 0.15rem;
 		padding: 0.55rem 0.7rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: var(--neutral-soft);
 	}
 	.cell.good {
@@ -148,8 +148,6 @@
 	.l {
 		font-size: var(--fs-xs);
 		color: var(--muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 	}
 	.cell.good .l {
 		color: inherit;

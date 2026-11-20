@@ -169,7 +169,7 @@
 		width: 3.25rem;
 		height: 3.25rem;
 		margin-bottom: 0.9rem;
-		border-radius: 15px;
+		border-radius: var(--r-card);
 		background: linear-gradient(145deg, #ffd978, #f5a524 60%, #e88f05);
 		color: #0f2f52;
 		box-shadow:
@@ -202,7 +202,7 @@
 		position: relative;
 		width: 100%;
 		padding: 2rem 1.75rem 1.6rem;
-		border-radius: 24px;
+		border-radius: var(--r-modal);
 		background: rgba(255, 255, 255, 0.98);
 		color: var(--text);
 		box-shadow:
@@ -239,7 +239,7 @@
 		width: 100%;
 		min-height: 50px;
 		padding-left: 2.6rem;
-		border-radius: 13px;
+		border-radius: var(--r-input);
 		font-size: 1rem;
 		background: var(--surface-2);
 		border-color: var(--line);
@@ -262,7 +262,7 @@
 	}
 	.srv {
 		padding: 0.55rem 0.75rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		background: color-mix(in srgb, var(--bad) 8%, #fff);
 	}
 	.go {
@@ -273,7 +273,7 @@
 		width: 100%;
 		min-height: 52px;
 		margin-top: 0.6rem;
-		border-radius: 14px;
+		border-radius: var(--r-btn);
 		border: 1px solid #d98c0b;
 		background: linear-gradient(180deg, #ffc54d, var(--sun));
 		color: #2a1900;
@@ -301,7 +301,7 @@
 	.go-ico {
 		display: grid;
 		place-items: center;
-		transition: transform var(--dur-base) var(--ease-spring);
+		transition: transform var(--dur-fast) var(--ease-out);
 	}
 	.go:hover .go-ico {
 		transform: translateX(4px);
@@ -309,15 +309,16 @@
 
 	@media (prefers-reduced-motion: no-preference) {
 		.rise {
-			animation: rise 0.8s var(--ease-out) var(--d, 0ms) backwards;
+			/* Вхід — єдиний «перший кадр» застосунку: бренд і форма з'являються разом, коротко */
+			animation: rise var(--dur-slow) var(--ease-out) backwards;
 		}
 		.card-form {
-			animation: card-in 0.9s var(--ease-out) 0.18s backwards;
+			animation: card-in var(--dur-slow) var(--ease-emph) 60ms backwards;
 		}
 		@keyframes rise {
 			from {
 				opacity: 0;
-				transform: translateY(18px);
+				transform: translateY(8px);
 			}
 		}
 		@keyframes card-in {
@@ -331,7 +332,7 @@
 	@media (max-width: 520px) {
 		.card-form {
 			padding: 1.4rem 1.1rem 1.15rem;
-			border-radius: 20px;
+			border-radius: var(--r-modal);
 		}
 		.wrap-login {
 			gap: 1.25rem;

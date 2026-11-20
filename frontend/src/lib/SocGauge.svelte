@@ -13,7 +13,7 @@
 	const color = $derived(v < 20 ? '#c2410c' : v < 50 ? '#e08a00' : '#1a7f37');
 	const word = $derived(pct === null ? 'немає даних' : v < 20 ? 'низький' : v < 50 ? 'середній' : 'добрий');
 
-	let seen = $state(false);
+	let seen = $state(true); // значення видно одразу
 	function onView(node: HTMLElement) {
 		if (isReduced() || typeof IntersectionObserver === 'undefined') {
 			seen = true;
@@ -60,7 +60,7 @@
 		{/each}
 	</svg>
 	<div class="val" aria-hidden="true">
-		<span class="big-num">{#if seen}<CountUp value={pct} duration={1100} />{:else}0{/if}<span class="unit-s">%</span></span>
+		<span class="big-num">{#if seen}<CountUp value={pct} />{:else}0{/if}<span class="unit-s">%</span></span>
 		<span class="word">заряд · {word}</span>
 	</div>
 </div>
@@ -77,8 +77,8 @@
 	}
 	.arc {
 		transition:
-			stroke-dasharray 1.1s cubic-bezier(0.22, 1, 0.36, 1),
-			stroke 0.4s;
+			stroke-dasharray var(--dur-slow) var(--ease-out),
+			stroke var(--dur-slow) var(--ease-out); /* лише коли змінюється заряд */
 	}
 	.val {
 		position: absolute;

@@ -1,4 +1,4 @@
-<!-- Кільце прогресу (0–100 %) з анімованим заповненням; reduced-motion — одразу кінцевий стан -->
+<!-- Кільце прогресу (0–100 %): заповнюється один раз синхронно з числом (450 мс); reduced-motion — одразу кінцевий стан -->
 <script lang="ts">
 	import CountUp from '#lib/CountUp.svelte';
 	import { isReduced } from '#lib/motion.ts';
@@ -26,7 +26,7 @@
 		<circle class="bar" class:done cx="60" cy="60" r={R} stroke-dasharray={C} stroke-dashoffset={C * (1 - shown / 100)} />
 	</svg>
 	<div class="c" aria-hidden="true">
-		<b><CountUp value={pct} suffix=" %" duration={1100} /></b>
+		<b><CountUp value={pct} suffix=" %" animate duration={450} /></b>
 		<span>{label}</span>
 	</div>
 </div>
@@ -53,7 +53,8 @@
 	.bar {
 		stroke: var(--sun-strong);
 		stroke-linecap: round;
-		transition: stroke-dashoffset 1.1s var(--ease-out);
+		/* Заповнюється один раз разом із числом у центрі: той самий час (450 мс) і крива */
+		transition: stroke-dashoffset 450ms var(--ease-out);
 	}
 	.bar.done {
 		stroke: var(--surplus);

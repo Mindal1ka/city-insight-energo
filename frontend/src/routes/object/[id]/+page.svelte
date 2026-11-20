@@ -17,7 +17,6 @@
 	import ForecastCard from '#lib/ForecastCard.svelte';
 	import V2Blackout from '#lib/obj/V2Blackout.svelte';
 	import ObjFinance from '#lib/obj/ObjFinance.svelte';
-	import ObjEditDrawer from '#lib/obj/ObjEditDrawer.svelte';
 	import V2Monthly from '#lib/obj/V2Monthly.svelte';
 	import V2Budget from '#lib/obj/V2Budget.svelte';
 	import V2Live from '#lib/obj/V2Live.svelte';
@@ -26,6 +25,7 @@
 	import SourceTag from '#lib/SourceTag.svelte';
 	import { fetchInsight, updateLimit, type Insight, type MonthRow } from '#lib/api-v2.ts';
 	import { onDestroy } from 'svelte';
+	import { segIndicator } from '#lib/motion.ts';
 	import { loadObj, saveObj, normSes, normCosts, emptySes, emptyCosts, type ObjDetail, type ObjPatch } from '#lib/obj/ObjApi.ts';
 
 	const id = $derived(page.params.id ?? '');
@@ -124,6 +124,11 @@
 
 	// --- Редагування з оптимістичним оновленням ---
 	let editOpen = $state(false);
+	// Шухляда редагування (форма + валідація) вантажиться лише коли її вперше відкривають
+	let drawerMod = $state<Promise<typeof import('#lib/obj/ObjEditDrawer.svelte')> | null>(null);
+	$effect(() => {
+		if (editOpen && !drawerMod) drawerMod = import('#lib/obj/ObjEditDrawer.svelte');
+	});
 	let toast = $state<{ text: string; ok: boolean } | null>(null);
 	let tt: ReturnType<typeof setTimeout> | undefined;
 	function say(text: string, ok = true) {
@@ -167,7 +172,12 @@
 		].filter((t) => t.show) as { id: TabId; label: string; icon: 'chart'; show: boolean }[]
 	);
 	const cur = $derived<TabId>(tabs.some((t) => t.id === tab) ? (tab as TabId) : 'overview');
+	// Напрямок зміни вкладки: вміст зсувається туди, куди «пішли» (±12 px), лише після першого перемикання
+	let tabDir = $state(0);
 	function pick(t: TabId) {
+		const from = tabs.findIndex((x) => x.id === cur);
+		const to = tabs.findIndex((x) => x.id === t);
+		if (to !== from) tabDir = to > from ? 1 : -1;
 		tab = t;
 		const u = new URL(page.url.href);
 		if (t === 'overview') u.searchParams.delete('tab');
@@ -252,11 +262,11 @@
 				<div class="h-side">
 					{#if sens}
 						<div class="kbig">
-							<span class="k-l">Покриття сонцем · {pLabel}</span>
+							<span class="k-l">Покриття сонцем за {pLabel}</span>
 							<KBadge {k} cls={kc} size="lg" />
 						</div>
 					{/if}
-					<div class="seg" role="radiogroup" aria-label="Період">
+					<div class="seg" role="radiogroup" aria-label="Період" use:segIndicator>
 						{#each PERIODS as p (p.id)}
 							<button type="button" role="radio" aria-checked={period === p.id} class:on={period === p.id} onclick={() => (period = p.id)}>{p.label}</button>
 						{/each}
@@ -300,7 +310,7 @@
 
 		<!-- ============ 2. Вкладки ============ -->
 		{#if tabs.length > 1}
-			<div class="tabs" role="tablist" aria-label="Розділи картки">
+			<div class="tabs" role="tablist" aria-label="Розділи картки" use:segIndicator>
 				{#each tabs as t (t.id)}
 					<button
 						type="button"
@@ -327,7 +337,7 @@
 		{/snippet}
 
 		<!-- ---- Огляд ---- -->
-		<div class="tp" id="tp-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={cur !== 'overview'}>
+		<div class="tp" class:swap={tabDir !== 0} style:--tp-dx="{tabDir * 12}px" id="tp-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={cur !== 'overview'}>
 			{#if ins?.months?.length && !noCons}
 				<div class="panel pad"><V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} months2026={ins.y2026?.months_2026 ?? null} /></div>
 			{:else if !hasCons && !(ses && e?.gen_kwh)}
@@ -346,7 +356,7 @@
 
 		<!-- ---- Станція ---- -->
 		{#if sens}
-			<div class="tp" id="tp-station" role="tabpanel" aria-labelledby="tab-station" hidden={cur !== 'station'}>
+			<div class="tp" class:swap={tabDir !== 0} style:--tp-dx="{tabDir * 12}px" id="tp-station" role="tabpanel" aria-labelledby="tab-station" hidden={cur !== 'station'}>
 				{#if ses}
 					<div class="eq">
 						<div class="eq-i sun"><Icon name="panel" size={18} /><span><b class="tnum">{num(ses.total_kw, 1)} кВт</b><small>Панелі{ses.panels_count ? ` · ${num(ses.panels_count)} × ${num(ses.panel_w)} Вт` : ''}</small></span></div>
@@ -377,7 +387,7 @@
 					</Disclosure>
 				{:else}
 					<div class="empty">
-						<span class="e-ic" aria-hidden="true">○</span>
+						<span class="e-ic" aria-hidden="true"><Icon name="circle" size={18} /></span>
 						<p><b>СЕС немає</b></p>
 						{#if editable}<button type="button" class="btn btn-secondary btn-sm" onclick={() => (editOpen = true)}>Додати СЕС</button>{/if}
 					</div>
@@ -388,7 +398,7 @@
 
 		<!-- ---- Гроші ---- -->
 		{#if tabs.some((t) => t.id === 'money')}
-			<div class="tp" id="tp-money" role="tabpanel" aria-labelledby="tab-money" hidden={cur !== 'money'}>
+			<div class="tp" class:swap={tabDir !== 0} style:--tp-dx="{tabDir * 12}px" id="tp-money" role="tabpanel" aria-labelledby="tab-money" hidden={cur !== 'money'}>
 				{#if ins?.budget}
 					<div class="panel pad"><V2Budget b={ins.budget} canEdit={canLimit} onsave={saveLimit} /></div>
 				{/if}
@@ -403,16 +413,20 @@
 			</div>
 		{/if}
 
-		<!-- ---- Блекаут (завантажується завжди; 403 — вкладка ховається) ---- -->
-		{#if isInternal(user)}
-			<div class="tp" id="tp-blackout" role="tabpanel" aria-labelledby="tab-blackout" hidden={cur !== 'blackout'}>
+		<!-- ---- Блекаут: лише для ролей із доступом до чутливих даних (інакше бекенд дає 403) ---- -->
+		{#if isInternal(user) && sens && canSeeSensitive(user, cat, id)}
+			<div class="tp" class:swap={tabDir !== 0} style:--tp-dx="{tabDir * 12}px" id="tp-blackout" role="tabpanel" aria-labelledby="tab-blackout" hidden={cur !== 'blackout'}>
 				<V2Blackout id={b.id} canEdit={editable || user?.role === 'energy_manager'} bind:available={blackoutOk} />
 			</div>
 		{/if}
 	</div>
 
 	{#if editable}
-		<ObjEditDrawer bind:open={editOpen} ses={d.ses} costs={d.costs} {onsave} />
+		{#if drawerMod}
+			{#await drawerMod then { default: ObjEditDrawer }}
+				<ObjEditDrawer bind:open={editOpen} ses={d.ses} costs={d.costs} {onsave} />
+			{/await}
+		{/if}
 	{/if}
 {/if}
 
@@ -458,7 +472,6 @@
 	.hero {
 		display: grid;
 		gap: 0.9rem;
-		animation: obj-in 0.45s var(--ease-out) both;
 	}
 	.h-top {
 		display: flex;
@@ -494,7 +507,7 @@
 		align-items: center;
 		gap: 0.3rem;
 		padding: 0.1rem 0.55rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--accent-soft);
 		color: var(--cons);
 		font-size: var(--fs-xs);
@@ -525,20 +538,18 @@
 	.k-l {
 		font-size: var(--fs-xs);
 		color: var(--muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 	}
 	.seg {
 		display: inline-flex;
 		padding: 3px;
-		border-radius: 999px;
+		border-radius: var(--r-btn);
 		background: var(--neutral-soft);
 	}
 	.seg button {
 		border: 0;
 		background: transparent;
 		padding: 0.4rem 0.9rem;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		font: inherit;
 		font-size: var(--fs-sm);
 		font-weight: 600;
@@ -572,7 +583,7 @@
 		display: grid;
 		gap: 0.2rem;
 		padding: 0.6rem 0.8rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		background: var(--neutral-soft);
 		min-width: 0;
 	}
@@ -658,6 +669,38 @@
 		color: var(--ink);
 		border-bottom-color: var(--accent);
 	}
+	/* Підкреслення активної вкладки — один елемент, що ковзає (segIndicator), 220 мс --ease-in-out */
+	.tabs:global(.has-ind) button.on {
+		border-bottom-color: transparent;
+	}
+	.tabs :global(.seg-ind) {
+		top: auto !important;
+		bottom: 0;
+		height: 3px !important;
+		border-radius: var(--r-sm) var(--r-sm) 0 0;
+		background: var(--accent);
+		box-shadow: none;
+	}
+	/* Період: «таблетка» ковзає під вибраним (кольори ті самі, що й у .on) */
+	.seg:global(.has-ind) button.on {
+		background: transparent;
+		box-shadow: none;
+	}
+	.seg :global(.seg-ind) {
+		background: var(--surface);
+		box-shadow: var(--shadow);
+		border-radius: var(--r-btn);
+	}
+	/* Вміст вкладки: проявлення + зсув 12 px у бік руху, лише після перемикання користувачем */
+	.tp.swap:not([hidden]) {
+		animation: tp-swap var(--dur-base) var(--ease-out) both;
+	}
+	@keyframes tp-swap {
+		from {
+			opacity: 0;
+			transform: translateX(var(--tp-dx, 0px));
+		}
+	}
 	.tp {
 		display: grid;
 		gap: 1rem;
@@ -691,7 +734,7 @@
 		align-items: center;
 		gap: 0.6rem;
 		padding: 0.55rem 0.8rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		background: var(--neutral-soft);
 		min-width: 0;
 	}
@@ -756,7 +799,7 @@
 		justify-self: start;
 		margin: 0;
 		padding: 0.3rem 0.7rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--neutral-soft);
 		font-size: var(--fs-xs);
 		color: var(--muted);
@@ -771,7 +814,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.7rem 1.1rem;
-		border-radius: 999px;
+		border-radius: var(--r-card);
 		background: var(--ok);
 		color: #fff;
 		font-weight: 600;
@@ -780,12 +823,6 @@
 	}
 	.toast.bad {
 		background: var(--bad);
-	}
-	@keyframes obj-in {
-		from {
-			opacity: 0;
-			transform: translateY(8px);
-		}
 	}
 	@keyframes toast-in {
 		from {

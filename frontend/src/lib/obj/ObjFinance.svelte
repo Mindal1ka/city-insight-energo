@@ -23,11 +23,7 @@
 	);
 	const sumParts = $derived(parts.reduce((s, x) => s + (x.v ?? 0), 0));
 	const hasCosts = $derived(showSes && !!d.ses && !!invested);
-	let shown = $state(false);
-	$effect(() => {
-		const id = requestAnimationFrame(() => (shown = true));
-		return () => cancelAnimationFrame(id);
-	});
+	const shown = true; // структура вкладень видно одразу
 </script>
 
 <div class="fin">
@@ -63,7 +59,7 @@
 				{#if parts.length}
 					<div class="bar" role="img" aria-label={parts.map((p) => `${p.k} ${num(p.v)} грн`).join(', ')}>
 						{#each parts as p, i (p.k)}
-							<i class="seg {p.cls}" style="flex-basis: {shown ? ((p.v ?? 0) / sumParts) * 100 : 0}%; transition-delay: {i * 80}ms"></i>
+							<i class="seg {p.cls}" style="flex-basis: {shown ? ((p.v ?? 0) / sumParts) * 100 : 0}%"></i>
 						{/each}
 					</div>
 					<ul class="leg">
@@ -96,11 +92,7 @@
 		border-radius: var(--radius);
 		padding: 1rem;
 		min-width: 0;
-		animation: fin-rise 0.5s var(--ease-out) both;
 	}
-	.card:nth-child(2) { animation-delay: 60ms; }
-	.card:nth-child(3) { animation-delay: 120ms; }
-	.card:nth-child(4) { animation-delay: 180ms; }
 	.h {
 		display: flex;
 		align-items: center;
@@ -115,7 +107,7 @@
 		place-items: center;
 		width: 1.9rem;
 		height: 1.9rem;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 	}
 	.ic.grid { background: var(--accent-soft); color: var(--cons); }
 	.ic.good { background: var(--surplus-soft); color: var(--surplus-ink); }
@@ -162,13 +154,13 @@
 		gap: 2px;
 		height: 12px;
 		margin: 0.8rem 0 0.6rem;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		overflow: hidden;
 		background: var(--line-soft);
 	}
 	.seg {
 		flex: 0 0 0;
-		transition: flex-basis 0.9s var(--ease-out);
+
 	}
 	.p { background: var(--sun); }
 	.i { background: var(--cons); }
@@ -196,7 +188,7 @@
 	.dot {
 		width: 0.6rem;
 		height: 0.6rem;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.payback {
 		display: flex;
@@ -205,12 +197,6 @@
 	}
 	.payback .h {
 		margin-bottom: 0.2rem;
-	}
-	@keyframes fin-rise {
-		from {
-			opacity: 0;
-			transform: translateY(10px);
-		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.card { animation: none; }

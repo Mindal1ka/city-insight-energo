@@ -126,7 +126,7 @@
 		<div class="notice notice-error" role="alert"><p><strong>Не вдалося порахувати.</strong> {error}</p></div>
 	{:else if r}
 		<div class="result {tone}" class:stale={loading}>
-			<span class="r-sign" aria-hidden="true">{#key tone}<span class="r-glyph">{tone === 'ok' ? '✓' : tone === 'warn' ? '≈' : '!'}</span>{/key}</span>
+			<span class="r-sign" aria-hidden="true">{#key tone}<span class="r-glyph"><Icon name={tone === 'ok' ? 'check' : tone === 'warn' ? 'alert' : 'x'} size={22} stroke={2.4} /></span>{/key}</span>
 			<div class="r-body">
 				<p class="r-title" aria-hidden="true">
 					{#if r.survives_all}
@@ -160,10 +160,10 @@
 		<div class="run" class:stale={loading} aria-hidden="true">
 			<div class="run-track">
 				<span class="run-ok" style:width="{okPct}%">
-					{#if okPct >= 18}<span class="run-lbl">✓ є світло</span>{/if}
+					{#if okPct >= 18}<span class="run-lbl"><Icon name="check" size={15} stroke={2.6} /> є світло</span>{/if}
 				</span>
 				<span class="run-gap" style:width="{100 - okPct}%">
-					{#if 100 - okPct >= 18}<span class="run-lbl">✕ без світла</span>{/if}
+					{#if 100 - okPct >= 18}<span class="run-lbl"><Icon name="x" size={15} stroke={2.6} /> без світла</span>{/if}
 				</span>
 				{#if okPct > 0 && okPct < 100}
 					<span class="run-cut" style:left="{okPct}%"><b>{clock(r.survives_hours)}</b></span>
@@ -187,7 +187,7 @@
 								<span class="bat" style="flex-grow: {p.bat}"></span>
 								<span class="sun" style="flex-grow: {p.sun}"></span>
 							</div>
-							<span class="mark {t.covered ? 'y' : 'n'}">{t.covered ? '✓' : '✕'}</span>
+							<span class="mark {t.covered ? 'y' : 'n'}"><Icon name={t.covered ? 'check' : 'x'} size={13} stroke={2.6} /></span>
 							<span class="hl tnum">{String(t.hour).padStart(2, '0')}</span>
 						</div>
 					{/each}
@@ -206,7 +206,7 @@
 				<figcaption class="legend">
 					<span><i class="k sun"></i>сонце</span>
 					<span><i class="k bat"></i>акумулятор</span>
-					<span><i class="k gap"></i>бракує (✕ — година без світла)</span>
+					<span><i class="k gap"></i>бракує (<Icon name="x" size={12} stroke={2.6} /> — година без світла)</span>
 					<span class="muted">висота стовпчика — скільки енергії потрібно закладу за годину</span>
 				</figcaption>
 			</figure>
@@ -249,7 +249,7 @@
 		flex-wrap: wrap;
 		gap: 1rem 2.5rem;
 		padding: 1rem 1.2rem;
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		background: #f4f7fb;
 		border: 1px solid #e3e8ef;
 	}
@@ -267,7 +267,7 @@
 		display: inline-flex;
 		align-items: center;
 		border: 1px solid var(--line-strong);
-		border-radius: 12px;
+		border-radius: var(--r-btn);
 		background: #fff;
 		overflow: hidden;
 	}
@@ -307,7 +307,7 @@
 	.chip {
 		padding: 0.3rem 0.75rem;
 		min-height: 36px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid #cfd7e1;
 		background: #fff;
 		font: inherit;
@@ -325,7 +325,7 @@
 		gap: 1rem;
 		align-items: center;
 		padding: 1rem 1.25rem;
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		border: 1px solid;
 		border-left-width: 6px;
 		transition: opacity 0.2s;
@@ -414,7 +414,7 @@
 		position: relative;
 		display: flex;
 		height: 2.6rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		overflow: visible;
 		background: #edf1f5;
 	}
@@ -430,17 +430,17 @@
 	}
 	.run-ok {
 		background: linear-gradient(90deg, #2e9a4f, var(--surplus));
-		border-radius: 12px 0 0 12px;
+		border-radius: var(--r-card) 0 0 var(--r-card);
 		color: #fff;
 	}
 	.run-gap {
 		background: repeating-linear-gradient(135deg, var(--deficit) 0 8px, #d9561d 8px 16px);
-		border-radius: 0 12px 12px 0;
+		border-radius: 0 var(--r-card) var(--r-card) 0;
 		color: #fff;
 	}
 	.run-ok:only-child,
 	.run-gap[style*='width: 100%'] {
-		border-radius: 12px;
+		border-radius: var(--r-card);
 	}
 	.run-lbl {
 		padding: 0 0.85rem;
@@ -455,7 +455,7 @@
 		width: 3px;
 		margin-left: -1.5px;
 		background: var(--ink, #0f1b2d);
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		transition: left 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	.run-cut b {
@@ -464,7 +464,7 @@
 		left: 50%;
 		transform: translateX(-50%);
 		padding: 0.05rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--ink, #0f1b2d);
 		color: #fff;
 		font-size: 0.8125rem;
@@ -508,7 +508,7 @@
 		width: min(100%, 3rem);
 		display: flex;
 		flex-direction: column;
-		border-radius: 5px 5px 0 0;
+		border-radius: var(--r-sm) var(--r-sm) 0 0;
 		overflow: hidden;
 		min-height: 3px;
 	}
@@ -592,7 +592,7 @@
 		display: inline-block;
 		width: 0.9rem;
 		height: 0.9rem;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.note {
 		display: flex;
@@ -646,7 +646,7 @@
 			display: grid;
 			grid-template-columns: 3.25rem minmax(0, 1fr) 3.25rem;
 			width: 100%;
-			border-radius: 14px;
+			border-radius: var(--r-btn);
 		}
 		.sb {
 			width: 100%;

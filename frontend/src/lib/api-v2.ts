@@ -17,13 +17,15 @@ export const DEPARTMENTS = [
 export interface Budget {
 	/** openbudget.gov.ua — реальний план програми 2026, розподілений пропорційно кВт·год; МОК — оцінка */
 	source: 'МОК' | 'введено' | 'openbudget.gov.ua';
-	limit_uah: { year: number; month: number; day: number };
-	paid_uah: { year: number; month: number; day: number };
+	/** false — у UMUNI немає споживання 2025: суми null («немає даних»), а не 0 */
+	has_data?: boolean;
+	limit_uah: { year: number | null; month: number | null; day: number | null };
+	paid_uah: { year: number | null; month: number | null; day: number | null };
 	/** Скільки коштувала б е/е без СЕС за рік */
-	without_ses_uah_year: number;
+	without_ses_uah_year: number | null;
 	used_pct: { year: number | null; month: number | null };
 	/** Ліміт − оплачено; < 0 — перевитрата */
-	balance_uah: { year: number; month: number };
+	balance_uah: { year: number | null; month: number | null };
 }
 
 /** «Скільки доставити» — лише з кВт·год (без м²): панелі під K = 1 за рік, акумулятор під вечірню частку доби */
@@ -95,7 +97,8 @@ export interface Distribution {
 
 export interface MonthRow {
 	month: number;
-	cons_kwh: number;
+	/** null — немає даних споживання 2025 */
+	cons_kwh: number | null;
 	gen_kwh: number | null;
 	/** Власне споживання сонячної е/е (разом із тим, що пройшло через акумулятор) */
 	self_kwh: number | null;
@@ -111,8 +114,10 @@ export interface Insight {
 	id: number;
 	department: string;
 	day: string;
-	/** Споживання е/е по місяцях (січ…гру), кВт·год */
-	monthly_kwh: number[];
+	/** false — немає даних споживання 2025 (monthly_kwh — null, не нулі) */
+	has_data?: boolean;
+	/** Споживання е/е по місяцях (січ…гру), кВт·год; null — немає даних */
+	monthly_kwh: (number | null)[];
 	/** Помісячно (січ…гру). null-поля — немає доступу */
 	months: MonthRow[];
 	/** Ємність акумулятора станції, кВт·год (null — немає доступу / немає СЕС) */
@@ -174,6 +179,8 @@ export const fetchLive = () => req<LiveAll>('/api/live');
 export interface DeptRow {
 	department: string;
 	objects: number;
+	/** Об'єкти без даних споживання 2025 — у суми не входять */
+	no_data_count?: number;
 	with_ses: number;
 	deficit: number;
 	surplus: number;
@@ -250,24 +257,30 @@ export interface ReportRow {
 	name: string;
 	department: string;
 	has_ses: boolean;
-	cons_kwh: number;
+	/** null — немає даних споживання 2025 (порожня клітинка, не 0) */
+	cons_kwh: number | null;
 	gen_kwh: number;
-	self_kwh: number;
-	surplus_kwh: number;
-	grid_kwh: number;
-	cost_uah: number;
-	saved_uah: number;
-	limit_uah: number;
-	saved_uah_year: number;
+	self_kwh: number | null;
+	surplus_kwh: number | null;
+	grid_kwh: number | null;
+	cost_uah: number | null;
+	saved_uah: number | null;
+	limit_uah: number | null;
+	saved_uah_year: number | null;
 	invested_uah: number;
-	saved_since_launch_uah: number;
+	saved_since_launch_uah: number | null;
 }
 
 export interface Report {
 	demo: boolean;
 	month: string;
 	tariff_uah_kwh: number;
-	totals: Omit<ReportRow, 'id' | 'name' | 'department' | 'has_ses'> & { over_limit_uah: number; k: number | null };
+	/** Суми — лише по об'єктах з даними; no_data_count — скільки без даних споживання */
+	totals: { [K in Exclude<keyof ReportRow, 'id' | 'name' | 'department' | 'has_ses'>]: number } & {
+		over_limit_uah: number;
+		k: number | null;
+		no_data_count?: number;
+	};
 	/** Порожній для публічного режиму (лише підсумки) */
 	items: ReportRow[];
 }
@@ -629,17 +642,21 @@ export interface GenSummaryItem extends GenMoney {
 }
 export interface GenSummary {
 	year: number;
+	demo?: boolean;
+	/** true — роль finance: лише грошові суми (разом і по розпорядниках), без переліку закладів і кВт */
+	aggregates_only?: boolean;
 	totals: {
 		count: number;
-		kw: number;
+		kw?: number;
 		capex_uah: number;
-		capex_real: number;
+		capex_real?: number;
 		fuel_year_uah: number;
 		fuel_year_l: number;
-		fuel_real: number;
+		fuel_real?: number;
 	};
-	departments: { department: string; count: number; kw: number; capex_uah: number; fuel_year_uah: number }[];
-	items: GenSummaryItem[];
+	departments: { department: string; count: number; kw?: number; capex_uah: number; fuel_year_uah: number }[];
+	/** null — aggregates_only (finance) */
+	items: GenSummaryItem[] | null;
 	assumptions: Record<string, number | number[]>;
 }
 /** Зведення витрат на генератори (енергоменеджер, адміністратор даних, фінанси; інакше 403) */

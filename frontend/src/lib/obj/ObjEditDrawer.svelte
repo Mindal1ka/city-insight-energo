@@ -142,7 +142,7 @@
 	<form onsubmit={submit} novalidate>
 		<header>
 			<h2 id="ed-h"><Icon name="panel" size={20} /> Редагувати дані СЕС</h2>
-			<button type="button" class="x" aria-label="Закрити" onclick={() => (open = false)}>✕</button>
+			<button type="button" class="x" aria-label="Закрити" onclick={() => (open = false)}><Icon name="x" size={18} /></button>
 		</header>
 		<div class="body">
 			<fieldset>
@@ -151,8 +151,8 @@
 					{#each STATION as f (f.key)}{@render field(f)}{/each}
 				</div>
 				<p class="sum tnum">
-					<span>Σ панелей <b>{totalKw !== null ? num(totalKw, 2) : '—'}</b> кВт</span>
-					<span>Σ ємність <b>{totalKwh !== null ? num(totalKwh, 2) : '—'}</b> кВт·год</span>
+					<span>Разом панелей <b>{totalKw !== null ? num(totalKw, 2) : '—'}</b> кВт</span>
+					<span>Загальна ємність <b>{totalKwh !== null ? num(totalKwh, 2) : '—'}</b> кВт·год</span>
 				</p>
 			</fieldset>
 			<fieldset>
@@ -186,12 +186,13 @@
 		color: var(--text);
 		box-shadow: var(--shadow-lg);
 	}
+	/* Шухляда виїжджає з правого краю (звідки її кнопка), фон темніє паралельно — спільна крива --ease-emph */
 	.drawer[open] {
-		animation: slide-in var(--dur-slow) var(--ease-out);
+		animation: slide-in var(--dur-slow) var(--ease-emph);
 	}
 	.drawer::backdrop {
 		background: rgba(10, 31, 56, 0.45);
-		animation: fade var(--dur-base);
+		animation: fade var(--dur-base) var(--ease-out);
 	}
 	form {
 		display: flex;
@@ -321,7 +322,8 @@
 	}
 	@keyframes slide-in {
 		from {
-			transform: translateX(100%);
+			transform: translateX(48px);
+			opacity: 0;
 		}
 	}
 	@keyframes fade {
@@ -334,7 +336,7 @@
 			inset: auto 0 0 0;
 			width: 100vw;
 			height: 92dvh;
-			border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+			border-radius: var(--r-modal) var(--r-modal) 0 0;
 		}
 		.drawer[open] {
 			animation-name: slide-up;
@@ -345,7 +347,8 @@
 	}
 	@keyframes slide-up {
 		from {
-			transform: translateY(100%);
+			transform: translateY(64px);
+			opacity: 0;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

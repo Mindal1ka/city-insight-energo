@@ -1,7 +1,7 @@
 <!-- Кільце класів K + легенда-фільтр (клік по рядку вмикає/вимикає клас) -->
 <script lang="ts">
 	import { Tween } from 'svelte/motion';
-	import { cubicOut, isReduced } from '../motion.ts';
+	import { EASE, DUR, isReduced } from '../motion.ts';
 	import { CLASSES, type KClass } from './DashData.ts';
 
 	let {
@@ -17,12 +17,11 @@
 	} = $props();
 
 	const total = $derived(CLASSES.reduce((s, c) => s + (counts[c.id] ?? 0), 0));
-	const vals = new Tween<number[]>(CLASSES.map(() => 0), { duration: 700, easing: cubicOut });
+	// Дуги одразу в кінцевому стані; рух (300 мс) лише коли змінюються дані — напр. після фільтра
+	const fracs = () => CLASSES.map((c) => (total ? (counts[c.id] ?? 0) / total : 0));
+	const vals = new Tween<number[]>(fracs(), { duration: DUR.slow, easing: EASE.out });
 	$effect(() => {
-		vals.set(
-			CLASSES.map((c) => (total ? (counts[c.id] ?? 0) / total : 0)),
-			{ duration: isReduced() ? 0 : 700 }
-		);
+		vals.set(fracs(), { duration: isReduced() ? 0 : DUR.slow });
 	});
 	const R = 62;
 	const C = 2 * Math.PI * R;
@@ -93,8 +92,8 @@
 	}
 	circle {
 		transition:
-			stroke-width var(--dur-base) var(--ease-out),
-			opacity var(--dur-base);
+			stroke-width var(--dur-fast) var(--ease-out),
+			opacity var(--dur-fast) var(--ease-out);
 	}
 	.big {
 		font-size: 30px;
@@ -123,7 +122,7 @@
 		width: 100%;
 		padding: 0.35rem 0.5rem;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		background: none;
 		font: inherit;
 		color: var(--text);

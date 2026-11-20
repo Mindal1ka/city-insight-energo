@@ -378,13 +378,15 @@ class Sites:
         mtd = sum(daily_consumption(b, d.replace(day=i)) for i in range(1, d.day)) + sm(past, "cons_kwh")
         mtd_grid = mtd - (sum(sm(simulate_day(b, ses, d.replace(day=i)), "self_kwh") for i in range(1, d.day))
                           + sm(past, "self_kwh") if ses else 0)
-        money_limit = round(month_cons * tariff * 1.05, -2)
+        # без даних споживання 2025 лімітів не рахуємо (None — «немає даних», а не 0)
+        money_limit = round(month_cons * tariff * 1.05, -2) if month_cons > 0 else None
         money_used = mtd_grid * tariff
-        day_limit = round(month_cons / days_in_month * 1.1)
+        day_limit = round(month_cons / days_in_month * 1.1) if month_cons > 0 else None
         day_used = sm(past, "cons_kwh")
 
         period = {"since": None, "days": 0, "generated_kwh": None, "saved_uah": None,
-                  "consumed_kwh": round((y25.elec_kwh or 0) + ((y26.elec_kwh or 0) if y26 else 0)) if y25 else None,
+                  "consumed_kwh": (round(y25.elec_kwh + ((y26.elec_kwh or 0) if y26 else 0))
+                                   if y25 and y25.elec_kwh else None),
                   "consumed_since": "2025-01-01"}
         if ses and ses.get("launched") and ses.get("total_kw"):
             start = date.fromisoformat(ses["launched"])
@@ -437,7 +439,8 @@ class Sites:
                       "to_battery_kwh": _r(sm(past, "to_battery_kwh")), "surplus_kwh": _r(sm(past, "surplus_kwh")),
                       "peak_kw": _r(peak["cons_kwh"]), "peak_hour": peak["hour"]},
             "period": period,
-            "limits": {"tariff_uah_kwh": tariff, "money_month_uah": money_limit, "money_month_used_uah": round(money_used),
+            "limits": {"tariff_uah_kwh": tariff, "money_month_uah": money_limit,
+                       "money_month_used_uah": round(money_used) if money_limit else None,
                        "money_month_pct": _r(100 * money_used / money_limit) if money_limit else None,
                        "energy_day_kwh": day_limit, "energy_day_used_kwh": _r(day_used),
                        "energy_day_pct": _r(100 * day_used / day_limit) if day_limit else None,

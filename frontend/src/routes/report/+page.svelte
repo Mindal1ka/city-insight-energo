@@ -58,7 +58,8 @@
 		const list = (data?.items ?? []).filter((r) => (!dep || r.department === dep) && (!nq || norm(r.name).includes(nq)));
 		const k = sortKey;
 		return list.sort((a, b) => {
-			const r = k === 'name' ? a.name.localeCompare(b.name, 'uk') : (a[k] as number) - (b[k] as number);
+			if (k !== 'name' && (a[k] == null) !== (b[k] == null)) return a[k] == null ? 1 : -1; // «немає даних» — у кінці
+			const r = k === 'name' ? a.name.localeCompare(b.name, 'uk') : ((a[k] as number) ?? 0) - ((b[k] as number) ?? 0);
 			return asc ? r : -r;
 		});
 	});
@@ -73,7 +74,9 @@
 
 	const t = $derived(data?.totals);
 	const paybackPct = $derived(t && t.invested_uah > 0 ? (t.saved_since_launch_uah / t.invested_uah) * 100 : null);
-	const over = (r: ReportRow) => r.limit_uah > 0 && r.cost_uah > r.limit_uah;
+	const over = (r: ReportRow) => r.limit_uah != null && r.cost_uah != null && r.limit_uah > 0 && r.cost_uah > r.limit_uah;
+	/** null = у UMUNI немає даних споживання 2025 — не 0 */
+	const cell = (v: number | null | undefined) => (v == null ? 'немає даних' : num(v));
 	const COLS: [Key, string][] = [
 		['cons_kwh', 'Спожито'],
 		['grid_kwh', 'З мережі'],
@@ -127,6 +130,12 @@
 		{/if}
 	</section>
 
+	{#if t.no_data_count}
+		<p class="ndnote">
+			Без даних споживання за 2025 рік (UMUNI): {t.no_data_count} об’єкт(ів) — у таблиці «немає даних», у суми не входять.
+		</p>
+	{/if}
+
 	{#if data.items.length}
 		<div class="filters noprint">
 			<input type="search" placeholder="Пошук" bind:value={q} aria-label="Пошук" />
@@ -153,11 +162,11 @@
 								<a href="/object/{r.id}">{r.name}</a>
 								{#if r.has_ses}<Icon name="sun" size={13} />{/if}
 							</td>
-							<td class="r" data-l="Спожито">{num(r.cons_kwh)}</td>
-							<td class="r" data-l="З мережі">{num(r.grid_kwh)}</td>
-							<td class="r" data-l="Вартість" class:bad={over(r)}>{num(r.cost_uah)}</td>
-							<td class="r ok" data-l="Заощаджено">{num(r.saved_uah)}</td>
-							<td class="r" data-l="Ліміт">{num(r.limit_uah)}</td>
+							<td class="r" class:nd={r.cons_kwh == null} data-l="Спожито">{cell(r.cons_kwh)}</td>
+							<td class="r" class:nd={r.grid_kwh == null} data-l="З мережі">{cell(r.grid_kwh)}</td>
+							<td class="r" class:nd={r.cost_uah == null} data-l="Вартість" class:bad={over(r)}>{cell(r.cost_uah)}</td>
+							<td class="r ok" class:nd={r.saved_uah == null} data-l="Заощаджено">{cell(r.saved_uah)}</td>
+							<td class="r" class:nd={r.limit_uah == null} data-l="Ліміт">{cell(r.limit_uah)}</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -167,6 +176,15 @@
 {/if}
 
 <style>
+	.ndnote {
+		margin: 0 0 0.75rem;
+		font-size: 0.8125rem;
+		color: var(--muted);
+	}
+	td.nd {
+		color: var(--muted);
+		font-size: 0.8125rem;
+	}
 	.page-head {
 		display: flex;
 		align-items: center;
@@ -242,7 +260,7 @@
 	.bar {
 		height: 8px;
 		background: var(--line-soft);
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		margin-top: 0.5rem;
 		overflow: hidden;
 	}

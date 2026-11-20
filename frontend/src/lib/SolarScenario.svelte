@@ -75,6 +75,7 @@
 
 <script lang="ts">
 	import type { SolarItem } from './api.ts';
+	import Icon from './Icon.svelte';
 	import { num } from './format.ts';
 	import SolarChart from './SolarChart.svelte';
 	import StatCard from './StatCard.svelte';
@@ -163,7 +164,7 @@
 		</div>
 		<div class="quick">
 			<button type="button" class="chip press" aria-pressed={Math.abs(kwNow - kwRec) < 0.05} onclick={() => (kwInput = kwRec)}
-				>✓ Рекомендовано · {num(kwRec, 1)} кВт</button
+				><Icon name="check" size={14} stroke={2.4} /> Рекомендовано: {num(kwRec, 1)} кВт</button
 			>
 			{#if roofMax}
 				<button type="button" class="chip press" aria-pressed={Math.abs(kwNow - roofMax) < 0.05} onclick={() => (kwInput = roofMax)}
@@ -202,7 +203,7 @@
 
 	{#key verdict.tone}
 		<p class="verdict v-{verdict.tone}" role="status" in:fadeUp={{ y: 6 }}>
-			<span class="vi" aria-hidden="true">{verdict.tone === 'ok' ? '✓' : verdict.tone === 'info' ? 'i' : '!'}</span>
+			<span class="vi" aria-hidden="true"><Icon name={verdict.tone === 'ok' ? 'check' : verdict.tone === 'info' ? 'info' : 'alert'} size={14} stroke={2.4} /></span>
 			<span>{verdict.text}</span>
 		</p>
 	{/key}
@@ -308,17 +309,17 @@
 	}
 	.big-range::-webkit-slider-runnable-track {
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: linear-gradient(90deg, var(--sun-strong) 0 var(--fill), #e7eaef var(--fill) 100%);
 	}
 	.big-range::-moz-range-track {
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #e7eaef;
 	}
 	.big-range::-moz-range-progress {
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--sun-strong);
 	}
 	.big-range::-webkit-slider-thumb {
@@ -346,7 +347,7 @@
 	.big-range:focus-visible {
 		outline: 3px solid var(--focus);
 		outline-offset: 4px;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 	}
 	.quick {
 		display: flex;
@@ -360,7 +361,7 @@
 		font-weight: 600;
 		padding: 0.35rem 0.8rem;
 		min-height: 34px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid var(--line-strong);
 		background: #fff;
 		color: var(--text);

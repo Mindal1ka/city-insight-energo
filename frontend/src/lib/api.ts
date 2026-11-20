@@ -3,6 +3,7 @@
 
 import { goto } from '$app/navigation';
 import { auth, logout } from './auth.svelte.ts';
+import { untrack } from 'svelte';
 
 export interface YearSummary {
 	partial: boolean;
@@ -367,7 +368,7 @@ if (nativeFetch && !(window as unknown as { __energoFetch?: boolean }).__energoF
 	(window as unknown as { __energoFetch?: boolean }).__energoFetch = true;
 	window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		if (!isApiUrl(input)) return nativeFetch(input, init);
-		const token = auth.user?.token ?? null;
+		const token = untrack(() => auth.user?.token ?? null); // див. authToken(): без реактивної залежності
 		let sent = false;
 		if (token) {
 			const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));

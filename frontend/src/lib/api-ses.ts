@@ -27,17 +27,19 @@ export interface KClassMeta {
 	ink: string;
 	/** Символ-дубль кольору (колір — ніколи не єдиний сигнал) */
 	icon: string;
+	/** Та сама позначка як SVG-іконка з набору Icon.svelte */
+	svg: 'check' | 'arrow-down' | 'arrow-up' | 'circle' | 'help';
 	/** SVG-шлях форми маркера в полі 10×10 */
 	glyph: string;
 	shape: string;
 }
 
 export const K_CLASSES: KClassMeta[] = [
-	{ id: 'Ефективно', short: 'Ефективно', color: '#1f8a4c', soft: '#e3f4ea', ink: '#fff', icon: '✓', glyph: 'M5 .9a4.1 4.1 0 1 1 0 8.2 4.1 4.1 0 0 1 0-8.2z', shape: 'коло' },
-	{ id: 'Не вистачає', short: 'Не вистачає', color: '#d9680f', soft: '#fdeedf', ink: '#fff', icon: '↓', glyph: 'M.8 1.6h8.4L5 9.2z', shape: 'трикутник вниз' },
-	{ id: 'Надлишок', short: 'Надлишок', color: '#1f6fd1', soft: '#e3eefb', ink: '#fff', icon: '↑', glyph: 'M5 .8 9.2 8.4H.8z', shape: 'трикутник вгору' },
-	{ id: 'Без СЕС', short: 'Без СЕС', color: '#7a8594', soft: '#eef0f3', ink: '#fff', icon: '○', glyph: 'M1.6 1.6h6.8v6.8H1.6z', shape: 'квадрат' },
-	{ id: 'Немає даних', short: 'Немає даних', color: '#b9c1cc', soft: '#f3f5f8', ink: '#2b3442', icon: '?', glyph: 'M5 .6 9.4 5 5 9.4.6 5z', shape: 'ромб' }
+	{ id: 'Ефективно', short: 'Ефективно', color: '#1f8a4c', soft: '#e3f4ea', ink: '#fff', icon: '✓', svg: 'check', glyph: 'M5 .9a4.1 4.1 0 1 1 0 8.2 4.1 4.1 0 0 1 0-8.2z', shape: 'коло' },
+	{ id: 'Не вистачає', short: 'Не вистачає', color: '#d9680f', soft: '#fdeedf', ink: '#fff', icon: '↓', svg: 'arrow-down', glyph: 'M.8 1.6h8.4L5 9.2z', shape: 'трикутник вниз' },
+	{ id: 'Надлишок', short: 'Надлишок', color: '#1f6fd1', soft: '#e3eefb', ink: '#fff', icon: '↑', svg: 'arrow-up', glyph: 'M5 .8 9.2 8.4H.8z', shape: 'трикутник вгору' },
+	{ id: 'Без СЕС', short: 'Без СЕС', color: '#7a8594', soft: '#eef0f3', ink: '#fff', icon: '○', svg: 'circle', glyph: 'M1.6 1.6h6.8v6.8H1.6z', shape: 'квадрат' },
+	{ id: 'Немає даних', short: 'Немає даних', color: '#b9c1cc', soft: '#f3f5f8', ink: '#2b3442', icon: '?', svg: 'help', glyph: 'M5 .6 9.4 5 5 9.4.6 5z', shape: 'ромб' }
 ];
 
 /** Обмін надлишком між будівлями поки не працює: клас «Надлишок» і все про передачу приховано. */

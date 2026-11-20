@@ -8,7 +8,7 @@
 	}: { kind: 'umuni' | 'openbudget' | 'mok' | 'manual' | 'estimate'; label?: string; href?: string; title?: string } = $props();
 
 	const text = $derived(
-		label ?? { umuni: 'UMUNI', openbudget: 'openbudget.gov.ua', mok: 'МОК', manual: 'введено вручну', estimate: 'оцінка' }[kind]
+		label ?? { umuni: 'UMUNI', openbudget: 'openbudget.gov.ua', mok: 'ДЕМО', manual: 'введено вручну', estimate: 'оцінка' }[kind]
 	);
 	const link = $derived(href ?? (kind === 'openbudget' ? 'https://openbudget.gov.ua/local-budget?id=1657010000' : undefined));
 	const tip = $derived(
@@ -16,7 +16,7 @@
 			{
 				umuni: 'Реальні дані UMUNI',
 				openbudget: 'Реальні дані openbudget.gov.ua',
-				mok: 'Змодельовано (МОК), не фактичні дані',
+				mok: 'Демонстраційні (змодельовані) дані, не фактичні',
 				manual: 'Введено вручну',
 				estimate: 'Оцінка'
 			}[kind]
@@ -34,7 +34,7 @@
 		display: inline-flex;
 		align-items: center;
 		padding: 0.05rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-size: 0.7rem;
 		font-weight: 700;
 		letter-spacing: 0.02em;

@@ -50,6 +50,11 @@ def _get_store():
     return store
 
 
+def hidden_on_map(b) -> bool:
+    """Котельні не публікуються на мапах (ТЗ): у таблицях лишаються, координат не віддаємо."""
+    return "котельн" in (getattr(b, "name", "") or "").lower()
+
+
 def jitter(bid: int, lat: float, lon: float) -> tuple[float, float]:
     """Детермінований зсув 40–150 м за id (той самий при кожному запиті)."""
     h = hashlib.sha256(str(bid).encode()).digest()
@@ -98,7 +103,7 @@ def build_map(store) -> dict:
     for b in store.buildings:
         prec = b.geo_precision if b.lat is not None else "немає"
         by_precision[prec] = by_precision.get(prec, 0) + 1
-        if b.lat is None or b.lon is None:
+        if b.lat is None or b.lon is None or hidden_on_map(b):
             missing.append({"id": b.id, "name": b.name, "address": b.address, "category_short": b.category_short})
             continue
         points.append(point(b))

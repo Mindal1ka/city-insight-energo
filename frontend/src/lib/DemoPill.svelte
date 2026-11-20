@@ -26,7 +26,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.2rem 0.65rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font: inherit;
 		font-size: 0.75rem;
 		font-weight: 700;
@@ -63,7 +63,7 @@
 		width: max-content;
 		max-width: min(19rem, calc(100vw - 2.5rem));
 		padding: 0.6rem 0.8rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: #142235;
 		color: #fff;
 		font-size: 0.8125rem;

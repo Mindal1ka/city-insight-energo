@@ -4,6 +4,7 @@
 	// Енергонезалежність громади рахуємо ТАК САМО, як сторінка «Енергонезалежність» (/api/independence):
 	// стартуємо з наявних станцій, а для будівель, де станція вже є, додаємо лише те, чого бракує.
 	import { page } from '$app/state';
+	import Icon from '#lib/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
@@ -461,7 +462,7 @@
 			<button type="button" class="btn btn-secondary" onclick={resetSettings} disabled={!settingsChanged}>Скинути до типових</button>
 		</div>
 		<p class="muted small sc-status" aria-live="polite">
-			{#if refreshing}Перераховуємо…{:else if data}✓ оновлено{/if}
+			{#if refreshing}Перераховуємо…{:else if data}<Icon name="check" size={14} /> оновлено{/if}
 		</p>
 	</Disclosure>
 </section>
@@ -562,7 +563,7 @@
 								<a href="/solar/{it.id}{detailQs}" title={it.name}>{it.name}</a>
 								<span class="r-type">
 									{catLabel(it.category_short)}
-									{#if tier(it) === 0}<span class="tag crit"><span aria-hidden="true">✚</span> критичний</span>{/if}
+									{#if tier(it) === 0}<span class="tag crit"><Icon name="plus" size={12} stroke={2.6} /> критичний</span>{/if}
 									{#if it.existingKw && seeExisting(it)}<span class="tag ext">+ до наявної {num(it.existingKw, 1)} кВт</span>{/if}
 									{#if it.fill}<span class="tag fill" title="Наступна за чергою станція не вмістилася в залишок бюджету, тому добрали цю, меншу">у залишок бюджету</span>{/if}
 								</span>
@@ -591,7 +592,7 @@
 									<span class="r-no" aria-hidden="true"></span>
 									<span class="r-name">
 										<a href="/solar/{it.id}{detailQs}" title={it.name}>{it.name}</a>
-										<span class="r-type">{catLabel(it.category_short)}{#if tier(it) === 0}<span class="tag crit"><span aria-hidden="true">✚</span> критичний</span>{/if}</span>
+										<span class="r-type">{catLabel(it.category_short)}{#if tier(it) === 0}<span class="tag crit"><Icon name="plus" size={12} stroke={2.6} /> критичний</span>{/if}</span>
 									</span>
 									<span class="r-kw r"><span class="lbl">Станція: </span><b>{it.existingKw && seeExisting(it) ? '+' : ''}{num(it.kw, it.kw < 10 ? 1 : 0)}</b> кВт</span>
 									<span class="r-cost r"><span class="lbl">Вартість: </span>{money(it.cost)}</span>
@@ -650,7 +651,7 @@
 				<div class="sizes" role="img" aria-label="Окупність на прикладі однієї будівлі: {sizes.map((s) => `${s.label} — ${s.payback !== null ? num(s.payback, 1) : '—'} року`).join('; ')}">
 					{#each sizes as s (s.k)}
 						<div class="srow" class:best={s.k === 1}>
-							<span class="sl">{s.label}<small class="muted sl-kw">{num(s.kw, 0)} кВт{#if s.k === 1} · <span class="best-tag">✓ наш вибір</span>{/if}</small></span>
+							<span class="sl">{s.label}<small class="muted sl-kw">{num(s.kw, 0)} кВт{#if s.k === 1} · <span class="best-tag"><Icon name="check" size={12} stroke={2.6} /> наш вибір</span>{/if}</small></span>
 							<span class="sbar"><i style:--w="{((s.payback ?? 0) / sizeMax) * 100}%"></i></span>
 							<span class="sv"><strong>{paybackWords(s.payback)}</strong>{#if s.surplusShare > 0.01}<br /><small class="muted">{num(s.surplusShare * 100)} % енергії пропадає</small>{/if}</span>
 						</div>
@@ -750,11 +751,9 @@
 		align-items: center;
 		gap: 0.5rem;
 		margin: 0 0 0.5rem;
-		font-weight: 700;
+		font-weight: 600;
 		font-size: 0.9rem;
-		letter-spacing: 0.02em;
 		color: var(--sun-ink);
-		text-transform: uppercase;
 	}
 	.sundot {
 		width: 12px;
@@ -785,7 +784,7 @@
 		display: inline-block;
 		min-width: 1.6ch;
 		padding: 0 0.3rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: var(--sun-soft);
 		box-shadow: inset 0 -3px 0 var(--sun);
 		font-variant-numeric: tabular-nums;
@@ -805,17 +804,17 @@
 	}
 	.big-range::-webkit-slider-runnable-track {
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: linear-gradient(90deg, var(--sun-strong) 0 var(--fill), #e7eaef var(--fill) 100%);
 	}
 	.big-range::-moz-range-track {
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #e7eaef;
 	}
 	.big-range::-moz-range-progress {
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--sun-strong);
 	}
 	.big-range::-webkit-slider-thumb {
@@ -844,7 +843,7 @@
 	.big-range:focus-visible {
 		outline: 3px solid var(--focus);
 		outline-offset: 4px;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 	}
 	.range-scale {
 		display: flex;
@@ -866,7 +865,7 @@
 		font-weight: 600;
 		padding: 0.4rem 0.85rem;
 		min-height: 36px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid var(--line-strong);
 		background: #fff;
 		color: var(--text);
@@ -1038,7 +1037,7 @@
 		position: relative;
 		display: block;
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 		margin-top: 0.15rem;
@@ -1046,7 +1045,7 @@
 	.ibar > span {
 		position: absolute;
 		inset: 0 auto 0 0;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 	}
 	.ib-pot {
 		background: #bfe3c9;
@@ -1074,7 +1073,7 @@
 		display: inline-block;
 		width: 11px;
 		height: 11px;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.sw.base {
 		background: repeating-linear-gradient(135deg, var(--navy-3) 0 2px, #3d6aa0 2px 4px);
@@ -1116,14 +1115,14 @@
 	}
 	.used-bar {
 		height: 8px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 	}
 	.used-bar span {
 		display: block;
 		height: 100%;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: linear-gradient(90deg, var(--sun), var(--sun-strong));
 	}
 	.rows-head,
@@ -1151,7 +1150,7 @@
 	.row {
 		padding: 0.65rem 0.75rem;
 		border-bottom: 1px solid #edf0f4;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 		background-color: transparent;
 	}
 	.row:hover {
@@ -1216,7 +1215,7 @@
 		font-size: 0.75rem;
 		font-weight: 700;
 		padding: 0 0.4rem;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		white-space: nowrap;
 	}
 	.tag.crit {
@@ -1393,7 +1392,7 @@
 		gap: 0.75rem;
 		align-items: center;
 		padding: 0.45rem 0.6rem;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 		line-height: 1.25;
 	}
 	@media (max-width: 700px) {
@@ -1423,7 +1422,7 @@
 	.sbar {
 		height: 14px;
 		background: #eef1f5;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		overflow: hidden;
 	}
 	.sbar i {
@@ -1469,7 +1468,7 @@
 	@media (max-width: 640px) {
 		.ask {
 			padding: 1rem 1rem 0.25rem;
-			border-radius: 14px;
+			border-radius: var(--r-card);
 			box-shadow: var(--shadow);
 			margin-bottom: 0.875rem;
 		}
@@ -1533,7 +1532,7 @@
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 			gap: 0;
 			padding: 3px;
-			border-radius: 12px;
+			border-radius: var(--r-card);
 			background: var(--bg-2);
 		}
 		.opt {
@@ -1542,7 +1541,7 @@
 			min-height: 48px;
 			padding: 0.4rem 0.5rem;
 			border: 0;
-			border-radius: 10px;
+			border-radius: var(--r-btn);
 			background: transparent;
 			text-align: center;
 		}

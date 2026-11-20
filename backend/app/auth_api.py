@@ -15,13 +15,15 @@ def login(req: LoginIn, request: Request):
     from .main import store  # лінивий імпорт, щоб не було циклу з main.py
 
     ip = request.client.host if request.client else "?"
-    if auth.rate_limited(ip):
+    who = req.login or req.full_name  # лічильник — за (IP, логін), а не лише за IP
+    if auth.rate_limited(ip, login=who):
         raise HTTPException(429, "Забагато спроб входу. Спробуйте за хвилину")
     try:
         user = auth.authenticate(req, {b.id for b in store.buildings})
     except HTTPException:
-        auth.note_failure(ip)
+        auth.note_failure(ip, login=who)
         raise
+    auth.note_success(ip, login=who)
     return {"token": auth.make_token(user), "user": user.model_dump()}
 
 
@@ -34,4 +36,5 @@ def me(user: User = Depends(current_user)):
 
 @router.get("/api/auth/roles")
 def roles():
-    return [{"id": rid, **r} for rid, r in auth.ROLES.items()]
+    # гостьового режиму немає: внутрішня роль public (без токена) клієнтам не показується
+    return [{"id": rid, **r} for rid, r in auth.ROLES.items() if rid != "public"]

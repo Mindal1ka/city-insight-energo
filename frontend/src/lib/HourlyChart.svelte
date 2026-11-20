@@ -349,7 +349,7 @@
 		display: inline-block;
 		width: 0.95rem;
 		height: 0.95rem;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		flex: none;
 	}
 	.sw.gen {
@@ -357,12 +357,12 @@
 	}
 	.sw.cons {
 		height: 3px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: #1f4f84;
 	}
 	.sw.soc {
 		height: 3px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: #0f766e;
 	}
 	.sw.dash {
@@ -377,7 +377,7 @@
 		display: block;
 		width: 100%;
 		height: auto;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 		cursor: crosshair;
 		/* Вертикальна прокрутка сторінки лишається, горизонтальний рух пальця — вибір години */
 		touch-action: pan-y;
@@ -416,8 +416,8 @@
 		font-size: 12px;
 		font-weight: 600;
 		fill: #6b7686;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+
+
 	}
 	.cons-line {
 		fill: none;
@@ -438,15 +438,15 @@
 		opacity: 0.6;
 	}
 	.bar {
-		transition: opacity 0.2s;
+		transition: opacity var(--dur-fast) var(--ease-out);
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.bar {
 			transform-box: fill-box;
 			transform-origin: 50% 100%;
 			transition:
-				transform 0.45s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 10ms),
-				opacity 0.2s;
+				transform 280ms var(--ease-emph),
+				opacity var(--dur-fast) var(--ease-out);
 		}
 		.plot:not(.seen) .bar {
 			transform: scaleY(0);
@@ -454,16 +454,16 @@
 		.draw {
 			stroke-dasharray: 1;
 			stroke-dashoffset: 0;
-			transition: stroke-dashoffset 0.6s cubic-bezier(0.45, 0, 0.2, 1) 0.05s;
+			transition: stroke-dashoffset var(--dur-slow) var(--ease-out) 80ms;
 		}
 		.plot:not(.seen) .draw {
 			stroke-dashoffset: 1;
 		}
 		.fade {
-			transition: opacity 0.4s ease 0.15s;
+			transition: opacity var(--dur-base) var(--ease-out) 120ms;
 		}
 		.fade.late {
-			transition-delay: 0.5s;
+			transition-delay: 240ms;
 		}
 		.plot:not(.seen) .fade {
 			opacity: 0;
@@ -496,7 +496,7 @@
 		pointer-events: none;
 		background: #fff;
 		border: 1px solid #dbe2ea;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		box-shadow: var(--shadow-lg);
 		padding: 0.6rem 0.8rem;
 		font-size: 0.875rem;
@@ -534,7 +534,7 @@
 		font-weight: 600;
 		color: var(--muted);
 		border: 1px dashed var(--line-strong);
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		padding: 0 0.45rem;
 	}
 </style>

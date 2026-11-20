@@ -54,7 +54,7 @@
 		{#if data}<p class="ph-sub"><Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}</p>{/if}
 	</div>
 	<div class="head-side">
-		<span class="mok" title="Демонстраційні дані">МОК</span>
+		<span class="mok" title="Демонстраційні дані">ДЕМО</span>
 	</div>
 </header>
 
@@ -171,7 +171,7 @@
 	}
 	.mok {
 		padding: 0.15rem 0.6rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.06em;
@@ -200,7 +200,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.5rem 1rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px dashed var(--line-strong);
 		background: var(--surface);
 		color: var(--text-2);
@@ -219,7 +219,7 @@
 		gap: 0.4rem;
 		min-height: 36px;
 		padding: 0 0.7rem;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		border: 1px solid var(--line);
 		background: var(--surface);
 		color: var(--muted);
@@ -241,7 +241,7 @@
 		gap: 0.35rem;
 		min-height: 36px;
 		padding: 0 0.85rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid var(--line);
 		background: var(--surface);
 		font: inherit;
@@ -316,14 +316,14 @@
 	.track {
 		flex: 1;
 		height: 0.7rem;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 	}
 	.fill {
 		display: block;
 		height: 100%;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 	}
 	.fill.red {
 		background: #c2410c;
@@ -363,7 +363,7 @@
 	.out {
 		margin: 0 0 1rem;
 		padding: 0.9rem 1rem;
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		background: var(--surface, #fff);
 		box-shadow: 0 1px 3px rgba(15, 35, 65, 0.08);
 		display: grid;
@@ -392,7 +392,7 @@
 	}
 	.cells i {
 		display: block;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 	}
 	.cells .c1 {
 		background: #cfe9d9;

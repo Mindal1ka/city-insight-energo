@@ -9,6 +9,7 @@
 	import Skeleton from '#lib/Skeleton.svelte';
 	import Status from '#lib/Status.svelte';
 	import Icon from '#lib/Icon.svelte';
+	import { auth } from '#lib/auth.svelte.ts';
 
 	let data = $state<LiveAll | null>(null);
 	let error = $state<string | null>(null);
@@ -42,6 +43,8 @@
 	);
 	const gridTone = $derived(!t ? 'neutral' : t.grid_kw > 0 ? 'warn' : 'good');
 	const nf = (v: number | null | undefined, d = 1) => num(v, d);
+	// «Заряд» — дані акумуляторів: фінансовий орган їх не бачить (бекенд віддає null) — колонку ховаємо
+	const showSoc = $derived(auth.user?.role !== 'finance' && (data?.items ?? []).some((r) => r.soc_pct != null));
 </script>
 
 <svelte:head><title>Розподіл енергії · Insight Tool</title></svelte:head>
@@ -52,7 +55,7 @@
 		{#if data}<p class="ph-sub"><Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}</p>{/if}
 	</div>
 	<div class="head-side">
-		<span class="mok" title="Дані інверторів підключаться через API">МОК</span>
+		<span class="mok" title="Дані інверторів підключаться через API">ДЕМО</span>
 	</div>
 </header>
 
@@ -110,7 +113,7 @@
 							<th>Об'єкт</th>
 							<th class="num">Генерація, кВт</th>
 							<th class="num">Навантаження, кВт</th>
-							<th class="num">Заряд</th>
+							{#if showSoc}<th class="num">Заряд</th>{/if}
 							<th class="num">Баланс, кВт·год</th>
 						</tr>
 					</thead>
@@ -126,11 +129,11 @@
 								</div></td>
 								<td class="num">{nf(r.gen_kw)}</td>
 								<td class="num">{nf(r.load_kw)}</td>
-								<td class="num">{r.soc_pct == null ? '—' : `${num(r.soc_pct, 0)} %`}</td>
+								{#if showSoc}<td class="num">{r.soc_pct == null ? '—' : `${num(r.soc_pct, 0)} %`}</td>{/if}
 								<td class="num bal-c" class:neg={r.balance_kwh < 0} class:pos={r.balance_kwh >= 0}>{signed(r.balance_kwh, 0)}</td>
 							</tr>
 						{:else}
-							<tr><td colspan="5" class="empty">—</td></tr>
+							<tr><td colspan={showSoc ? 5 : 4} class="empty">—</td></tr>
 						{/each}
 					</tbody>
 				</table>
@@ -166,7 +169,7 @@
 	}
 	.mok {
 		padding: 0.15rem 0.6rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.06em;
@@ -201,7 +204,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.5rem 1rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px dashed var(--line-strong);
 		background: var(--surface);
 		color: var(--text-2);
@@ -227,7 +230,7 @@
 		gap: 0.4rem;
 		min-height: 36px;
 		padding: 0 0.7rem;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		border: 1px solid var(--line);
 		background: var(--surface);
 		color: var(--muted);
@@ -249,7 +252,7 @@
 		gap: 0.35rem;
 		min-height: 36px;
 		padding: 0 0.85rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid var(--line);
 		background: var(--surface);
 		font: inherit;

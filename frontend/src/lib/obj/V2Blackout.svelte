@@ -5,6 +5,7 @@
 	import { uah } from '#lib/api-ses.ts';
 	import { num } from '#lib/format.ts';
 	import Icon from '#lib/Icon.svelte';
+	import Hint from '#lib/Hint.svelte';
 
 	let { id, canEdit = false, available = $bindable(false) }: { id: number; canEdit?: boolean; available?: boolean } = $props();
 
@@ -159,7 +160,7 @@
 				{@const g = b.generator}
 				<div class="g-head">
 					<span class="g-t"><Icon name="bolt" size={16} /> Генератор</span>
-					{#if g.source === 'МОК'}<span class="mok" title="Демонстраційні дані">МОК</span>{/if}
+					{#if g.source === 'МОК'}<span class="mok" title="Демонстраційні дані">ДЕМО</span>{/if}
 					{#if canEdit && !editing}<button type="button" class="btn btn-secondary btn-sm" onclick={openForm}>Змінити</button>{/if}
 				</div>
 				<div class="facts tnum">
@@ -179,7 +180,7 @@
 					{@const m = b.money}
 					<div class="money">
 						<div class="mc">
-							<span class="ml">Вкладено в генератор {#if m.capex_source === 'МОК'}<span class="mok sm" title="Оцінка за ринковими цінами: введіть фактичну вартість">оцінка</span>{/if}</span>
+							<span class="ml">Вкладено в генератор {#if m.capex_source === 'МОК'}<Hint text="Оцінка за ринковими цінами: введіть фактичну вартість"><span class="mok sm">оцінка</span></Hint>{/if}</span>
 							<b class="tnum">{uah(m.capex_uah)}</b>
 							<span class="mn">
 								{#if m.bought}куплено {dmy(m.bought)}{/if}
@@ -188,7 +189,7 @@
 							</span>
 						</div>
 						<div class="mc">
-							<span class="ml">Пальне за {m.fuel_year} {#if m.fuel_source === 'МОК'}<span class="mok sm" title="Оцінка: {b.assumptions?.fuel_price_uah_l ?? 101} грн/л, ~150 мотогодин на рік">оцінка</span>{/if}</span>
+							<span class="ml">Пальне за {m.fuel_year} {#if m.fuel_source === 'МОК'}<Hint text="Оцінка: {b.assumptions?.fuel_price_uah_l ?? 101} грн/л, ~150 мотогодин на рік"><span class="mok sm">оцінка</span></Hint>{/if}</span>
 							<b class="tnum">{uah(m.fuel_year_uah)}</b>
 							<span class="mn tnum">{num(m.fuel_year_l)} л{m.fuel_source === 'журнал' ? ` · ${m.fuel_entries} ${m.fuel_entries === 1 ? 'запис' : 'записи(ів)'} у журналі` : ' · журнал порожній'}</span>
 						</div>
@@ -206,7 +207,7 @@
 											<td class="r tnum">{num(e.liters)}</td>
 											<td class="r tnum">{uah(e.uah)}</td>
 											<td class="note">{e.note}</td>
-											{#if canEdit}<td class="r"><button type="button" class="x" aria-label="Видалити запис" onclick={() => removeEntry(e.id)}>×</button></td>{/if}
+											{#if canEdit}<td class="r"><button type="button" class="x" aria-label="Видалити запис" onclick={() => removeEntry(e.id)}><Icon name="x" size={14} /></button></td>{/if}
 										</tr>
 									{/each}
 								</tbody>
@@ -275,14 +276,14 @@
 	}
 	.track {
 		height: 0.9rem;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 	}
 	.fill {
 		display: block;
 		height: 100%;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 	}
 	.fill.bat {
 		background: var(--bat, #6d4fc2);
@@ -326,7 +327,7 @@
 	}
 	.mok {
 		padding: 0.1rem 0.55rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.06em;
@@ -371,7 +372,7 @@
 		min-height: 2.25rem;
 		padding: 0 0.5rem;
 		border: 1px solid var(--line);
-		border-radius: 8px;
+		border-radius: var(--r-input);
 		font: inherit;
 		background: var(--surface);
 		color: var(--ink);

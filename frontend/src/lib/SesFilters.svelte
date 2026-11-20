@@ -2,6 +2,8 @@
 	// Панель фільтрів СЕС. variant='inline' — повна панель (список /objects);
 	// variant='map' — компактний рядок (пошук · період · «Фільтри (n)») + випадна панель з групами.
 	import type { Snippet } from 'svelte';
+	import Icon from './Icon.svelte';
+	import { segIndicator } from './motion.ts';
 	import {
 		K_CLASSES,
 		VISIBLE_CLASSES,
@@ -101,7 +103,7 @@
 <svelte:window onclick={onDoc} onkeydown={onKey} />
 
 {#snippet seg()}
-	<div class="seg" role="radiogroup" aria-label="Період">
+	<div class="seg" role="radiogroup" aria-label="Період" use:segIndicator>
 		{#each PERIODS as p (p.id)}
 			<button
 				type="button"
@@ -178,7 +180,7 @@
 			style="--c: {c.color}; --soft: {c.soft}; --ink: {c.ink}"
 			onclick={() => (classes = toggle(classes, c.id))}
 		>
-			<span class="dot" aria-hidden="true">{c.icon}</span>{c.short}<b>{n}</b>
+			<span class="dot" aria-hidden="true"><Icon name={c.svg} size={10} stroke={3} /></span>{c.short}<b>{n}</b>
 		</button>
 	{/each}
 {/snippet}
@@ -205,7 +207,7 @@
 			{@render search()}
 			{#if active}
 				<button type="button" class="reset" onclick={resetAll} title="Скинути фільтри"
-					>✕ <span class="sr">Скинути фільтри</span></button
+					><Icon name="x" size={16} /><span class="sr">Скинути фільтри</span></button
 				>
 			{/if}
 		</div>
@@ -246,11 +248,11 @@
 
 		{#if nFilters}
 			<ul class="active" aria-label="Активні фільтри">
-				{#if season}<li><button type="button" onclick={() => (season = null)}>{season} <span aria-hidden="true">✕</span><span class="sr">прибрати</span></button></li>{/if}
-				{#if department}<li><button type="button" onclick={() => (department = '')}>{department} <span aria-hidden="true">✕</span><span class="sr">прибрати</span></button></li>{/if}
-				{#if need}<li><button type="button" onclick={() => (need = false)}>Потреба в розширенні <span aria-hidden="true">✕</span><span class="sr">прибрати</span></button></li>{/if}
-				{#each classes as c (c)}<li><button type="button" onclick={() => (classes = classes.filter((x) => x !== c))}>{c} <span aria-hidden="true">✕</span><span class="sr">прибрати</span></button></li>{/each}
-				{#each types as t (t)}<li><button type="button" onclick={() => (types = types.filter((x) => x !== t))}>{CATEGORIES.find((c) => c.key === t)?.label ?? t} <span aria-hidden="true">✕</span><span class="sr">прибрати</span></button></li>{/each}
+				{#if season}<li><button type="button" onclick={() => (season = null)}>{season} <Icon name="x" size={12} stroke={2.2} /><span class="sr">прибрати</span></button></li>{/if}
+				{#if department}<li><button type="button" onclick={() => (department = '')}>{department} <Icon name="x" size={12} stroke={2.2} /><span class="sr">прибрати</span></button></li>{/if}
+				{#if need}<li><button type="button" onclick={() => (need = false)}>Потреба в розширенні <Icon name="x" size={12} stroke={2.2} /><span class="sr">прибрати</span></button></li>{/if}
+				{#each classes as c (c)}<li><button type="button" onclick={() => (classes = classes.filter((x) => x !== c))}>{c} <Icon name="x" size={12} stroke={2.2} /><span class="sr">прибрати</span></button></li>{/each}
+				{#each types as t (t)}<li><button type="button" onclick={() => (types = types.filter((x) => x !== t))}>{CATEGORIES.find((c) => c.key === t)?.label ?? t} <Icon name="x" size={12} stroke={2.2} /><span class="sr">прибрати</span></button></li>{/each}
 			</ul>
 		{/if}
 
@@ -302,7 +304,7 @@
 	.seg {
 		display: inline-flex;
 		background: #eef2f7;
-		border-radius: 999px;
+		border-radius: var(--r-btn);
 		padding: 3px;
 		flex: none;
 	}
@@ -310,18 +312,31 @@
 		border: 0;
 		background: none;
 		padding: 6px 12px;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		font: inherit;
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: #36425a;
 		cursor: pointer;
-		transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+		transition: color var(--dur-fast) var(--ease-out), transform var(--dur-press) var(--ease-out);
+	}
+	.seg button:active {
+		transform: scale(0.97);
 	}
 	.seg button.on {
 		background: #fff;
 		color: #0f1b2d;
 		box-shadow: 0 1px 3px rgba(15, 35, 65, 0.18);
+	}
+	/* Ковзна «таблетка» періоду (segIndicator) — ті самі фон і тінь, що в .on */
+	.seg:global(.has-ind) button.on {
+		background: transparent;
+		box-shadow: none;
+	}
+	.seg :global(.seg-ind) {
+		background: #fff;
+		box-shadow: 0 1px 3px rgba(15, 35, 65, 0.18);
+		border-radius: var(--r-input);
 	}
 	.search {
 		flex: 1;
@@ -330,7 +345,7 @@
 		align-items: center;
 		gap: 6px;
 		background: #eef2f7;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		padding: 0 12px;
 		color: #4f5b6b;
 	}
@@ -366,7 +381,7 @@
 		gap: 6px;
 		border: 1px solid #dfe5ec;
 		background: #fff;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		padding: 4px 10px 4px 4px;
 		font: inherit;
 		font-size: 0.82rem;
@@ -417,7 +432,7 @@
 		max-width: 220px;
 		border: 1px solid #dfe5ec;
 		background: #fff;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		padding: 5px 10px;
 		font: inherit;
 		font-size: 0.82rem;
@@ -466,7 +481,7 @@
 		-webkit-backdrop-filter: saturate(1.5) blur(12px);
 		backdrop-filter: saturate(1.5) blur(12px);
 		box-shadow: 0 2px 6px rgba(15, 35, 65, 0.08), 0 12px 32px -14px rgba(15, 35, 65, 0.35);
-		border-radius: 16px;
+		border-radius: var(--r-modal);
 	}
 	.mbar {
 		display: flex;
@@ -489,7 +504,7 @@
 		gap: 6px;
 		border: 1px solid #dfe5ec;
 		background: #fff;
-		border-radius: 999px;
+		border-radius: var(--r-btn);
 		padding: 7px 14px;
 		font: inherit;
 		font-size: 0.88rem;
@@ -508,7 +523,7 @@
 		min-width: 20px;
 		height: 20px;
 		padding: 0 5px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: #0b5cad;
 		color: #fff;
 		font-size: 0.74rem;
@@ -524,7 +539,7 @@
 	}
 	.active button {
 		border: 0;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		padding: 4px 10px;
 		background: #0f2f52;
 		color: #fff;
@@ -553,10 +568,8 @@
 	.sec h3 {
 		margin: 0 0 6px;
 		font-size: 0.72rem;
-		font-weight: 700;
+		font-weight: 600;
 		color: #4f5b6b;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 	}
 	.sec select {
 		max-width: 100%;
@@ -591,7 +604,7 @@
 	.rst {
 		border: 1px solid #dfe5ec;
 		background: #fff;
-		border-radius: 999px;
+		border-radius: var(--r-btn);
 		padding: 5px 14px;
 		font: inherit;
 		font-weight: 700;

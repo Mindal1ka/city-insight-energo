@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Список усіх комунальних об'єктів: K, генерація/споживання, заощаджено, окупність. Сортування + фільтри.
 	import { goto } from '$app/navigation';
+	import Icon from '#lib/Icon.svelte';
 	import { page } from '$app/state';
 	import SesFilters from '#lib/SesFilters.svelte';
 	import KBadge from '#lib/KBadge.svelte';
@@ -8,7 +9,6 @@
 	import { catLabel } from '#lib/categories.ts';
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
-	import { isReduced } from '#lib/motion.ts';
 	import { matchExtra, seasonDay, kwhMonth, type Season } from '#lib/ses-extra.ts';
 	import {
 		fetchSes,
@@ -123,7 +123,6 @@
 	}
 	const kw = (v: number | null) => (v == null ? '—' : Math.round(v).toLocaleString('uk-UA'));
 	const open = (id: number) => goto(`/object/${id}`);
-	const reduced = isReduced();
 </script>
 
 <svelte:head><title>Об’єкти — Енергоменеджмент Полтави</title></svelte:head>
@@ -149,7 +148,7 @@
 			{#each Array(8) as _, i (i)}<div style="animation-delay: {i * 80}ms"></div>{/each}
 		</div>
 	{:else}
-		<p class="unit" aria-hidden="true">кВт·год · {period === 'day' ? 'за день' : period === 'month' ? 'за місяць' : 'за рік'}</p>
+		<p class="unit" aria-hidden="true">кВт·год {period === 'day' ? 'за день' : period === 'month' ? 'за місяць' : 'за рік'}</p>
 		<div class="tbl-wrap" class:dim={loading}>
 			<table>
 				<thead>
@@ -170,7 +169,7 @@
 				</thead>
 				<tbody>
 					{#each rows as r, i (r.id)}
-						<tr onclick={() => open(r.id)} style="--d: {reduced ? 0 : Math.min(i, 20) * 18}ms">
+						<tr onclick={() => open(r.id)}>
 							<td class="name">
 								<a href="/object/{r.id}" onclick={(e) => e.stopPropagation()}>{r.name}</a>
 								<span class="type"><CategoryIcon category={r.category_short} size={13} />{catLabel(r.category_short)}</span>
@@ -193,7 +192,7 @@
 		<!-- Телефон: компактні рядки -->
 		<ul class="cards" class:dim={loading}>
 			{#each rows as r, i (r.id)}
-				<li style="--d: {reduced ? 0 : Math.min(i, 12) * 25}ms">
+				<li>
 					<a href="/object/{r.id}">
 						<span class="t1">
 							<span class="nm">{r.name}</span>
@@ -201,7 +200,7 @@
 						</span>
 						<span class="t2">
 							<span class="type"><CategoryIcon category={r.category_short} size={12} />{catLabel(r.category_short)}</span>
-							<span class="nn"><i aria-hidden="true">≈</i>{kwhMonth(r.cons_kwh_month_avg)}/міс <i aria-hidden="true">☀</i>{kw(r.gen_kwh)} <i aria-hidden="true">⚡</i>{kw(r.cons_kwh)}</span>
+							<span class="nn"><i aria-hidden="true">≈</i>{kwhMonth(r.cons_kwh_month_avg)}/міс <i title="Генерація"><Icon name="sun" size={12} /><span class="visually-hidden">генерація</span></i>{kw(r.gen_kwh)} <i title="Споживання"><Icon name="bolt" size={12} /><span class="visually-hidden">споживання</span></i>{kw(r.cons_kwh)}</span>
 						</span>
 					</a>
 				</li>
@@ -238,7 +237,7 @@
 		color: #fff;
 		background: #0f2f52;
 		padding: 2px 10px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-variant-numeric: tabular-nums;
 	}
 	.n small {
@@ -258,7 +257,7 @@
 	}
 	.lock {
 		padding: 4px 10px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: #0f2f52;
 		color: #fff;
 		text-decoration: none;
@@ -267,7 +266,7 @@
 	}
 	.demo {
 		padding: 2px 8px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: #fdf1df;
 		color: #8a4b00;
 		font-weight: 700;
@@ -278,7 +277,7 @@
 		top: var(--sticky-top, 0px);
 		z-index: 5;
 		background: #fff;
-		border-radius: 16px;
+		border-radius: var(--r-card);
 		padding: 8px;
 		box-shadow: 0 1px 2px rgba(15, 35, 65, 0.05), 0 8px 24px -14px rgba(15, 35, 65, 0.2);
 		margin-bottom: 8px;
@@ -291,7 +290,7 @@
 	}
 	.tbl-wrap {
 		background: #fff;
-		border-radius: 16px;
+		border-radius: var(--r-card);
 		box-shadow: 0 1px 2px rgba(15, 35, 65, 0.05), 0 8px 24px -14px rgba(15, 35, 65, 0.2);
 		overflow: hidden;
 		transition: opacity 0.2s;
@@ -352,18 +351,10 @@
 	}
 	tbody tr {
 		cursor: pointer;
-		transition: background 0.15s;
-		animation: row-in 0.35s var(--ease-out, ease-out) backwards;
-		animation-delay: var(--d);
+		transition: background var(--dur-fast) var(--ease-out);
 	}
 	tbody tr:hover {
 		background: #f3f7fc;
-	}
-	@keyframes row-in {
-		from {
-			opacity: 0;
-			transform: translateY(6px);
-		}
 	}
 	.num {
 		text-align: right;
@@ -384,7 +375,7 @@
 	.cards a:focus-visible {
 		outline: 3px solid var(--focus, #ffbf47);
 		outline-offset: 2px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 	}
 	.type {
 		display: flex;
@@ -415,14 +406,12 @@
 		margin: 0;
 		padding: 0;
 		background: #fff;
-		border-radius: 16px;
+		border-radius: var(--r-card);
 		overflow: hidden;
 		box-shadow: 0 1px 2px rgba(15, 35, 65, 0.05), 0 8px 24px -14px rgba(15, 35, 65, 0.2);
 	}
 	.cards li {
 		border-bottom: 1px solid #eef1f5;
-		animation: row-in 0.35s var(--ease-out, ease-out) backwards;
-		animation-delay: var(--d);
 	}
 	.cards a {
 		display: flex;
@@ -465,7 +454,7 @@
 		padding: 20px;
 		background: #fbe9e8;
 		color: #a3201c;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 	}
 	.skel {
 		display: grid;
@@ -473,7 +462,7 @@
 	}
 	.skel div {
 		height: 44px;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: linear-gradient(90deg, #eef1f5, #f8fafc, #eef1f5);
 		background-size: 200% 100%;
 		animation: sh 1.2s infinite linear;

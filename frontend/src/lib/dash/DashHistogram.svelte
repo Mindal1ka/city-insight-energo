@@ -1,7 +1,5 @@
 <!-- Розподіл K: гістограма 0–2 із зонами «Не вистачає / Ефективно / Надлишок» -->
 <script lang="ts">
-	import { Tween } from 'svelte/motion';
-	import { cubicOut, isReduced } from '../motion.ts';
 	import { CLASS_BY_ID, type KClass } from './DashData.ts';
 
 	let {
@@ -18,12 +16,6 @@
 	const XMAX = 2;
 	const x = (v: number) => m.l + (v / XMAX) * iw;
 
-	const counts = new Tween<number[]>([], { duration: 600, easing: cubicOut });
-	$effect(() => {
-		const next = bins.map((b) => b.n);
-		if (counts.current.length !== next.length) counts.set(next.map(() => 0), { duration: 0 });
-		counts.set(next, { duration: isReduced() ? 0 : 600 });
-	});
 
 	const maxN = $derived(Math.max(1, ...bins.map((b) => b.n)));
 	const yMax = $derived(maxN <= 5 ? maxN : Math.ceil(maxN / 5) * 5);
@@ -58,7 +50,7 @@
 		{/each}
 		<!-- стовпці -->
 		{#each bins as b, i (b.x0)}
-			{@const n = counts.current[i] ?? 0}
+			{@const n = b.n}
 			{@const meta = CLASS_BY_ID[zone((b.x0 + b.x1) / 2)]}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<g onpointerenter={() => (hover = i)} onpointerleave={() => (hover = null)}>
@@ -71,6 +63,7 @@
 					rx="3"
 					fill={meta.color}
 					opacity={hover === null || hover === i ? 1 : 0.55}
+					class="bar"
 				/>
 				{#if hover === i && b.n > 0}
 					<text class="val" x={(x(b.x0) + x(b.x1)) / 2} y={y(b.n) - 5} text-anchor="middle">{b.n}</text>
@@ -127,7 +120,20 @@
 		font-weight: 700;
 		fill: var(--ink);
 	}
+	/* Перший показ — стовпці ростуть від осі (transform), далі числа одразу кінцеві */
+	@media (prefers-reduced-motion: no-preference) {
+		.bar {
+			transform-box: fill-box;
+			transform-origin: 50% 100%;
+			animation: dh-grow 280ms var(--ease-emph) both;
+		}
+	}
+	@keyframes dh-grow {
+		from {
+			transform: scaleY(0);
+		}
+	}
 	rect {
-		transition: opacity var(--dur-fast);
+		transition: opacity var(--dur-fast) var(--ease-out);
 	}
 </style>

@@ -14,13 +14,18 @@
 
 	const pctM = $derived(b.used_pct.month);
 	const pctY = $derived(b.used_pct.year);
-	const saved = $derived(b.without_ses_uah_year - b.paid_uah.year);
+	// null — у UMUNI немає даних споживання 2025: показуємо «немає даних», а не 0
+	const noData = $derived(b.has_data === false || b.paid_uah.year == null);
+	const saved = $derived(
+		b.without_ses_uah_year != null && b.paid_uah.year != null ? b.without_ses_uah_year - b.paid_uah.year : null
+	);
+	const u = (v: number | null | undefined) => (v == null ? 'немає даних' : uah(v));
 
 	let editing = $state(false);
 	let val = $state('');
 	let busy = $state(false);
 	function start() {
-		val = String(Math.round(b.limit_uah.year));
+		val = b.limit_uah.year == null ? '' : String(Math.round(b.limit_uah.year));
 		editing = true;
 	}
 	async function save() {
@@ -50,26 +55,29 @@
 			<SourceTag kind="mok" />
 		{/if}
 	</p>
+	{#if noData}
+		<p class="src">У UMUNI немає даних споживання е/е за 2025 рік — оплату й ліміт не розраховано (немає даних, а не 0).</p>
+	{/if}
 	<div class="row">
-		<div class="lbl"><span>Ліміт · місяць</span><b class="tnum">{uah(b.paid_uah.month)} <small>/ {uah(b.limit_uah.month)}</small></b></div>
+		<div class="lbl"><span>Ліміт · місяць</span><b class="tnum">{u(b.paid_uah.month)} <small>/ {u(b.limit_uah.month)}</small></b></div>
 		<div class="track" class:over={(pctM ?? 0) > 100}><i style="width: {Math.min(100, pctM ?? 0)}%"></i></div>
 		<span class="pc tnum" class:over={(pctM ?? 0) > 100}>{pctM === null ? '—' : num(pctM) + ' %'}</span>
 	</div>
 	<div class="row">
-		<div class="lbl"><span>Ліміт · рік</span><b class="tnum">{uah(b.paid_uah.year)} <small>/ {uah(b.limit_uah.year)}</small></b></div>
+		<div class="lbl"><span>Ліміт · рік</span><b class="tnum">{u(b.paid_uah.year)} <small>/ {u(b.limit_uah.year)}</small></b></div>
 		<div class="track" class:over={(pctY ?? 0) > 100}><i style="width: {Math.min(100, pctY ?? 0)}%"></i></div>
 		<span class="pc tnum" class:over={(pctY ?? 0) > 100}>{pctY === null ? '—' : num(pctY) + ' %'}</span>
 	</div>
 
 	<div class="grid tnum">
 		<div class="cell">
-			<span class="l">Оплачено за рік</span><b>{uah(b.paid_uah.year)}</b>
+			<span class="l">Оплачено за рік</span><b>{u(b.paid_uah.year)}</b>
 		</div>
 		<div class="cell">
-			<span class="l">Без СЕС</span><b>{uah(b.without_ses_uah_year)}</b>
+			<span class="l">Без СЕС</span><b>{u(b.without_ses_uah_year)}</b>
 		</div>
-		<div class="cell" class:good={saved > 0}>
-			<span class="l">Економія</span><b>{saved >= 0 ? '+' : '−'}{uah(Math.abs(saved))}</b>
+		<div class="cell" class:good={saved != null && saved > 0}>
+			<span class="l">Економія</span><b>{saved == null ? 'немає даних' : (saved >= 0 ? '+' : '−') + uah(Math.abs(saved))}</b>
 		</div>
 	</div>
 
@@ -80,7 +88,7 @@
 				<input id="v2-lim" inputmode="numeric" bind:value={val} disabled={busy} />
 				<span>₴/рік</span>
 				<button class="btn btn-sm" type="submit" disabled={busy}><Icon name="check" size={16} /></button>
-				<button class="btn btn-secondary btn-sm" type="button" onclick={() => (editing = false)} disabled={busy}>✕</button>
+				<button class="btn btn-secondary btn-sm" type="button" onclick={() => (editing = false)} disabled={busy} aria-label="Скасувати"><Icon name="x" size={16} /></button>
 			</form>
 		{:else}
 			<button type="button" class="btn btn-secondary btn-sm" onclick={start}><Icon name="wallet" size={16} /> Змінити ліміт</button>
@@ -128,7 +136,7 @@
 	.track {
 		grid-area: t;
 		height: 0.6rem;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 	}
@@ -136,7 +144,7 @@
 		display: block;
 		height: 100%;
 		background: var(--ok);
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 	}
 	.track.over i {
 		background: var(--bad);
@@ -158,7 +166,7 @@
 		display: grid;
 		gap: 0.15rem;
 		padding: 0.55rem 0.7rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: var(--neutral-soft);
 	}
 	.cell.good {
@@ -168,8 +176,6 @@
 	.l {
 		font-size: var(--fs-xs);
 		color: var(--muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 	}
 	.cell.good .l {
 		color: inherit;
@@ -192,7 +198,7 @@
 		width: 9rem;
 		padding: 0.4rem 0.6rem;
 		border: 1px solid var(--line);
-		border-radius: 8px;
+		border-radius: var(--r-input);
 		font: inherit;
 	}
 	.bud > .btn {

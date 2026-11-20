@@ -44,7 +44,8 @@ def test_roles_list():
     r = c.get("/api/auth/roles")
     assert r.status_code == 200
     ids = {x["id"] for x in r.json()}
-    assert {"public", "energy_manager", "data_admin", "department", "facility_head", "finance"} <= ids
+    assert ids == {"energy_manager", "data_admin", "department", "facility_head", "finance"}
+    assert "public" not in ids  # гостьового режиму немає
     for x in r.json():
         assert set(x) == {"id", "name", "description", "needs_building", "needs_department"}
 
@@ -100,9 +101,26 @@ def test_token_expiry():
 
 def test_rate_limit():
     for _ in range(auth.RATE_LIMIT):
-        assert c.post("/api/auth/login", json={"full_name": "А", "position": "Б", "role": "finance",
+        # той самий користувач (ключ — IP + ПІБ/логін) помиляється паролем 10 разів
+        assert c.post("/api/auth/login", json={"full_name": "Іваненко Іван", "position": "Б", "role": "finance",
                                                "password": "bad"}).status_code == 401
     assert _login("finance").status_code == 429  # навіть правильний пароль блокується на хвилину
+
+
+def test_rate_limit_per_login_and_reset_on_success():
+    # помилки одного логіна (за проксі — та сама IP) не блокують інших
+    for _ in range(auth.RATE_LIMIT):
+        assert c.post("/api/auth/login", json={"login": "osvita", "password": "bad"}).status_code == 401
+    assert c.post("/api/auth/login", json={"login": "osvita", "password": PW}).status_code == 429
+    assert c.post("/api/auth/login", json={"login": "Osvita ", "password": PW}).status_code == 429  # той самий логін
+    assert c.post("/api/auth/login", json={"login": "finance", "password": PW}).status_code == 200
+    # успішний вхід скидає лічильник своєї пари (IP, логін)
+    for _ in range(auth.RATE_LIMIT - 1):
+        assert c.post("/api/auth/login", json={"login": "energo", "password": "bad"}).status_code == 401
+    assert c.post("/api/auth/login", json={"login": "energo", "password": PW}).status_code == 200
+    for _ in range(auth.RATE_LIMIT - 1):
+        assert c.post("/api/auth/login", json={"login": "energo", "password": "bad"}).status_code == 401
+    assert c.post("/api/auth/login", json={"login": "energo", "password": PW}).status_code == 200
 
 
 # --- чисті правила ---
@@ -195,7 +213,10 @@ def test_finance_no_batteries():
     assert c.get(f"/api/sites/{b.id}/outage", headers=h).status_code == 403
 
 
-def test_upload_roles():
+def test_upload_roles(tmp_path, monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)  # журнал завантажень — у тимчасову теку, не в data/
     files = {"file": ("x.txt", b"hello", "text/plain")}
     assert c.post("/api/upload", files=files).status_code == 401
     for role, kw in (("finance", {}), ("department", {"department": "освіта"})):

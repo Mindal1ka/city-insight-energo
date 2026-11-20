@@ -57,7 +57,7 @@
 		width: 100%;
 		height: 1.4rem;
 		display: block;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.val {
 		font-size: 0.9rem;

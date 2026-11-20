@@ -1,3 +1,6 @@
+> **Архів: текст першої версії; актуальна презентація — [docs/presentation/Insight-Tool-presentation.pdf](presentation/Insight-Tool-presentation.pdf).**
+> Цифри нижче (тариф 8 грн/кВт·год, клас «Надлишок», публічний режим без входу) застаріли: актуальні — у [README.md](../README.md), розділ 2, і [METHODOLOGY.md](../METHODOLOGY.md).
+
 # Пітч · City Insight Map · Енергія
 
 Фінал, ~5 хв + питання. **10 слайдів у PDF** (шаблон організаторів `drive/Шаблон_Hackathon_Poltava 2026.pptx`).

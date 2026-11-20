@@ -97,7 +97,7 @@
 		gap: 0.6rem;
 		width: 100%;
 		padding: 0.5rem 0.65rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		border: 1px solid var(--line);
 		background: var(--surface, #fff);
 		font: inherit;
@@ -176,7 +176,7 @@
 		z-index: 30;
 		width: min(20rem, calc(100vw - 2rem));
 		padding: 0.75rem 0.8rem 0.65rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		border: 1px solid var(--line);
 		background: #fff;
 		box-shadow: 0 12px 32px rgb(15 23 42 / 0.16);
@@ -184,10 +184,8 @@
 	.pop-t {
 		margin: 0 0 0.45rem;
 		font-size: 0.78rem;
-		font-weight: 700;
+		font-weight: 600;
 		color: var(--muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 	}
 	ul {
 		list-style: none;

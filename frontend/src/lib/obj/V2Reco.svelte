@@ -29,7 +29,7 @@
 	</div>
 {:else if hasStation}
 	<div class="reco good">
-		<p><span class="ic" aria-hidden="true">✓</span> Станції достатньо</p>
+		<p><span class="ic" aria-hidden="true"><Icon name="check" size={14} stroke={2.6} /></span> Станції достатньо</p>
 	</div>
 {/if}
 
@@ -41,7 +41,7 @@
 		justify-content: space-between;
 		gap: 0.5rem 1rem;
 		padding: 0.6rem 0.9rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 	}
 	.reco p {
 		margin: 0;

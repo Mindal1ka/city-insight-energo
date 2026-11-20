@@ -164,7 +164,7 @@
 		font-size: 0.85rem;
 		font-weight: 700;
 		padding: 0.05rem 0.55rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--neutral-soft);
 		color: #3d4857;
 	}
@@ -183,7 +183,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.5rem 0.6rem;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		color: var(--text);
 		text-decoration: none;
 	}
@@ -202,14 +202,14 @@
 	}
 	.bar-wrap {
 		height: 10px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #edf1f5;
 		overflow: hidden;
 	}
 	.bar {
 		display: block;
 		height: 100%;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 	}
 	.deficit .bar {
 		background: var(--deficit);

@@ -1,29 +1,32 @@
 <!--
-	Анімоване число («набігає» від попереднього значення до нового). Українське форматування:
-	пробіл між тисячами, кома в дробах, табличні цифри. null → «—».
+	Число з українським форматуванням: пробіл між тисячами, кома в дробах, табличні цифри. null → «—».
+	Типово НЕ анімується — числа мають читатися одразу. animate=true дозволено лише для одного
+	«героя» на екрані (напр. кільце окупності): коротке набігання ≤ 500 мс, лише при першому показі.
 
 	ВИКОРИСТАННЯ
 	  import CountUp from '#lib/CountUp.svelte';
 	  <CountUp value={1234.5} decimals={1} />                     → 1 234,5
 	  <CountUp value={share * 100} suffix=" %" />                  → 86 %
 	  <CountUp value={kwh} format={(n) => energy(n).v} />           → власне форматування
-	  <CountUp value={null} />                                     → —
+	  <CountUp value={pct} animate duration={450} />               → єдине анімоване число на екрані
 
-	Props: value:number|null, decimals?=0, duration?=800 (мс), format?:(n)=>string, suffix?:string
-	Екранні зчитувачі отримують лише кінцеве значення; за prefers-reduced-motion — без анімації.
+	Props: value:number|null, decimals?=0, animate?=false, duration?=450 (мс), format?:(n)=>string, suffix?:string
+	У DOM завжди один текстовий вузол із числом (екранні зчитувачі й innerText читають значення один раз).
 -->
 <script lang="ts">
-	import { isReduced } from './motion.ts';
+	import { isReduced, EASE } from './motion.ts';
 
 	let {
 		value,
 		decimals = 0,
-		duration = 800,
+		animate = false,
+		duration = 450,
 		format,
 		suffix = ''
 	}: {
 		value: number | null | undefined;
 		decimals?: number;
+		animate?: boolean;
 		duration?: number;
 		format?: (n: number) => string;
 		suffix?: string;
@@ -44,40 +47,33 @@
 	}
 
 	const valid = $derived(value !== null && value !== undefined && Number.isFinite(value));
-	let shown = $state(0);
-	let from = 0;
-	let raf = 0;
-
-	const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
+	/** Проміжне значення лише під час першого набігання; null — показуємо кінцеве */
+	let shown = $state<number | null>(null);
+	let played = false;
 
 	$effect(() => {
-		const target = valid ? (value as number) : 0;
-		cancelAnimationFrame(raf);
-		if (!valid || isReduced() || duration <= 0 || from === target) {
-			shown = from = target;
-			return;
-		}
-		const start = from;
+		if (!animate || played || !valid || isReduced() || duration <= 0) return;
+		played = true;
+		const target = value as number;
 		const t0 = performance.now();
+		let raf = 0;
 		const step = (now: number) => {
 			const t = Math.min(1, (now - t0) / duration);
-			shown = start + (target - start) * easeOutExpo(t);
-			from = shown;
+			shown = t < 1 ? target * EASE.out(t) : null;
 			if (t < 1) raf = requestAnimationFrame(step);
-			else shown = from = target;
 		};
+		shown = 0;
 		raf = requestAnimationFrame(step);
-		return () => cancelAnimationFrame(raf);
+		return () => {
+			cancelAnimationFrame(raf);
+			shown = null;
+		};
 	});
 
-	const finalText = $derived(valid ? fmt(value as number) + suffix : '—');
+	const text = $derived(valid ? fmt(shown ?? (value as number)) + suffix : '—');
 </script>
 
-{#if valid}<span class="countup"
-		><span aria-hidden="true">{fmt(shown)}{suffix}</span><span class="visually-hidden"
-			>{finalText}</span
-		></span
-	>{:else}<span class="countup">—</span>{/if}
+<span class="countup">{text}</span>
 
 <style>
 	.countup {

@@ -1,6 +1,6 @@
 <!--
 	СТАНДАРТНА ПРОСТА КАРТКА ПОКАЗНИКА: назва → велике анімоване число. Пояснення (hint) приховане:
-	значок «i» з підказкою при наведенні, дотик по картці розгортає (екранні зчитувачі читають завжди).
+	значок «i» (Hint: наведення, фокус, дотик), дотик по картці розгортає (екранні зчитувачі читають завжди).
 	Стан (tone) показано кольором І значком І прихованим текстом — ніколи лише кольором.
 
 	ВИКОРИСТАННЯ
@@ -32,6 +32,7 @@
 	import type { ComponentProps, Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
 	import CountUp from './CountUp.svelte';
+	import Hint from './Hint.svelte';
 
 	type IconName = ComponentProps<typeof Icon>['name'];
 	type Tone = 'neutral' | 'good' | 'warn' | 'bad';
@@ -84,7 +85,7 @@
 		{/if}
 		<span class="sc-label">{label}</span>
 		{#if hint}
-			<span class="sc-i" title={hint} aria-hidden="true">i</span>
+			<span class="sc-i"><Hint text={hint} size={16} /></span>
 		{/if}
 		{#if demo}
 			<span class="sc-demo" title="Змодельовані (демонстраційні) дані">ДЕМО</span>
@@ -139,16 +140,16 @@
 		padding: 1.15rem 1.25rem 1.2rem;
 		background: var(--surface, #fff);
 		border: 1px solid var(--card-line, #e3e8ef);
-		border-radius: var(--radius-lg, 16px);
+		border-radius: var(--r-card);
 		box-shadow: var(--shadow, 0 1px 2px rgba(16, 24, 40, 0.06));
 		color: var(--text);
 		text-decoration: none;
 		overflow: hidden;
 		isolation: isolate;
 		transition:
-			transform var(--dur-base, 240ms) var(--ease-out, ease),
-			box-shadow var(--dur-base, 240ms) var(--ease-out, ease),
-			border-color var(--dur-base, 240ms);
+			transform var(--dur-fast) var(--ease-out),
+			box-shadow var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out);
 	}
 	/* Тонка кольорова смуга зверху — підсилює стан, але значок і текст лишаються головними */
 	.sc::before {
@@ -173,7 +174,8 @@
 		--t-bg: var(--deficit-soft, #fdebe2);
 		--t-line: var(--deficit, #c2410c);
 	}
-	.sc:hover {
+	/* Підйом лише в карток-посилань: рух підказує, що картка клікабельна */
+	.sc.is-link:hover {
 		transform: translateY(-2px);
 		box-shadow: var(--shadow-md, 0 6px 18px -6px rgba(16, 24, 40, 0.16));
 		border-color: var(--card-line-hover, #d3dbe5);
@@ -186,8 +188,8 @@
 		border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 	.is-link:active {
-		transform: translateY(0) scale(0.99);
-		transition-duration: 80ms;
+		transform: scale(0.985);
+		transition-duration: var(--dur-press);
 	}
 	.sc-top {
 		display: flex;
@@ -200,7 +202,7 @@
 		place-items: center;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		background: var(--t-bg);
 		color: var(--t-fg);
 		flex: none;
@@ -217,7 +219,7 @@
 		flex: none;
 		align-self: flex-start;
 		padding: 0.05rem 0.45rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.08em;
@@ -258,16 +260,8 @@
 	}
 	.sc-i {
 		flex: none;
-		display: grid;
-		place-items: center;
-		width: 1.1rem;
-		height: 1.1rem;
-		border-radius: 50%;
-		border: 1px solid currentColor;
-		font: italic 700 0.7rem/1 Georgia, serif;
+		display: inline-flex;
 		color: var(--muted);
-		opacity: 0.7;
-		cursor: help;
 	}
 	.sc-hint {
 		font-size: 0.9375rem;
@@ -293,8 +287,8 @@
 		opacity: 0;
 		transform: translateX(-6px);
 		transition:
-			opacity var(--dur-base, 240ms) var(--ease-out, ease),
-			transform var(--dur-base, 240ms) var(--ease-out, ease);
+			opacity var(--dur-fast) var(--ease-out),
+			transform var(--dur-fast) var(--ease-out);
 	}
 	.is-link:hover .sc-go,
 	.is-link:focus-visible .sc-go {
@@ -319,7 +313,7 @@
 		.sc {
 			gap: 0.4rem;
 			padding: 12px 12px 12px;
-			border-radius: 14px;
+			border-radius: var(--r-card);
 		}
 		.sc:hover {
 			transform: none;
@@ -331,7 +325,7 @@
 		.sc-ico {
 			width: 1.75rem;
 			height: 1.75rem;
-			border-radius: 8px;
+			border-radius: var(--r-btn);
 		}
 		.sc-ico :global(svg) {
 			width: 16px;

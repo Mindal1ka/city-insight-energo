@@ -3,6 +3,7 @@
 	import { api, errMessage, type UploadHistory } from './api.ts';
 	import { fresh, loadFreshness, STATUS_SHORT, ago } from './freshness.svelte.ts';
 	import { date, dateTime, num } from './format.ts';
+	import Icon from './Icon.svelte';
 	import DemoPill from './DemoPill.svelte';
 
 	let { version = 0 }: { version?: number } = $props();
@@ -96,9 +97,9 @@
 		<p class="muted">{histErr}</p>
 	{:else if hist}
 		<ol class="log">
-			{#each items as it (it.at + it.file + it.ok)}
+			{#each items as it, i (i)}
 				<li class:bad={!it.ok}>
-					<span class="ic {it.ok ? 'ok' : 'no'}" aria-hidden="true">{it.ok ? '✓' : '✕'}</span>
+					<span class="ic {it.ok ? 'ok' : 'no'}" aria-hidden="true"><Icon name={it.ok ? 'check' : 'x'} size={14} stroke={2.6} /></span>
 					<span class="l-main">
 						<span class="l-t">
 							<strong>{it.ok ? it.kind_label : 'Файл не прийнято'}</strong>
@@ -160,8 +161,6 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 		white-space: nowrap;
 	}
 	.tbl tbody th {
@@ -198,7 +197,7 @@
 		display: inline-block;
 		margin-left: 0.35rem;
 		padding: 0 0.4rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px dashed #d08a1c;
 		background: var(--sun-soft);
 		color: var(--sun-ink);
@@ -212,7 +211,7 @@
 		display: inline-block;
 		margin-left: 0.35rem;
 		padding: 0 0.4rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--neutral-soft);
 		color: var(--muted);
 		font-size: 0.7rem;

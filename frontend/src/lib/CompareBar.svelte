@@ -66,14 +66,14 @@
 		width: 100%;
 		height: 1.5rem;
 		display: block;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	/* Смужки «виростають» зліва направо при появі */
 	@media (prefers-reduced-motion: no-preference) {
 		.grow {
 			transform-box: fill-box;
 			transform-origin: left center;
-			animation: grow-x 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+			animation: grow-x var(--dur-slow) var(--ease-emph) both;
 			animation-delay: calc(var(--i, 0) * 140ms + 200ms);
 		}
 		@keyframes grow-x {

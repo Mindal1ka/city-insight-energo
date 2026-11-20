@@ -2,6 +2,7 @@
 // Токен бекенду (HMAC) і користувач живуть лише в sessionStorage вкладки.
 // Використання: import { auth, currentRole } from '#lib/auth.svelte.ts'; auth.user?.role
 
+import { untrack } from 'svelte';
 import { roleName, type RoleId, type Department } from './roles.ts';
 
 export interface User {
@@ -57,8 +58,10 @@ export function currentRole(): RoleId {
 }
 
 /** Токен для заголовка Authorization (або null без входу) */
+/** Токен для запиту. untrack: ефект сторінки, що робить запит, не повинен залежати від auth.user,
+ *  інакше оновлення профілю (verifySession) перезапускає завантаження — дубль кожного API-запиту. */
 export function authToken(): string | null {
-	return auth.user?.token ?? null;
+	return untrack(() => auth.user?.token ?? null);
 }
 
 function save(user: User, extra: Record<string, unknown> = {}): void {
@@ -127,6 +130,12 @@ export async function login(input: LoginInput): Promise<User> {
 }
 
 /** Перевіряє збережений токен (GET /api/auth/me); прострочений — вихід (шлюз у layout веде на /login) */
+function sameUser(a: object | null | undefined, b: object | null | undefined): boolean {
+	if (!a || !b) return a === b;
+	const norm = (o: object) => JSON.stringify(Object.entries(o).filter(([, v]) => v !== undefined).sort(([x], [y]) => (x < y ? -1 : 1)));
+	return norm(a) === norm(b);
+}
+
 export async function verifySession(): Promise<void> {
 	const token = authToken();
 	if (!token) return;
@@ -135,7 +144,9 @@ export async function verifySession(): Promise<void> {
 		if (res.status === 401) logout();
 		else if (res.ok && !missing(res)) {
 			const u = normalize(await res.json(), token);
-			if (u) save(u);
+			// Зберігаємо лише якщо щось змінилося: нова посилання на auth.user перезапускала б усі
+			// ефекти сторінок, що читають токен, — і кожен API-запит при відкритті йшов двічі
+			if (u && !sameUser(u, auth.user)) save(u);
 		}
 	} catch {
 		/* сервер недоступний — лишаємо як є */

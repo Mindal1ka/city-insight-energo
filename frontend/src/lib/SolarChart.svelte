@@ -150,7 +150,7 @@
 		display: inline-block;
 		width: 14px;
 		height: 14px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 	}
 	.sw.cons {
 		background: var(--sol-cons);

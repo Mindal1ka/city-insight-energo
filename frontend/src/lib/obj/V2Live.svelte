@@ -56,7 +56,7 @@
 		align-items: baseline;
 		gap: 0.3rem;
 		padding: 0.4rem 0.7rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: var(--neutral-soft);
 	}
 	.c :global(svg) {

@@ -95,7 +95,9 @@ def access_level(user: User, b) -> str:
 
 
 def _coords(b) -> tuple[float | None, float | None, bool]:
-    if b.lat is None or b.lon is None:
+    from .map_api import hidden_on_map
+
+    if b.lat is None or b.lon is None or hidden_on_map(b):  # котельні на мапі не публікуємо
         return None, None, False
     if b.geo_precision == "населений пункт":
         from .map_api import jitter  # той самий детермінований зсув, що й на публічній карті

@@ -140,7 +140,7 @@
 	svg {
 		display: block;
 		overflow: visible;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 	}
 	svg:focus-visible {
 		outline: 3px solid var(--focus);

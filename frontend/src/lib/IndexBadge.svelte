@@ -40,7 +40,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.18rem 0.65rem 0.18rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid;
 		font-size: 0.875rem;
 		font-weight: 700;
@@ -57,7 +57,7 @@
 	.bars i {
 		display: block;
 		width: 0.28em;
-		border-radius: 1px;
+		border-radius: var(--r-sm);
 		background: currentColor;
 		opacity: 0.22;
 	}

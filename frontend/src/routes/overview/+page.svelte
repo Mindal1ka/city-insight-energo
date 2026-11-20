@@ -10,7 +10,6 @@
 	import StatCard from '#lib/StatCard.svelte';
 	import Reveal from '#lib/Reveal.svelte';
 	import Disclosure from '#lib/Disclosure.svelte';
-	import { fadeUp, stagger } from '#lib/motion.ts';
 	import { electricityRating, median, BASE_YEAR } from '../rating/electricity.ts';
 	import { grow } from '../rating/grow.ts';
 
@@ -221,7 +220,7 @@
 				<ol class="top" {@attach grow}>
 					{#each topShown as b, i (b.id)}
 						{@const kwh = b.years[BASE_YEAR]?.elec_kwh ?? 0}
-						<li in:fadeUp={{ delay: i >= 5 ? stagger(i - 5, 50) : 0 }}>
+						<li>
 							<span class="top-n" aria-hidden="true">{i + 1}</span>
 							<span class="top-txt">
 								<a href="/object/{b.id}"><span class="visually-hidden">{i + 1}. </span>{b.name}</a>
@@ -277,7 +276,7 @@
 		display: inline-block;
 		margin-left: 0.4rem;
 		padding: 0.1rem 0.55rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--accent-soft);
 		color: var(--accent-dark, var(--accent));
 		font-size: 0.8rem;
@@ -330,7 +329,7 @@
 	.track {
 		display: block;
 		height: 10px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 	}
@@ -341,7 +340,7 @@
 	.fill {
 		display: block;
 		height: 100%;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: linear-gradient(90deg, var(--sun), var(--sun-strong));
 		transform-origin: left center;
 	}

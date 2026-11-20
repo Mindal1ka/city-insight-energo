@@ -1,6 +1,6 @@
-<script lang="ts">
+<script module lang="ts">
 	// Невеликий набір лінійних іконок (24×24, stroke = currentColor). Завжди декоративні.
-	type IconName =
+	export type IconName =
 		| 'sun'
 		| 'battery'
 		| 'bolt'
@@ -22,7 +22,16 @@
 		| 'gauge'
 		| 'info'
 		| 'users'
-		| 'lock';
+		| 'lock'
+		| 'x'
+		| 'plus'
+		| 'circle'
+		| 'help'
+		| 'arrow-up'
+		| 'arrow-down';
+</script>
+
+<script lang="ts">
 	let { name, size = 20, stroke = 1.8 }: { name: IconName; size?: number; stroke?: number } =
 		$props();
 </script>
@@ -103,6 +112,18 @@
 	{:else if name === 'lock'}
 		<rect x="5" y="10.5" width="14" height="10" rx="2" />
 		<path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+	{:else if name === 'x'}
+		<path d="M6 6l12 12M18 6 6 18" />
+	{:else if name === 'plus'}
+		<path d="M12 4.5v15M4.5 12h15" />
+	{:else if name === 'circle'}
+		<circle cx="12" cy="12" r="7" />
+	{:else if name === 'help'}
+		<path d="M9.2 9a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 4.2M12 18h.01" />
+	{:else if name === 'arrow-up'}
+		<path d="M12 19V5M6 11l6-6 6 6" />
+	{:else if name === 'arrow-down'}
+		<path d="M12 5v14M6 13l6 6 6-6" />
 	{/if}
 </svg>
 

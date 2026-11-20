@@ -66,6 +66,13 @@ export function isCityWide(user: RoleUser | null | undefined): boolean {
 	return r === 'energy_manager' || r === 'data_admin';
 }
 
+/** Витрати на резервне живлення (/api/generators): енергоменеджер, адміністратор даних, фінанси.
+ *  Дзеркало перевірки бекенду — щоб інші ролі не робили заздалегідь приречений запит (403). */
+export function canSeeGenerators(user: RoleUser | null | undefined): boolean {
+	const r = roleOf(user);
+	return r === 'energy_manager' || r === 'data_admin' || r === 'finance';
+}
+
 /** Може завантажувати файли UMUNI (сторінка «Оновити дані») */
 export function canUpload(user: RoleUser | null | undefined): boolean {
 	return isCityWide(user);

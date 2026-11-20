@@ -45,7 +45,17 @@ def _find(store, bid: int):
 
 
 # поля, яких не бачить finance (акумулятори й автономність)
-_SENSITIVE_FIELDS = ("battery_kwh", "autonomy_hours", "autonomy_hours_with_sun", "index", "index_class")
+_SENSITIVE_FIELDS = ("battery_kwh", "battery_kw", "has_battery", "autonomy_hours", "autonomy_hours_with_sun",
+                     "autonomy_with_sun_capped", "index", "index_class")
+# ключі зведень громади/категорій про акумулятори й автономність (не для finance)
+_SENSITIVE_AGG = ("battery_sites", "battery_kwh_total", "autonomy_hours_median", "critical_with_battery",
+                  "with_battery")
+
+
+def _strip_agg(user: User, d: dict) -> dict:
+    if user.role != "finance":
+        return d
+    return {**d, **{k: None for k in _SENSITIVE_AGG if k in d}}
 
 
 def _visible_items(user: User, evs: list[dict]) -> list[dict]:
@@ -80,7 +90,8 @@ def independence_list(day: str | None = None, hour: int | None = None, user: Use
     evs = [ind.evaluate(b, reg.get(b.id), now) for b in store.buildings]
     evs.sort(key=_sort_key)
     return {"demo": True, "now": now.isoformat(timespec="minutes"),
-            "community": ind.community(evs), "categories": ind.categories(evs),
+            "community": _strip_agg(user, ind.community(evs)),
+            "categories": [_strip_agg(user, c) for c in ind.categories(evs)],
             "items": _visible_items(user, evs), "formula": ind.formula(), "notes": ind.NOTES}
 
 

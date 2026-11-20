@@ -32,7 +32,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.2rem 0.7rem 0.2rem 0.25rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-size: 0.875rem;
 		font-weight: 600;
 		white-space: nowrap;

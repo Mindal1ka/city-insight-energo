@@ -2,11 +2,13 @@
 	// «Фінанси»: ліміт vs оплачено (з мережі), заощадження від СЕС, окупність. Ліміти — МОК.
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
+	import { canSeeGenerators } from '#lib/roles.ts';
 	import { fetchDepartments, fetchBudgetReal, fetchSpending, fetchGenerators, type Departments, type BudgetReal, type Spending, type GenSummary } from '#lib/api-v2.ts';
 	import { uah } from '#lib/api-ses.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
 	import StatCard from '#lib/StatCard.svelte';
 	import Icon from '#lib/Icon.svelte';
+	import Hint from '#lib/Hint.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
 	import SourceTag from '#lib/SourceTag.svelte';
 	import { MONTHS } from '#lib/format.ts';
@@ -15,6 +17,8 @@
 	let real = $state<BudgetReal | null>(null);
 	let sp = $state<Spending | null>(null);
 	let gens = $state<GenSummary | null>(null);
+	// finance отримує лише грошові агрегати (без кВт і переліку закладів) — колонку кВт показуємо, лише якщо вона є
+	const genKw = $derived(!!gens?.departments.some((d) => d.kw != null));
 	let error = $state<string | null>(null);
 	let loading = $state(true);
 
@@ -24,7 +28,8 @@
 		try {
 			fetchBudgetReal().then((r) => (real = r), () => (real = null));
 			fetchSpending().then((r) => (sp = r), () => (sp = null));
-			fetchGenerators().then((r) => (gens = r), () => (gens = null));
+			if (canSeeGenerators(auth.user)) fetchGenerators().then((r) => (gens = r), () => (gens = null));
+			else gens = null;
 			data = await fetchDepartments();
 		} catch (e) {
 			error = errMessage(e);
@@ -66,10 +71,10 @@
 <header class="page-head">
 	<div class="ph-text">
 		<h1>Фінанси</h1>
-		{#if data}<p class="ph-sub">Ліміти і оплата за електроенергію · {MONTHS_FULL[(data.month ?? 1) - 1]}</p>{/if}
+		{#if data}<p class="ph-sub">Ліміти й оплата за електроенергію, дані за {MONTHS_FULL[(data.month ?? 1) - 1].toLowerCase()}</p>{/if}
 	</div>
 	<div class="head-side">
-		<span class="mok" title="Ліміти змодельовані: споживання 2025 × тариф × 0,9–1,1">МОК</span>
+		<span class="mok" title="Ліміти змодельовані: споживання 2025 × тариф × 0,9–1,1">ДЕМО</span>
 	</div>
 </header>
 
@@ -86,7 +91,7 @@
 						<tr class:muted={!p.allocated}>
 							<th scope="row" title={p.name}>
 								{short(p.name)}
-								{#if !p.allocated}<span class="note" title="будівлі UMUNI покривають програму частково — ліміти будівель МОК"><Icon name="info" size={14} /></span>{/if}
+								{#if !p.allocated}<span class="note"><Hint text="Будівлі UMUNI покривають програму частково, тому ліміти будівель змодельовані" /></span>{/if}
 							</th>
 							<td>{p.plan_2026 == null ? '—' : uah(p.plan_2026)}</td>
 							<td>
@@ -146,23 +151,32 @@
 		<StatCard label="Заощаджено СЕС" value={t.saved_uah_year} format={uah} icon="sun" tone="good" />
 		<StatCard label="Перевищують ліміт" value={t.over_limit} unit="об'єктів" icon="alert" tone={t.over_limit > 0 ? 'bad' : 'good'} />
 	</div>
+	{#if t.no_data_count}
+		<p class="gnote">
+			Немає даних споживання за 2025 рік (UMUNI): {t.no_data_count} об’єкт(ів) — їхні ліміт і оплата «немає даних», у суми не входять.
+		</p>
+	{/if}
 
 	{#if gens && gens.totals.count}
 		{@const g = gens.totals}
 		<section class="card list" aria-label="Генератори">
-			<h2>Резервне живлення: генератори</h2>
+			<h2>Резервне живлення: генератори <span class="mok" title="Генератори й витрати на пальне — оцінка, крім введених вручну фактичних даних">ДЕМО</span></h2>
 			<p class="gnote">
-				Вкладено <b class="tnum">{uah(g.capex_uah)}</b> у {g.count} генераторів ({num(g.kw)} кВт) · пальне за {gens.year} —
+				Вкладено <b class="tnum">{uah(g.capex_uah)}</b> у {g.count} генераторів{#if g.kw != null} ({num(g.kw)} кВт){/if} · пальне за {gens.year} —
 				<b class="tnum">{uah(g.fuel_year_uah)}</b> ({num(g.fuel_year_l)} л).
-				Фактична вартість введена для {g.capex_real} з {g.count}, журнал пального — для {g.fuel_real}; решта — оцінка
-				(ціна з АВР і монтажем, ~{gens.assumptions.hours_year} мотогодин на рік, {gens.assumptions.fuel_price_uah_l} грн/л).
+				{#if g.capex_real != null && g.fuel_real != null}
+					Фактична вартість введена для {g.capex_real} з {g.count}, журнал пального — для {g.fuel_real}; решта — оцінка
+					(ціна з АВР і монтажем, ~{gens.assumptions.hours_year} мотогодин на рік, {gens.assumptions.fuel_price_uah_l} грн/л).
+				{:else}
+					Лише грошові суми по розпорядниках — без переліку закладів (оцінка, {gens.assumptions.fuel_price_uah_l} грн/л).
+				{/if}
 			</p>
 			<div class="scroll-x">
 				<table class="rt tnum">
-					<thead><tr><th>Розпорядник</th><th>Генераторів</th><th>кВт</th><th>Вкладено</th><th>Пальне за рік</th></tr></thead>
+					<thead><tr><th>Розпорядник</th><th>Генераторів</th>{#if genKw}<th>кВт</th>{/if}<th>Вкладено</th><th>Пальне за рік</th></tr></thead>
 					<tbody>
 						{#each gens.departments as d (d.department)}
-							<tr><td>{d.department}</td><td>{d.count}</td><td>{num(d.kw)}</td><td>{uah(d.capex_uah)}</td><td>{uah(d.fuel_year_uah)}</td></tr>
+							<tr><td>{d.department}</td><td>{d.count}</td>{#if genKw}<td>{num(d.kw)}</td>{/if}<td>{uah(d.capex_uah)}</td><td>{uah(d.fuel_year_uah)}</td></tr>
 						{/each}
 					</tbody>
 				</table>
@@ -187,6 +201,7 @@
 					<span>Оплачено {uah(d.paid_uah_year)} з {uah(d.limit_uah_year)}</span>
 					<span class:bad={d.paid_uah_month > d.limit_uah_month}>Місяць: {uah(d.paid_uah_month)} / {uah(d.limit_uah_month)}</span>
 					<span><Icon name="building" size={14} /> {d.objects} об'єктів, з СЕС {d.with_ses}</span>
+					{#if d.no_data_count}<span class="muted">Немає даних споживання 2025: {d.no_data_count} — у суми не входять</span>{/if}
 					<span>Не вистачає сонця {d.deficit}{d.over_limit > 0 ? ` · перевитрата ${d.over_limit}` : ''}</span>
 					<span><Icon name="panel" size={14} /> Вкладено {uah(d.invested_uah)}</span>
 					<span><Icon name="clock" size={14} /> Окупність {d.payback_years == null ? '—' : num(d.payback_years, 1) + ' р.'}</span>
@@ -222,7 +237,7 @@
 	}
 	.mok {
 		padding: 0.15rem 0.6rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		font-size: 0.75rem;
 		font-weight: 700;
 		letter-spacing: 0.06em;
@@ -287,7 +302,7 @@
 		height: 6px;
 		min-width: 5rem;
 		background: var(--line-soft);
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		overflow: hidden;
 	}
 	.pb i {
@@ -319,7 +334,7 @@
 	.b {
 		flex: 1 1 0;
 		max-width: 14px;
-		border-radius: 3px 3px 0 0;
+		border-radius: var(--r-sm) var(--r-sm) 0 0;
 	}
 	.b.y25,
 	.sw.y25 {
@@ -349,7 +364,7 @@
 	.sw {
 		width: 0.7rem;
 		height: 0.7rem;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		display: inline-block;
 	}
 	.kpis {
@@ -389,7 +404,7 @@
 	.bar {
 		height: 10px;
 		background: var(--line-soft);
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		overflow: hidden;
 	}
 	.bar i {

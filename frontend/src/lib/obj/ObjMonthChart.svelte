@@ -1,6 +1,7 @@
 <!-- 12 місяців: згенеровано (сонце) vs спожито (синій) + лінія K (права вісь, смуга 0,8–1,2) -->
 <script lang="ts">
 	import { MONTHS, num } from '#lib/format.ts';
+	import Icon from '#lib/Icon.svelte';
 	import { kText } from '#lib/api-ses.ts';
 	import { K_LOW, K_HIGH } from './ObjApi.ts';
 
@@ -76,8 +77,8 @@
 		{@const d = data[hover]}
 		<p class="tip" style="left: {((x(hover) + bw / 2) / W) * 100}%">
 			<b>{MONTHS[d.month - 1]}</b>
-			{#if hasSes}<span class="g">☀ {num(d.gen_kwh)}</span>{/if}
-			<span class="c">⚡ {num(d.cons_kwh)}</span>
+			{#if hasSes}<span class="g"><Icon name="sun" size={13} /><span class="visually-hidden">генерація</span> {num(d.gen_kwh)}</span>{/if}
+			<span class="c"><Icon name="bolt" size={13} /><span class="visually-hidden">споживання</span> {num(d.cons_kwh)}</span>
 			{#if hasSes}<span>покриття {kText(d.k)}</span>{/if}
 		</p>
 	{/if}
@@ -119,7 +120,7 @@
 	.sw {
 		width: 0.8rem;
 		height: 0.8rem;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.sw.gen { background: var(--sun); }
 	.sw.cons { background: var(--cons); }
@@ -133,8 +134,8 @@
 	.bar {
 		transform-box: fill-box;
 		transform-origin: bottom;
-		animation: grow 0.6s var(--ease-out) both;
-		animation-delay: var(--d);
+		/* Перший показ: стовпці ростуть від осі разом (без «драбинки»), 280 мс */
+		animation: grow 280ms var(--ease-emph) both;
 	}
 	.gen { fill: var(--sun); }
 	.cons { fill: var(--cons); opacity: 0.85; }
@@ -144,7 +145,7 @@
 		stroke-width: 2.5;
 		stroke-linejoin: round;
 		stroke-dasharray: 1;
-		animation: draw 1.1s 0.4s var(--ease-out) both;
+		animation: draw 300ms 120ms var(--ease-out) both;
 	}
 	.kdot { fill: var(--surface); stroke: var(--surplus); stroke-width: 2; transition: r var(--dur-fast); }
 	.tip {
@@ -157,7 +158,7 @@
 		padding: 0.3rem 0.55rem;
 		background: var(--ink);
 		color: #fff;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 		font-size: var(--fs-xs);
 		white-space: nowrap;
 		pointer-events: none;

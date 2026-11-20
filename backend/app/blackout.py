@@ -367,7 +367,19 @@ def generators_summary(user: User = Depends(current_user)):
         d["fuel_year_uah"] += m["fuel_year_uah"]
     items.sort(key=lambda i: -i["fuel_year_uah"])
     tot = lambda k: round(sum(i[k] for i in items))
-    return {"year": year,
+    if user.role == "finance":
+        # фінансовий орган: лише гроші (разом і по розпорядниках), без переліку закладів і кВт —
+        # перелік об'єктів з генераторами = резервне живлення, яке finance не бачить
+        return {"year": year, "demo": True, "aggregates_only": True,
+                "totals": {"count": len(items), "capex_uah": tot("capex_uah"),
+                           "fuel_year_uah": tot("fuel_year_uah"), "fuel_year_l": tot("fuel_year_l")},
+                "departments": sorted(({"department": d["department"], "count": d["count"],
+                                        "capex_uah": round(d["capex_uah"]),
+                                        "fuel_year_uah": round(d["fuel_year_uah"])} for d in depts.values()),
+                                      key=lambda d: -d["capex_uah"]),
+                "items": None,
+                "assumptions": {"fuel_price_uah_l": FUEL_PRICE_UAH_L}}
+    return {"year": year, "demo": True, "aggregates_only": False,
             "totals": {"count": len(items), "kw": tot("generator_kw"), "capex_uah": tot("capex_uah"),
                        "capex_real": sum(1 for i in items if i["capex_source"] != MOCK),
                        "fuel_year_uah": tot("fuel_year_uah"), "fuel_year_l": tot("fuel_year_l"),

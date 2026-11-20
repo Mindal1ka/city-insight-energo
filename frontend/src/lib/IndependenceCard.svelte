@@ -184,7 +184,7 @@
 		display: flex;
 		gap: 0.9rem;
 		padding: 1.1rem 1.2rem;
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		border: 1px solid #dbe3ec;
 		background: #fff;
 		box-shadow: var(--shadow);
@@ -222,13 +222,11 @@
 		display: inline-block;
 		margin: 0 0 0.25rem;
 		padding: 0.05rem 0.55rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--sun-soft);
 		color: var(--sun-ink);
 		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
+		font-weight: 600;
 	}
 	.act {
 		margin: 0.1rem 0 0.35rem;
@@ -302,7 +300,7 @@
 	}
 	.ws {
 		padding: 0.85rem 1rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		background: var(--surface-2, #f7f9fc);
 		border: 1px solid var(--line-soft, #e6ebf1);
 	}
@@ -324,7 +322,7 @@
 	}
 	.bar {
 		height: 6px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #e3e8ef;
 		margin: 0.4rem 0 0;
 		overflow: hidden;
@@ -334,7 +332,7 @@
 		height: 100%;
 		width: var(--w);
 		background: var(--sun-strong);
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 	}
 	h4 {
 		margin: 0.75rem 0 0.4rem;

@@ -20,7 +20,7 @@
 		align-items: baseline;
 		gap: 0.15em;
 		padding: 0.1rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid var(--c-fg);
 		background: var(--c-bg);
 		color: var(--c-fg);

@@ -35,7 +35,7 @@
 	);
 
 	// Смуги «ростуть», коли блок з’являється на екрані
-	let seen = $state(false);
+	let seen = $state(true); // смуги балансу видно одразу (без «набігання» ширини)
 	function onView(node: HTMLElement) {
 		if (isReduced() || typeof IntersectionObserver === 'undefined') {
 			seen = true;
@@ -286,20 +286,13 @@
 	.track {
 		display: flex;
 		height: 18px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #edf1f5;
 		overflow: hidden;
 		gap: 2px;
 	}
 	.track span {
 		height: 100%;
-		transition: width 1.1s cubic-bezier(0.22, 1, 0.36, 1);
-	}
-	.track .seg-sol {
-		transition-delay: 0.25s;
-	}
-	.compare .row + .row .track span {
-		transition-delay: 0.4s;
 	}
 	.seg-bat {
 		background: #0f766e;
@@ -309,7 +302,7 @@
 	}
 	.seg-need {
 		background: repeating-linear-gradient(-45deg, #1f4f84 0 7px, #2a5d96 7px 14px);
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 	}
 	.parts {
 		display: flex;
@@ -327,7 +320,7 @@
 	.k {
 		width: 0.8rem;
 		height: 0.8rem;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.k.bat {
 		background: #0f766e;
@@ -363,7 +356,7 @@
 		place-items: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		flex: none;
 	}
 	.ic.navy {
@@ -407,8 +400,8 @@
 		font-size: 0.8125rem;
 		font-weight: 600;
 		color: var(--muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
+
+
 	}
 	.two {
 		display: grid;
@@ -444,7 +437,7 @@
 		width: 3.5rem;
 		height: 3.5rem;
 		flex: none;
-		border-radius: 16px;
+		border-radius: var(--r-card);
 		background: var(--sun);
 		color: #3b2400;
 	}
@@ -458,7 +451,7 @@
 	}
 	.mcard {
 		padding: 1rem 1.15rem;
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		background: var(--surface);
 		border: 1px solid var(--card-line, #e2e7ee);
 	}

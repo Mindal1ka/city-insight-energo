@@ -6,6 +6,9 @@
 	import 'leaflet/dist/leaflet.css';
 	import { onMount, untrack } from 'svelte';
 	import type * as Leaflet from 'leaflet';
+
+	const ALERT_SVG =
+		'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 2.5 20h19L12 3.5Z"/><path d="M12 10v4.5M12 17.2h.01"/></svg>';
 	import {
 		type MapPoint,
 		type ColorBy,
@@ -122,7 +125,8 @@
 		const st = pointStyle(p, colorBy, activeScale);
 		const cls = ['cm-pin'];
 		if (isApprox(p)) cls.push('cm-approx');
-		if (delay !== null) cls.push('cm-in');
+		// delay ≥ 0 — перша поява «хвилею» від центру; -1 — тиха поява після зміни фільтра
+		if (delay !== null) cls.push(delay < 0 ? 'cm-fade' : 'cm-in');
 		return `<span class="${cls.join(' ')}" style="--c:${st.color};--ink:${st.ink};--sz:${st.size}px;--d:${delay ?? 0}ms"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="${st.glyph}"/></svg></span>`;
 	}
 
@@ -148,8 +152,15 @@
 		const keep = new Set(visible.map((p) => p.id));
 		for (const [id, e] of markers) {
 			if (!keep.has(id)) {
-				layer.removeLayer(e.m);
 				markers.delete(id);
+				// Фільтр: маркер згасає за 120 мс, а не зникає стрибком (reduced — одразу)
+				const pin = e.m.getElement()?.querySelector('.cm-pin');
+				if (reduced || !pin) layer.removeLayer(e.m);
+				else {
+					pin.classList.add('cm-out');
+					const lyr = layer;
+					setTimeout(() => lyr.removeLayer(e.m), 130);
+				}
 			}
 		}
 		// Поява хвилею від центру мапи до околиць
@@ -158,8 +169,11 @@
 			.filter((p) => !markers.has(p.id))
 			.map((p) => ({ p, d: (p.lat - c.lat) ** 2 + ((p.lon - c.lng) * 0.65) ** 2 }))
 			.sort((a, b) => a.d - b.d);
+		// Єдиний «момент» мапи: перша поява розходиться від центру за ≤ 360 мс (+240 мс на маркер).
+		// Далі (фільтри, режими) нові маркери лише проявляються, без хвилі.
 		const animate = !reduced;
-		const step = firstPaint ? Math.min(6, 900 / Math.max(1, fresh.length)) : 2;
+		const step = Math.min(4, 360 / Math.max(1, fresh.length));
+		const wave = firstPaint;
 		fresh.forEach(({ p }, i) => {
 			const ll = pos.get(p.id)!;
 			const m = L!.marker(ll, {
@@ -167,7 +181,7 @@
 					className: 'cm-mk',
 					iconSize: [0, 0],
 					iconAnchor: [0, 0],
-					html: pinHtml(p, animate ? Math.round(i * step) : null)
+					html: pinHtml(p, !animate ? null : wave ? Math.round(i * step) : -1)
 				}),
 				keyboard: false,
 				riseOnHover: true,
@@ -187,7 +201,7 @@
 			m.on('mouseout', () => onhover?.(null));
 			m.on('add', () => {
 				const pin = m.getElement()?.querySelector('.cm-pin');
-				pin?.addEventListener('animationend', () => pin.classList.remove('cm-in'), { once: true });
+				pin?.addEventListener('animationend', () => pin.classList.remove('cm-in', 'cm-fade'), { once: true });
 			});
 			m.addTo(layer!);
 			markers.set(p.id, { m, p, key: `${ll[0]},${ll[1]}` });
@@ -213,9 +227,11 @@
 	}
 
 	function markSel(id: number | null) {
-		for (const pin of el.querySelectorAll('.cm-pin.cm-sel')) pin.classList.remove('cm-sel');
+		// Клас не знімаємо з того самого маркера — інакше імпульс-кільце перезапускалося б при кожному оновленні
+		const target = id !== null ? pinOf(id) : null;
+		for (const pin of el.querySelectorAll('.cm-pin.cm-sel')) if (pin !== target) pin.classList.remove('cm-sel');
 		for (const e of markers.values()) e.m.setZIndexOffset(e.p.id === id ? 1000 : e.p.id === hl ? 800 : 0);
-		if (id !== null) pinOf(id)?.classList.add('cm-sel');
+		target?.classList.add('cm-sel');
 	}
 
 	function markHl(id: number | null) {
@@ -253,11 +269,15 @@
 		const notes: string[] = [];
 		if (isApprox(p) && p.precision) notes.push(`≈ Розташування ${PRECISION_TEXT[p.precision].replace('приблизно: ', 'приблизне: ')}`);
 		if (!p.data_ok || p.defects_count > 0)
-			notes.push(`⚠ ${p.defects_count > 0 ? `${p.defects_count} зауваж. до даних` : 'Є зауваження до даних'}`);
+			notes.push(`!${p.defects_count > 0 ? `${p.defects_count} зауваж. до даних` : 'Є зауваження до даних'}`);
 		for (const n of notes) {
 			const d = document.createElement('div');
 			d.className = 'cm-card-note';
-			d.textContent = n;
+			if (n.startsWith('!')) {
+				// значок-попередження тим самим лінійним стилем, що й Icon.svelte (статичний SVG)
+				d.innerHTML = ALERT_SVG;
+				d.append(n.slice(1));
+			} else d.textContent = n;
 			root.append(d);
 		}
 		const a = document.createElement('a');
@@ -357,7 +377,7 @@
 	export function resetView() {
 		if (!map) return;
 		const b = initialBounds();
-		if (b) map.flyToBounds(b, { padding: compact ? [16, 16] : [36, 36], duration: reduced ? 0 : 0.8, animate: !reduced });
+		if (b) map.flyToBounds(b, { padding: compact ? [16, 16] : [36, 36], duration: reduced ? 0 : 0.4, animate: !reduced });
 		else map.setView(POLTAVA, 12);
 	}
 
@@ -555,13 +575,13 @@
 		display: grid;
 		place-items: center;
 		cursor: pointer;
+		/* Зміна режиму кольору — перехід кольору 220 мс; розмір — миттєво (без анімації геометрії) */
 		transition:
-			background-color 0.45s var(--ease),
-			color 0.45s var(--ease),
-			width 0.3s var(--ease),
-			height 0.3s var(--ease),
-			scale 0.2s var(--ease),
-			box-shadow 0.2s;
+			background-color var(--dur-base) var(--ease-out),
+			color var(--dur-base) var(--ease-out),
+			scale var(--dur-fast) var(--ease-out),
+			opacity var(--dur-fast) var(--ease-out),
+			box-shadow var(--dur-fast) var(--ease-out);
 	}
 	.cm-root :global(.cm-pin svg) {
 		width: 62%;
@@ -570,20 +590,29 @@
 		display: block;
 	}
 	.cm-root :global(.cm-pin.cm-in) {
-		animation: cm-pop 0.55s var(--ease) var(--d) both;
+		animation: cm-pop 240ms var(--ease-emph) var(--d) both;
 	}
 	@keyframes -global-cm-pop {
-		0% {
+		from {
 			opacity: 0;
-			transform: translate(-50%, -50%) scale(0.2);
+			transform: translate(-50%, -50%) scale(0.4);
 		}
-		60% {
-			opacity: 1;
-			transform: translate(-50%, -50%) scale(1.18);
-		}
-		100% {
+		to {
 			opacity: 1;
 			transform: translate(-50%, -50%) scale(1);
+		}
+	}
+	/* Після зміни фільтра: тихе проявлення / згасання на місці (перехресне, без повторної «хвилі») */
+	.cm-root :global(.cm-pin.cm-fade) {
+		animation: cm-appear var(--dur-fast) var(--ease-out) both;
+	}
+	.cm-root :global(.cm-pin.cm-out) {
+		opacity: 0;
+		pointer-events: none;
+	}
+	@keyframes -global-cm-appear {
+		from {
+			opacity: 0;
 		}
 	}
 	/* Приблизне розташування: пунктирне кільце */
@@ -618,7 +647,8 @@
 		inset: -4px;
 		border-radius: 50%;
 		border: 2px solid var(--c);
-		animation: cm-pulse 1.8s ease-out infinite;
+		/* Одне кільце-імпульс у момент вибору — «ось він», без нескінченного миготіння */
+		animation: cm-pulse 600ms var(--ease-out) 1 both;
 		pointer-events: none;
 	}
 	@keyframes -global-cm-pulse {
@@ -637,7 +667,7 @@
 		background: #142235;
 		color: #fff;
 		border: 0;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 		padding: 0.3rem 0.6rem;
 		font: inherit;
 		font-size: 0.8125rem;
@@ -651,21 +681,21 @@
 		border-top-color: #142235;
 	}
 	.cm-root :global(.cm-popup .leaflet-popup-content-wrapper) {
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		padding: 0;
 		box-shadow:
 			0 2px 4px rgba(16, 24, 40, 0.06),
 			0 18px 40px -12px rgba(16, 24, 40, 0.35);
-		animation: cm-slide 0.32s var(--ease) both;
+		animation: cm-slide var(--dur-base) var(--ease-emph) both;
 		transform-origin: 50% 100%;
 	}
 	.cm-root :global(.cm-popup .leaflet-popup-tip-container) {
-		animation: cm-fade 0.32s var(--ease) both;
+		animation: cm-fade var(--dur-base) var(--ease-out) both;
 	}
 	@keyframes -global-cm-slide {
 		from {
 			opacity: 0;
-			transform: translateY(10px) scale(0.97);
+			transform: translateY(8px); /* виїжджає вгору від свого маркера */
 		}
 		to {
 			opacity: 1;
@@ -688,7 +718,7 @@
 		right: 6px;
 		width: 28px;
 		height: 28px;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 		font-size: 20px;
 		line-height: 26px;
 		color: var(--muted);
@@ -706,9 +736,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
+		font-weight: 600;
 		color: var(--muted);
 		padding-right: 1.6rem;
 	}
@@ -726,7 +754,7 @@
 	.cm-root :global(.cm-card-fig) {
 		margin-top: 0.65rem;
 		padding: 0.55rem 0.7rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: var(--neutral-soft);
 	}
 	.cm-root :global(.cm-card-fig-empty) {
@@ -750,16 +778,22 @@
 		color: var(--muted);
 	}
 	.cm-root :global(.cm-card-note) {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
 		margin-top: 0.45rem;
 		font-size: 0.78rem;
 		color: var(--warn);
+	}
+	.cm-root :global(.cm-card-note svg) {
+		flex: none;
 	}
 	.cm-root :global(.cm-card-btn) {
 		display: flex;
 		justify-content: center;
 		margin-top: 0.75rem;
 		padding: 0.5rem 0.8rem;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		background: var(--accent);
 		color: #fff !important;
 		font-weight: 650;
@@ -790,7 +824,7 @@
 	/* ---------- Елементи керування Leaflet ---------- */
 	.cm-root :global(.leaflet-control-zoom) {
 		border: 0;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		overflow: hidden;
 		box-shadow: var(--shadow-md);
 	}
@@ -831,7 +865,7 @@
 		min-height: 36px;
 		padding: 0.35rem 0.75rem;
 		border: 0;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		background: #fff;
 		color: var(--text);
 		font: inherit;
@@ -899,7 +933,7 @@
 		width: max-content;
 		max-width: calc(100% - 70px);
 		padding: 0.4rem 0.65rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: rgba(255, 255, 255, 0.92);
 		box-shadow: var(--shadow-md);
 		font-size: 0.75rem;
@@ -926,7 +960,7 @@
 		top: 8px;
 		left: 8px;
 		padding: 0.45rem 0.8rem;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		background: var(--navy, #10325a);
 		color: #fff;
 		font-weight: 650;
@@ -963,6 +997,7 @@
 	@media (prefers-reduced-motion: reduce) {
 		.cm-root :global(.cm-pin),
 		.cm-root :global(.cm-pin.cm-in),
+		.cm-root :global(.cm-pin.cm-fade),
 		.cm-root :global(.cm-pin.cm-sel::before),
 		.cm-root :global(.cm-popup .leaflet-popup-content-wrapper),
 		.cm-root :global(.cm-popup .leaflet-popup-tip-container),

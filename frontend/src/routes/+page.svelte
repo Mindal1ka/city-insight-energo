@@ -2,8 +2,8 @@
 	// Головна — повноекранна мапа всіх комунальних об'єктів, колір = клас ефективності СЕС (K).
 	// Публічний режим: бекенд не віддає K по об'єктах → фарбуємо за типом, лише зведені цифри громади.
 	import { onMount, tick, untrack } from 'svelte';
-	import { fly, fade } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
+	import Icon from '#lib/Icon.svelte';
+	import { fade } from 'svelte/transition';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import SesMap from '#lib/SesMap.svelte';
@@ -16,7 +16,7 @@
 	import { CATEGORIES } from '#lib/api-map.ts';
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
-	import { isReduced } from '#lib/motion.ts';
+	import { isReduced, slideIn } from '#lib/motion.ts';
 	import { matchExtra, seasonDay, SEASONS, kwhMonth, type Season } from '#lib/ses-extra.ts';
 	import {
 		fetchSes,
@@ -174,7 +174,6 @@
 	const periodWord = $derived(
 		season ? (SEASONS.find((x) => x.id === season)?.label ?? '') : period === 'day' ? 'за день' : period === 'month' ? 'за місяць' : 'за рік'
 	);
-	const dur = isReduced() ? 0 : 320;
 	const nums = $derived(
 		selected
 			? [
@@ -213,14 +212,14 @@
 	<!-- Верх: KPI (ліворуч) + пошук/період/фільтри (праворуч) -->
 	<div class="top" bind:offsetHeight={topH}>
 		{#if t}
-			<dl class="kpi" in:fade={{ duration: dur }}>
+			<dl class="kpi">
 				<div><dt>Об’єктів</dt><dd>{t.objects}</dd></div>
 				<div><dt>З СЕС</dt><dd>{t.with_ses ?? '—'}</dd></div>
 				{#if restricted}
 					<div><dt>Згенеровано</dt><dd>{kwh(t.gen_kwh).replace(' кВт·год', '')}<small> кВт·год</small></dd></div>
 					<div><dt>Заощаджено</dt><dd>{uah(t.saved_uah_year)}</dd></div>
 				{:else}
-					<div class="ok"><dt>Ефективно</dt><dd><i aria-hidden="true">✓</i>{t.effective ?? '—'}</dd></div>
+					<div class="ok"><dt>Ефективно</dt><dd><i aria-hidden="true"><Icon name="check" size={14} stroke={2.6} /></i>{t.effective ?? '—'}</dd></div>
 					<div class="dn"><dt>Не вистачає</dt><dd><i aria-hidden="true">↓</i>{t.deficit ?? '—'}</dd></div>
 				{/if}
 			</dl>
@@ -259,7 +258,7 @@
 
 	<!-- Єдина легенда: класи K (+ зони, коли шар увімкнено) -->
 	{#if data}
-		<div class="legend" class:expanded={legendOpen} aria-label="Легенда" in:fade={{ duration: dur }}>
+		<div class="legend" class:expanded={legendOpen} aria-label="Легенда">
 			<button type="button" class="lg-tog" aria-expanded={legendOpen} onclick={() => (legendOpen = !legendOpen)}>
 				Легенда <span aria-hidden="true">{legendOpen ? '▾' : '▴'}</span>
 			</button>
@@ -287,7 +286,7 @@
 	{/if}
 
 	{#if loading && !data}
-		<div class="state" out:fade={{ duration: 200 }}><span class="spin" aria-hidden="true"></span>Завантаження…</div>
+		<div class="state" out:fade={{ duration: isReduced() ? 0 : 120 }}><span class="spin" aria-hidden="true"></span>Завантаження…</div>
 	{:else if error && !data}
 		<div class="state err" role="alert">
 			{error}<button type="button" onclick={() => load(period, season)}>Повторити</button>
@@ -307,10 +306,10 @@
 				bind:this={cardEl}
 				bind:offsetHeight={cardH}
 				aria-labelledby="card-title"
-				in:fly={phone ? { y: 60, duration: dur, easing: cubicOut } : { x: 40, duration: dur, easing: cubicOut }}
-				out:fade={{ duration: isReduced() ? 0 : 120 }}
+				in:slideIn={phone ? { y: 40 } : { x: 24 }}
+				out:slideIn={phone ? { y: 40, out: true } : { x: 24, out: true }}
 			>
-				<button type="button" class="x" onclick={() => select(null)} aria-label="Закрити картку">✕</button>
+				<button type="button" class="x" onclick={() => select(null)} aria-label="Закрити картку"><Icon name="x" size={18} /></button>
 				<div class="type">
 					<CategoryIcon category={selected.category_short} size={16} />{catLabel(selected.category_short)}
 				</div>
@@ -380,7 +379,7 @@
 		-webkit-backdrop-filter: saturate(1.5) blur(12px);
 		backdrop-filter: saturate(1.5) blur(12px);
 		box-shadow: 0 2px 6px rgba(15, 35, 65, 0.08), 0 12px 32px -14px rgba(15, 35, 65, 0.35);
-		border-radius: 16px;
+		border-radius: var(--r-card);
 	}
 	.kpi {
 		display: flex;
@@ -438,7 +437,7 @@
 		align-items: center;
 		gap: 6px;
 		padding: 4px 10px;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: #0f2f52;
 		color: #fff;
 		font-weight: 600;
@@ -536,7 +535,7 @@
 		border: 0;
 		background: #0f2f52;
 		color: #fff;
-		border-radius: 999px;
+		border-radius: var(--r-input);
 		padding: 6px 14px;
 		font: inherit;
 		cursor: pointer;
@@ -607,7 +606,7 @@
 	}
 	.nums div {
 		background: #f3f6fa;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		padding: 7px 8px;
 		min-width: 0;
 	}
@@ -633,7 +632,7 @@
 		justify-content: center;
 		gap: 6px;
 		padding: 10px;
-		border-radius: 12px;
+		border-radius: var(--r-btn);
 		background: #0b5cad;
 		color: #fff;
 		font-weight: 700;
@@ -706,7 +705,7 @@
 			right: 8px;
 			bottom: 8px;
 			width: auto;
-			border-radius: 18px;
+			border-radius: var(--r-card);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

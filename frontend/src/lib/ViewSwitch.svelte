@@ -67,8 +67,6 @@
 	.vs-label {
 		font-size: 0.8125rem;
 		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
 		color: var(--muted);
 	}
 	.seg-sm a {

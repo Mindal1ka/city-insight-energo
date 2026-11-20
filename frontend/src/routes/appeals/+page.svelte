@@ -151,7 +151,7 @@
 					{#if picked}
 						<div class="picked">
 							<span>{picked.name}</span>
-							<button type="button" onclick={() => (bId = null)} aria-label="Змінити">×</button>
+							<button type="button" onclick={() => (bId = null)} aria-label="Змінити"><Icon name="x" size={14} /></button>
 						</div>
 					{:else}
 						<input id="bq" type="search" placeholder="Назва або №" bind:value={bQuery} autocomplete="off" />
@@ -277,7 +277,7 @@
 	.l1 a { font-weight: 600; color: var(--accent); text-decoration: none; }
 	.to, .meta { color: var(--muted); font-size: var(--fs-sm); }
 	.kw { font-variant-numeric: tabular-nums; }
-	.badge, .st { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600; }
+	.badge, .st { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.55rem; border-radius: var(--r-pill); font-size: var(--fs-xs); font-weight: 600; }
 	.info { background: var(--accent-soft); color: var(--accent-dark); }
 	.ok { background: var(--ok-soft); color: var(--ok); }
 	.warn { background: var(--warn-soft); color: var(--warn); }

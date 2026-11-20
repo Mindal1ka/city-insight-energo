@@ -10,7 +10,7 @@
 	import StatCard from '#lib/StatCard.svelte';
 	import Reveal from '#lib/Reveal.svelte';
 	import Icon from '#lib/Icon.svelte';
-	import { fadeUp, stagger, reducedMotion } from '#lib/motion.ts';
+	import { fadeUp, reducedMotion } from '#lib/motion.ts';
 	import { isElecRelevant } from '../rating/electricity.ts';
 	import { groupDefects, SEVERITY_LABEL, type Severity } from './groups.ts';
 
@@ -172,7 +172,7 @@
 		{#each groups as g, gi (g.key)}
 			{@const open = !!openGroups[g.key] || (!!q && g.shown.length <= 40)}
 			{@const limit = limits[g.key] ?? STEP}
-			<li class="group sev-{g.severity}" class:open animate:flip={{ duration: flipMs }} in:fadeUp|global={{ delay: stagger(gi, 60) }}>
+			<li class="group sev-{g.severity}" class:open animate:flip={{ duration: flipMs }}>
 				<div class="g-head">
 					<span class="g-ico" aria-hidden="true">
 						<Icon name={g.severity === 'high' ? 'alert' : g.severity === 'mid' ? 'chart' : 'info'} size={20} />
@@ -201,7 +201,7 @@
 						<p class="g-why">{g.why}</p>
 						<ul class="items">
 							{#each g.shown.slice(0, limit) as d, i (i)}
-								<li in:fadeUp={{ delay: i >= limit - STEP ? stagger(i - (limit - STEP), 15, 300) : 0 }}>
+								<li>
 									<span class="it-name">
 										{#if isId(d.будівля_id)}<a href="/building/{d.будівля_id}">{d.будівля}</a>{:else}{d.будівля || '—'}{/if}
 									</span>
@@ -252,7 +252,7 @@
 		gap: 0.4rem;
 		min-height: 42px;
 		padding: 0.4rem 0.85rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid var(--line-strong);
 		background: var(--surface);
 		color: var(--text);
@@ -366,7 +366,7 @@
 		place-items: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		background: var(--g-soft);
 		color: var(--g-ink);
 	}
@@ -429,7 +429,7 @@
 		font-weight: 600;
 		color: var(--accent);
 		cursor: pointer;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 		min-height: 40px;
 	}
 	.g-toggle svg {
@@ -519,7 +519,7 @@
 		}
 		.group {
 			padding: 0.8rem 0.85rem 0.25rem;
-			border-radius: 14px;
+			border-radius: var(--r-card);
 		}
 		.g-head {
 			grid-template-columns: 2.25rem minmax(0, 1fr);
@@ -528,7 +528,7 @@
 		.g-ico {
 			width: 2.25rem;
 			height: 2.25rem;
-			border-radius: 10px;
+			border-radius: var(--r-btn);
 		}
 		.g-title {
 			font-size: 1.02rem;
@@ -549,7 +549,7 @@
 			padding: 0.6rem 0.85rem;
 			min-height: 44px;
 			border-top: 1px solid var(--line);
-			border-radius: 0 0 12px 12px;
+			border-radius: 0 0 var(--r-card) var(--r-card);
 			justify-content: space-between;
 			flex-direction: row-reverse;
 		}

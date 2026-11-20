@@ -75,7 +75,7 @@
 		color: var(--accent);
 		cursor: pointer;
 		text-align: left;
-		border-radius: 8px;
+		border-radius: var(--r-btn);
 	}
 	.disc-btn:hover {
 		color: var(--accent-dark);

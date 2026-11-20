@@ -1,26 +1,25 @@
 /*
- * Спільний моушн-дизайн застосунку. Усе вимикається за prefers-reduced-motion.
+ * Моушн застосунку — самописні переходи й дії (actions), без бібліотек.
+ *
+ * ПРАВИЛА
+ *   • Рух лише тоді, коли змінюється стан або треба направити погляд. Жодних масових «появ» списків.
+ *   • Лише transform і opacity. Тривалості: 100–160 мс — рутинний UI, 200–300 мс — значущі зміни.
+ *   • Криві — ті самі, що й у app.css (--ease-out / --ease-in-out / --ease-in / --ease-emph).
+ *   • prefers-reduced-motion: reduce → усе миттєво (кожна функція тут це перевіряє).
  *
  * ВИКОРИСТАННЯ
- *   import { fadeUp, scaleIn, stagger, DUR, cubicOut, reducedMotion } from '#lib/motion.ts';
+ *   import { DUR, EASE, slideIn, swap, segIndicator, growOnce, pulseOnce, isReduced } from '#lib/motion.ts';
  *
- *   {#each items as it, i (it.id)}
- *     <li in:fadeUp={{ delay: stagger(i) }}>…</li>          // поява з підйомом на 8 px, «драбинкою»
- *   {/each}
- *   <div transition:scaleIn>…</div>                          // спливаюче вікно / підказка
- *   <div in:fadeUp={{ y: 16, duration: DUR.slow }}>…</div>
- *
- *   reducedMotion.current   — true, якщо користувач просив менше анімації (реактивно в .svelte)
- *   isReduced()             — те саме, разова перевірка (для звичайного TS-коду, rAF-циклів)
- *   DUR = { fast: 150, base: 240, slow: 420 }  — тривалості, мс
- *   stagger(i, step = 40, max = 400) — затримка для i-го елемента списку, мс
- *
- * CSS-аналоги (app.css): змінні --dur-fast / --dur-base / --dur-slow, --ease-out, --ease-spring,
- * класи .fade-in, .lift (підйом при наведенні), .press (стискання при натисканні).
+ *   <aside in:slideIn={{ x: 24 }} out:slideIn={{ x: 24, out: true }}>…</aside>   // картка/шухляда з боку якоря
+ *   {#key tab}<div in:swap={{ dir }}>…</div>{/key}                                 // вміст вкладки з урахуванням напрямку
+ *   <div class="seg" use:segIndicator>…</div>                                       // індикатор, що ковзає під вибраним
+ *   <g use:growOnce>…</g>                                                           // стовпці ростуть від осі лише при першому показі
+ *   <span use:pulseOnce={selectedId}>…</span>                                       // одне кільце-імпульс при зміні ключа
  */
 import { prefersReducedMotion } from 'svelte/motion';
 import { cubicOut, cubicInOut, quintOut, backOut, expoOut, linear } from 'svelte/easing';
 import type { TransitionConfig } from 'svelte/transition';
+import type { Action } from 'svelte/action';
 
 export { cubicOut, cubicInOut, quintOut, backOut, expoOut, linear };
 
@@ -36,11 +35,40 @@ export function isReduced(): boolean {
 	}
 }
 
-export const DUR = { fast: 150, base: 240, slow: 420 } as const;
+/** Тривалості, мс — дзеркало --dur-* з app.css */
+export const DUR = { press: 100, fast: 140, base: 220, slow: 300 } as const;
 
-/** Затримка для i-го елемента списку («драбинка»), з верхньою межею, щоб довгі списки не чекали */
-export function stagger(i: number, step = 35, max = 280): number {
-	return isReduced() ? 0 : Math.min(i * step, max);
+/** Кубічна Безьє (x1,y1,x2,y2) як функція t→прогрес — ті самі криві, що й у CSS */
+function bezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
+	const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+	const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+	const sx = (t: number) => ((ax * t + bx) * t + cx) * t;
+	const sy = (t: number) => ((ay * t + by) * t + cy) * t;
+	const dx = (t: number) => (3 * ax * t + 2 * bx) * t + cx;
+	return (x: number) => {
+		if (x <= 0) return 0;
+		if (x >= 1) return 1;
+		let t = x;
+		for (let i = 0; i < 6; i++) {
+			const e = sx(t) - x;
+			const d = dx(t);
+			if (Math.abs(e) < 1e-4 || Math.abs(d) < 1e-6) break;
+			t -= e / d;
+		}
+		return sy(Math.min(1, Math.max(0, t)));
+	};
+}
+
+export const EASE = {
+	out: bezier(0.2, 0.7, 0.2, 1),
+	inOut: bezier(0.55, 0, 0.25, 1),
+	in: bezier(0.4, 0, 1, 1),
+	emph: bezier(0.16, 1, 0.3, 1)
+} as const;
+
+/** Застаріле: «драбинки» прибрано — завжди 0 (лишено, щоб старий код компілювався) */
+export function stagger(_i: number, _step = 0, _max = 0): number {
+	return 0;
 }
 
 export interface FadeUpParams {
@@ -50,10 +78,10 @@ export interface FadeUpParams {
 	easing?: (t: number) => number;
 }
 
-/** Поява: прозорість + підйом на y px (типово 8) */
+/** Поява нового результату (вердикт, відповідь калькулятора): прозорість + зсув на y px (типово 4) */
 export function fadeUp(
 	_node: Element,
-	{ delay = 0, duration = DUR.base, y = 8, easing = cubicOut }: FadeUpParams = {}
+	{ delay = 0, duration = DUR.base, y = 4, easing = EASE.out }: FadeUpParams = {}
 ): TransitionConfig {
 	if (isReduced()) return { duration: 0 };
 	return {
@@ -71,16 +99,154 @@ export interface ScaleInParams {
 	easing?: (t: number) => number;
 }
 
-/** Поява з легким збільшенням (0.96 → 1): спливаючі вікна, підказки, бейджі */
+/** Спливаюче вікно/підказка: 0.97 → 1 з точки походження (transform-origin задає компонент) */
 export function scaleIn(
 	_node: Element,
-	{ delay = 0, duration = DUR.fast + 40, start = 0.96, easing = cubicOut }: ScaleInParams = {}
+	{ delay = 0, duration = DUR.fast, start = 0.97, easing = EASE.out }: ScaleInParams = {}
 ): TransitionConfig {
 	if (isReduced()) return { duration: 0 };
 	return {
 		delay,
 		duration,
 		easing,
-		css: (t) => `opacity:${t};transform:scale(${start + (1 - start) * t})`
+		css: (t) => `opacity:${t};transform:scale(${(start + (1 - start) * t).toFixed(4)})`
 	};
 }
+
+export interface SlideParams {
+	x?: number;
+	y?: number;
+	duration?: number;
+	/** true — для out: швидше і з кривою «геть з дороги» */
+	out?: boolean;
+}
+
+/** Картка/шухляда виїжджає з боку свого якоря (x або y у px) і проявляється */
+export function slideIn(_node: Element, { x = 0, y = 0, duration, out = false }: SlideParams = {}): TransitionConfig {
+	if (isReduced()) return { duration: 0 };
+	return {
+		duration: duration ?? (out ? DUR.fast : DUR.slow),
+		easing: out ? EASE.in : EASE.emph,
+		css: (t, u) =>
+			`opacity:${Math.min(1, t * 1.6).toFixed(3)};transform:translate(${(u * x).toFixed(1)}px,${(u * y).toFixed(1)}px)`
+	};
+}
+
+/** Зміна вмісту вкладки: зсув 12 px у бік руху + проявлення (dir: 1 — вправо, -1 — вліво) */
+export function swap(_node: Element, { dir = 0, duration = DUR.base }: { dir?: number; duration?: number } = {}): TransitionConfig {
+	if (isReduced()) return { duration: 0 };
+	const dx = Math.sign(dir) * 12;
+	return {
+		duration,
+		easing: EASE.out,
+		css: (t, u) => `opacity:${t.toFixed(3)};transform:translateX(${(u * dx).toFixed(1)}px)`
+	};
+}
+
+/**
+ * Сегментований перемикач: одна «таблетка» ковзає під вибраною кнопкою (aria-pressed / aria-selected /
+ * aria-current). Створює <span class="seg-ind"> усередині контейнера; стилі — у app.css (.seg-ind).
+ * Перший показ — без руху (таблетка вже на місці), далі — 200 мс --ease-in-out.
+ */
+export const segIndicator: Action<HTMLElement, string | number | boolean | null | undefined> = (node) => {
+	const ind = document.createElement('span');
+	ind.className = 'seg-ind';
+	ind.setAttribute('aria-hidden', 'true');
+	node.prepend(ind);
+	node.classList.add('has-ind');
+	// Індикатор позиціонується відносно контейнера (offsetLeft рахується від нього ж)
+	if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
+	let first = true;
+	let px = 0, pw = 0, py = 0;
+	const place = () => {
+		const sel = node.querySelector<HTMLElement>(
+			':scope > [aria-pressed="true"], :scope > [aria-selected="true"], :scope > [aria-current="page"], :scope > [aria-checked="true"]'
+		);
+		if (!sel) {
+			ind.style.opacity = '0';
+			first = true;
+			return;
+		}
+		const x = sel.offsetLeft, y = sel.offsetTop, w = sel.offsetWidth;
+		if (x === px && w === pw && y === py && !first) return;
+		// FLIP: розмір ставимо одразу кінцевий, а рух і різницю ширини показуємо лише через transform
+		ind.style.width = w + 'px';
+		ind.style.height = sel.offsetHeight + 'px';
+		if (first || isReduced() || !pw) {
+			ind.style.transition = 'none';
+			ind.style.transform = `translate(${x}px,${y}px)`;
+		} else {
+			ind.style.transition = 'none';
+			ind.style.transform = `translate(${px}px,${py}px) scaleX(${(pw / w).toFixed(4)})`;
+			void ind.offsetWidth;
+			ind.style.transition = '';
+			ind.style.transform = `translate(${x}px,${y}px)`;
+		}
+		ind.style.opacity = '1';
+		px = x; pw = w; py = y;
+		first = false;
+	};
+	place();
+	const mo = new MutationObserver(place);
+	mo.observe(node, { subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-selected', 'aria-current', 'aria-checked'], childList: true });
+	const ro = new ResizeObserver(() => {
+		first = true;
+		place();
+	});
+	ro.observe(node);
+	return {
+		update: place,
+		destroy() {
+			mo.disconnect();
+			ro.disconnect();
+			ind.remove();
+			node.classList.remove('has-ind');
+		}
+	};
+};
+
+/**
+ * Стовпці/смуги ростуть від базової лінії лише при першому показі графіка (scaleY 0 → 1, 280 мс).
+ * Повторні зміни даних не «перезапускають» ріст. axis: 'y' (типово) або 'x' (горизонтальні смуги).
+ */
+export const growOnce: Action<Element, 'x' | 'y' | undefined> = (node, axis = 'y') => {
+	if (isReduced() || typeof (node as unknown as HTMLElement).animate !== 'function') return;
+	const from = axis === 'x' ? 'scaleX(0)' : 'scaleY(0)';
+	const to = axis === 'x' ? 'scaleX(1)' : 'scaleY(1)';
+	(node as unknown as HTMLElement).animate([{ transform: from }, { transform: to }], {
+		duration: 280,
+		easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+	});
+};
+
+/** Одне кільце-імпульс, коли змінюється ключ (вибраний маркер, щойно збережене поле) */
+export const pulseOnce: Action<HTMLElement, unknown> = (node, key) => {
+	let last = key;
+	const run = () => {
+		if (isReduced()) return;
+		// Кільце — окремий елемент: анімуємо лише transform і opacity
+		if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
+		const ring = document.createElement('span');
+		ring.setAttribute('aria-hidden', 'true');
+		ring.style.cssText =
+			'position:absolute;inset:-2px;border-radius:inherit;border:2px solid var(--sun,#f5a524);pointer-events:none';
+		node.appendChild(ring);
+		ring
+			.animate(
+				[
+					{ transform: 'scale(1)', opacity: 0.8 },
+					{ transform: 'scale(1.6)', opacity: 0 }
+				],
+				{ duration: 600, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' }
+			)
+			.finished.finally(() => ring.remove());
+	};
+	return {
+		update(k) {
+			if (k !== last) {
+				last = k;
+				run();
+			}
+		}
+	};
+};

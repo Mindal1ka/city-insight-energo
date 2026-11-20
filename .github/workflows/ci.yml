@@ -51,11 +51,15 @@ jobs:
       - name: Запуск і перевірка API
         run: |
           docker run -d --name app -p 8000:8000 city-insight-energo
+          ok=0
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost:8000/api/summary > /tmp/summary.json; then break; fi
+            # /api/auth/roles — публічний; решта /api/* без токена повертає 401
+            if curl -fsS http://localhost:8000/api/auth/roles > /tmp/roles.json; then ok=1; break; fi
             sleep 2
           done
-          cat /tmp/summary.json | head -c 400; echo
+          if [ "$ok" != 1 ]; then echo "API не відповів за 60 с"; exit 1; fi
+          head -c 400 /tmp/roles.json; echo
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/api/summary)" = 401 && echo "Без токена /api/summary → 401"
           curl -fsS http://localhost:8000/ | grep -qi "<html" && echo "Фронтенд віддається"
       - name: Логи контейнера
         if: always()

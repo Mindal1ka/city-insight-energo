@@ -16,7 +16,7 @@
 	import Reveal from '#lib/Reveal.svelte';
 	import Disclosure from '#lib/Disclosure.svelte';
 	import Icon from '#lib/Icon.svelte';
-	import { fadeUp, stagger, reducedMotion } from '#lib/motion.ts';
+	import { fadeUp, reducedMotion } from '#lib/motion.ts';
 	import { electricityRating, ratioWords, BASE_YEAR, type ElecRow } from './electricity.ts';
 	import { grow } from './grow.ts';
 
@@ -223,7 +223,6 @@
 							class="row"
 							class:open
 							animate:flip={{ duration: flipMs }}
-							in:fadeUp|global={{ delay: stagger(i, 22, 450) }}
 						>
 							<span class="rank tnum" title="№ {r.rank} з {r.rankOf} у черзі на перевірку">
 								<span class="visually-hidden">№ у черзі на перевірку</span>{r.rank}
@@ -340,7 +339,7 @@
 		align-items: center;
 		gap: 0.35rem;
 		padding: 0.3rem 0.7rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--neutral-soft);
 		font-weight: 600;
 		font-size: 0.95rem;
@@ -373,7 +372,7 @@
 		min-width: 1.6em;
 		margin-left: 0.25rem;
 		padding: 0 0.35em;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: rgba(255, 255, 255, 0.7);
 		border: 1px solid var(--line);
 		font-size: 0.8rem;
@@ -470,13 +469,13 @@
 		position: relative;
 		display: block;
 		height: 0.55rem;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 	}
 	.fill {
 		position: absolute;
 		inset: 0 auto 0 0;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		transform-origin: left center;
 	}
 	.t-good {
@@ -504,7 +503,7 @@
 		width: 2px;
 		margin-left: -1px;
 		background: var(--text);
-		border-radius: 1px;
+		border-radius: var(--r-sm);
 	}
 	.cmp {
 		display: flex;
@@ -767,7 +766,7 @@
 			grid-column: 1 / -1;
 		}
 		.list-card {
-			border-radius: 14px;
+			border-radius: var(--r-card);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

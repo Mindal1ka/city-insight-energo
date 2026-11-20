@@ -2,13 +2,13 @@
 	// Каркас: бокове меню з групами розділів (десктоп) і висувне меню (телефон).
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
-	import { page } from '$app/state';
+	import { page, navigating } from '$app/state';
+	import { untrack } from 'svelte';
 	import { goto, afterNavigate, onNavigate } from '$app/navigation';
 	import { auth, logout, initials, verifySession } from '#lib/auth.svelte.ts';
 	import { isCityWide, isInternal, canUpload, roleLabel } from '#lib/roles.ts';
 	import { isReduced } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
-	import CommandPalette from '#lib/CommandPalette.svelte';
 	import FreshnessBadge from '#lib/FreshnessBadge.svelte';
 	import type { LayoutProps } from './$types';
 
@@ -95,6 +95,30 @@
 
 	let drawer = $state(false);
 	let paletteOpen = $state(false);
+	// Палітра (583 рядки + список будівель) вантажиться лише при першому відкритті або наведенні на пошук
+	let paletteWanted = $state(false);
+	let paletteMod = $state<Promise<typeof import('#lib/CommandPalette.svelte')> | null>(null);
+	$effect(() => {
+		if ((paletteWanted || paletteOpen) && !paletteMod) paletteMod = import('#lib/CommandPalette.svelte');
+	});
+	const warmPalette = () => (paletteWanted = true);
+
+	// Тонка смуга прогресу: з'являється лише якщо перехід триває > 120 мс (швидкі переходи — без шуму)
+	let navBar = $state<'idle' | 'on' | 'done'>('idle');
+	$effect(() => {
+		const busy = !!navigating.to;
+		return untrack(() => {
+			if (busy) {
+				const t = setTimeout(() => (navBar = 'on'), 120);
+				return () => clearTimeout(t);
+			}
+			if (navBar === 'on') {
+				navBar = 'done';
+				const t = setTimeout(() => (navBar = 'idle'), 400);
+				return () => clearTimeout(t);
+			}
+		});
+	});
 
 	afterNavigate(() => {
 		drawer = false;
@@ -147,7 +171,7 @@
 			</span>
 		</a>
 
-		<button type="button" class="search" onclick={() => (paletteOpen = true)} aria-keyshortcuts="Control+K">
+		<button type="button" class="search" onclick={() => (paletteOpen = true)} onpointerenter={warmPalette} onfocus={warmPalette} aria-keyshortcuts="Control+K">
 			<Icon name="search" size={16} />
 			<span>Знайти будівлю</span>
 			<kbd>Ctrl K</kbd>
@@ -183,7 +207,12 @@
 		</div>
 	</aside>
 
-	<CommandPalette bind:open={paletteOpen} />
+	{#if paletteMod}
+		{#await paletteMod then { default: CommandPalette }}
+			<CommandPalette bind:open={paletteOpen} />
+		{/await}
+	{/if}
+	<div class="nav-progress no-print" class:on={navBar === 'on'} class:done={navBar === 'done'} aria-hidden="true"></div>
 
 	<div class="shell">
 		<main id="main" class="wrap" tabindex="-1">
@@ -299,10 +328,8 @@
 	}
 	.g-title {
 		margin: 1rem 0.5rem 0.3rem;
-		font-size: 0.7rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
+		font-size: 0.75rem;
+		font-weight: 600;
 		color: #7a8696;
 	}
 	.nav ul {
@@ -338,7 +365,7 @@
 		top: 0.4rem;
 		bottom: 0.4rem;
 		width: 3px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: var(--accent);
 	}
 	.me {
@@ -453,10 +480,14 @@
 		.mbar-btn:hover {
 			background: var(--surface-2);
 		}
+		/* Меню: відкриття — 260 мс --ease-emph (виїжджає з-за краю), закриття — 160 мс --ease-in */
 		.side {
 			transform: translateX(-100%);
-			transition: transform 0.2s var(--ease-out);
+			transition: transform 160ms var(--ease-in);
 			box-shadow: none;
+		}
+		.side.open {
+			transition: transform 260ms var(--ease-emph);
 		}
 		.side.open {
 			transform: none;
@@ -468,6 +499,12 @@
 			inset: 0;
 			background: rgba(10, 31, 56, 0.35);
 			z-index: 35;
+			animation: scrim-in var(--dur-base) var(--ease-out);
+		}
+		@keyframes scrim-in {
+			from {
+				opacity: 0;
+			}
 		}
 		.shell {
 			margin-left: 0;

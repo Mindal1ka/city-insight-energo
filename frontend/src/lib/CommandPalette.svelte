@@ -328,7 +328,7 @@
 		margin: 9vh auto auto;
 		padding: 0;
 		border: 0;
-		border-radius: 20px;
+		border-radius: var(--r-modal);
 		background: var(--surface);
 		color: var(--text);
 		box-shadow:
@@ -345,15 +345,16 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.cp[open] {
-			animation: cp-in 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+			/* Палітра «опускається» до поля пошуку зверху — коротко, бо це інструмент швидкого доступу */
+			animation: cp-in var(--dur-base) var(--ease-emph);
 		}
 		.cp[open]::backdrop {
-			animation: cp-fade 0.2s ease-out;
+			animation: cp-fade var(--dur-fast) var(--ease-out);
 		}
 		@keyframes cp-in {
 			from {
 				opacity: 0;
-				transform: translateY(-10px) scale(0.98);
+				transform: translateY(-8px);
 			}
 		}
 		@keyframes cp-fade {
@@ -397,7 +398,7 @@
 	.cp-esc {
 		border: 1px solid var(--line-strong);
 		background: #f4f6f9;
-		border-radius: 6px;
+		border-radius: var(--r-input);
 		padding: 0.15rem 0.45rem;
 		font: inherit;
 		font-size: 0.8rem;
@@ -418,9 +419,7 @@
 	.cp-group {
 		padding: 0.6rem 0.7rem 0.3rem;
 		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+		font-weight: 600;
 		color: var(--muted);
 	}
 	.cp-group span {
@@ -433,7 +432,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.55rem 0.7rem;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		cursor: pointer;
 	}
 	.cp-opt.active {
@@ -445,7 +444,7 @@
 		place-items: center;
 		width: 2.1rem;
 		height: 2.1rem;
-		border-radius: 9px;
+		border-radius: var(--r-btn);
 		background: #eef2f6;
 		color: var(--navy-3);
 		flex: none;
@@ -475,7 +474,7 @@
 	mark {
 		background: #ffe6a8;
 		color: inherit;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		padding: 0 1px;
 	}
 	.cp-enter {
@@ -510,7 +509,7 @@
 		margin-right: 0.2em;
 		border: 1px solid var(--line-strong);
 		border-bottom-width: 2px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		background: #fff;
 		font: inherit;
 		font-size: 0.75rem;
@@ -541,7 +540,7 @@
 			min-height: 44px;
 			padding: 0 0.85rem;
 			border: 0;
-			border-radius: 12px;
+			border-radius: var(--r-btn);
 			background: transparent;
 			color: var(--accent);
 			font-size: 1rem;
@@ -571,12 +570,12 @@
 	}
 	@media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
 		.cp[open] {
-			animation: cp-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+			animation: cp-up var(--dur-slow) var(--ease-emph);
 		}
 		@keyframes cp-up {
 			from {
-				opacity: 0.6;
-				transform: translateY(24px);
+				opacity: 0;
+				transform: translateY(32px);
 			}
 		}
 	}

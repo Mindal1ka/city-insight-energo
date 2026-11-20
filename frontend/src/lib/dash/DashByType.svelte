@@ -83,7 +83,7 @@
 		width: 100%;
 		padding: 0.4rem 0.5rem;
 		border: 1px solid transparent;
-		border-radius: 10px;
+		border-radius: var(--r-btn);
 		background: none;
 		font: inherit;
 		color: var(--text);
@@ -132,7 +132,7 @@
 	.track {
 		position: relative;
 		height: 12px;
-		border-radius: 6px;
+		border-radius: var(--r-input);
 		background: var(--line-soft);
 		overflow: hidden;
 	}
@@ -157,9 +157,9 @@
 		left: 0;
 		top: 3px;
 		bottom: 3px;
-		border-radius: 5px;
-		transition: width var(--dur-slow) var(--ease-out);
-		animation: grow var(--dur-slow) var(--ease-out);
+		border-radius: var(--r-sm);
+		/* Смуги ростуть від нуля лише при першому показі (transform), ширина — без анімації */
+		animation: grow var(--dur-slow) var(--ease-emph);
 		transform-origin: left;
 		z-index: 1;
 	}

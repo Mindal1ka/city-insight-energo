@@ -165,7 +165,7 @@
 		text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
 		text-decoration-thickness: 1.5px;
 		text-underline-offset: 0.2em;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 	}
 	.term:hover {
 		text-decoration-color: currentColor;
@@ -204,7 +204,7 @@
 		width: max-content;
 		max-width: min(23rem, calc(100vw - 16px));
 		padding: 0.75rem 0.9rem;
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		background: #10243d;
 		border: 1px solid rgba(255, 255, 255, 0.08);
 		color: #f3f6fa;
@@ -230,7 +230,7 @@
 		height: 12px;
 		background: inherit;
 		transform: rotate(45deg);
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 	}
 	.term-tip.above::before {
 		top: auto;
@@ -262,7 +262,7 @@
 		overflow-y: auto;
 		gap: 0.4rem;
 		padding: 0.5rem calc(1.25rem + env(safe-area-inset-right, 0px)) calc(1.25rem + env(safe-area-inset-bottom, 0px)) calc(1.25rem + env(safe-area-inset-left, 0px));
-		border-radius: 22px 22px 0 0;
+		border-radius: var(--r-modal) var(--r-modal) 0 0;
 		font-size: 1rem;
 		line-height: 1.5;
 		box-shadow:
@@ -277,7 +277,7 @@
 		width: 40px;
 		height: 5px;
 		margin: 0.15rem 0 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: rgba(255, 255, 255, 0.28);
 	}
 	.term-tip.sheet .t {

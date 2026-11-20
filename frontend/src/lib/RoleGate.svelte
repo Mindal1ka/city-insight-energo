@@ -97,7 +97,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.35rem 0.7rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px dashed var(--line-strong, #b9c4d2);
 		background: var(--surface-2, #f5f7fa);
 		color: var(--muted, #5b6878);

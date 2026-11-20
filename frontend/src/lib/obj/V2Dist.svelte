@@ -63,7 +63,7 @@
 		align-items: center;
 		gap: 0.3rem;
 		padding: 0.4rem 0.8rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 	}
 	.big.good { background: var(--ok-soft); color: var(--ok); }
 	.big.bad { background: var(--bad-soft); color: var(--bad); }
@@ -118,7 +118,7 @@
 		display: inline-block;
 		width: 0.7rem;
 		height: 0.7rem;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		margin-left: 0.4rem;
 	}
 	.sw:first-child {

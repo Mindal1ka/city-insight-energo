@@ -17,7 +17,7 @@
 	import { num } from '#lib/format.ts';
 	import { catLabel } from '#lib/categories.ts';
 	import { viewFrom, withView } from '#lib/view.ts';
-	import { fadeUp, stagger, DUR, isReduced } from '#lib/motion.ts';
+	import { DUR, isReduced } from '#lib/motion.ts';
 	import Status from '#lib/Status.svelte';
 	import DemoPill from '#lib/DemoPill.svelte';
 	import Icon from '#lib/Icon.svelte';
@@ -230,12 +230,12 @@
 	<div class="story" class:stale={loading}>
 		<!-- 1. Де ми зараз -->
 		<section class="block now" aria-labelledby="now-h">
-			<h2 id="now-h" class="kicker"><span class="step" aria-hidden="true">1</span>Де ми зараз</h2>
+			<h2 id="now-h" class="kicker">Де ми зараз</h2>
 			<div class="now-grid">
 				<div class="now-main" use:inview={() => (heroSeen = true)}>
 					<p class="nm-l"><Icon name="sun" size={22} /> Власне сонце дає</p>
 					<p class="nm-v"><span class="big-num"><CountUp value={c.self_sufficiency_pct} decimals={1} duration={600} /></span><span class="u">%</span></p>
-					<p class="nm-s">електрики · {num(c.sites)} будівель · рік</p>
+					<p class="nm-s">електрики за рік у {num(c.sites)} будівлях</p>
 					<div class="mix" class:go={heroSeen} role="img" aria-label="Сонце {num(c.self_sufficiency_pct, 1)} %, мережа {num(100 - c.self_sufficiency_pct, 1)} %">
 						<span class="mix-sun" style:--w="{c.self_sufficiency_pct}%"></span>
 						<span class="mix-grid"></span>
@@ -265,7 +265,7 @@
 		<!-- 2. Де бракує даних про резерв (нейтрально: це прогалина в даних, а не встановлений факт) -->
 		<Reveal>
 			<section class="block risk" aria-labelledby="risk-h">
-				<h2 id="risk-h" class="kicker"><span class="step" aria-hidden="true">2</span>Де бракує даних про резерв</h2>
+				<h2 id="risk-h" class="kicker">Де бракує даних про резерв</h2>
 				{#if noReserve.length}
 					<p class="statement">
 						Дані про резерв внесено лише для <b class="tnum">{num(c.critical_sites_total - noReserve.length)} з {num(c.critical_sites_total)}</b> медзакладів <span class="demo-tag">ДЕМО</span>
@@ -298,7 +298,7 @@
 		<!-- 3. Що дасть програма СЕС -->
 		<Reveal>
 			<section class="block pot" aria-labelledby="pot-h">
-				<h2 id="pot-h" class="kicker"><span class="step" aria-hidden="true">3</span>Що дасть програма <Term key="СЕС" plain>СЕС</Term></h2>
+				<h2 id="pot-h" class="kicker">Що дасть програма <Term key="СЕС" plain>СЕС</Term></h2>
 				<p class="statement">
 					Частка власного сонця зросте з
 					<span class="from tnum">{num(c.self_sufficiency_pct, 1)} %</span> до
@@ -333,7 +333,7 @@
 		<!-- 4. Рейтинг -->
 		<Reveal>
 			<section class="block rank-block" aria-labelledby="rank-h">
-				<h2 id="rank-h" class="kicker"><span class="step" aria-hidden="true">4</span>Рейтинг закладів</h2>
+				<h2 id="rank-h" class="kicker">Рейтинг закладів</h2>
 
 				<!-- Телефон: пошук + ряд чипів типів + шторка «Фільтри» -->
 				<div class="pf only-phone" role="search">
@@ -464,7 +464,7 @@
 							<tbody>
 								{#each filtered.slice(0, limit) as i, n (i.id)}
 									{@const s = status(i)}
-									<tr class:crit={i.critical} animate:flip={{ duration: isReduced() ? 0 : DUR.slow }} in:fadeUp={{ delay: stagger(n, 25, 250), y: 6 }}>
+									<tr class:crit={i.critical} animate:flip={{ duration: isReduced() ? 0 : DUR.slow }}>
 										<td class="name">
 											<a href={obj(i.id)}>{i.name}</a>
 											<span class="sub2">{catLabel(i.category_short)}{#if i.critical && i.category_short !== HEALTH}{' '}· <b class="crit-t">медичний</b>{/if}</span>
@@ -639,21 +639,8 @@
 		gap: 0.6rem;
 		margin: 0 0 1rem;
 		font-size: 0.95rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
+		font-weight: 600;
 		color: var(--muted);
-	}
-	.step {
-		display: grid;
-		place-items: center;
-		width: 1.7rem;
-		height: 1.7rem;
-		border-radius: 50%;
-		background: var(--navy);
-		color: #fff;
-		font-size: 0.85rem;
-		letter-spacing: 0;
 	}
 	.statement {
 		font-size: 1.6rem;
@@ -709,7 +696,7 @@
 	.mix {
 		display: flex;
 		height: 18px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		overflow: hidden;
 		background: #e2e8f0;
 		max-width: 34rem;
@@ -719,7 +706,7 @@
 		width: var(--w);
 		min-width: 6px;
 		background: var(--sun-strong);
-		border-radius: 999px 0 0 999px;
+		border-radius: var(--r-sm) 0 0 var(--r-sm);
 	}
 	.mix-grid {
 		flex: 1;
@@ -761,7 +748,7 @@
 		display: inline-block;
 		vertical-align: middle;
 		padding: 0.05rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px dashed #d08a1c;
 		background: var(--sun-soft);
 		color: var(--sun-ink);
@@ -786,7 +773,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.8rem 1rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		border: 1px solid var(--card-line);
 		background: var(--surface-2);
 		color: var(--text);
@@ -893,7 +880,7 @@
 	.pb {
 		display: flex;
 		height: 22px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #e8edf3;
 		overflow: hidden;
 	}
@@ -951,7 +938,7 @@
 	.index-explain {
 		margin: 0 0 1.25rem;
 		padding: 0.8rem 1rem;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 		background: #f3f6fa;
 		max-width: 60rem;
 	}
@@ -991,7 +978,7 @@
 		gap: 0.35rem;
 		min-height: 44px;
 		padding: 0.35rem 1rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		border: 1px solid #cfd7e1;
 		background: #fff;
 		font: inherit;
@@ -1034,7 +1021,7 @@
 		position: relative;
 		width: 2.4rem;
 		height: 1.4rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: #cbd5e1;
 		transition: background 0.2s;
 	}
@@ -1128,7 +1115,7 @@
 		display: inline-block;
 		width: 7rem;
 		height: 10px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #e8edf3;
 		margin-right: 0.5rem;
 		vertical-align: middle;
@@ -1165,7 +1152,7 @@
 	.formula {
 		margin: 0 0 0.75rem;
 		padding: 0.6rem 0.85rem;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: #f3f6fa;
 		color: #3d4857;
 		max-width: 60rem;
@@ -1271,7 +1258,7 @@
 		gap: 0.4rem;
 		min-height: 44px;
 		padding: 0 0.85rem;
-		border-radius: 12px;
+		border-radius: var(--r-btn);
 		border: 1px solid var(--line);
 		background: var(--surface);
 		font: inherit;
@@ -1286,7 +1273,7 @@
 		min-width: 1.25rem;
 		height: 1.25rem;
 		padding: 0 0.3rem;
-		border-radius: 999px;
+		border-radius: var(--r-pill);
 		background: var(--navy);
 		color: #fff;
 		font-size: 0.75rem;
@@ -1306,7 +1293,7 @@
 		max-height: 88dvh;
 		padding: 0;
 		border: 0;
-		border-radius: 20px 20px 0 0;
+		border-radius: var(--r-modal) var(--r-modal) 0 0;
 		background: var(--surface);
 		color: var(--text);
 		box-shadow: var(--shadow-lg);
@@ -1332,7 +1319,7 @@
 		display: block;
 		width: 2.5rem;
 		height: 4px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--line);
 		margin: 0 auto 0.5rem;
 	}
@@ -1359,15 +1346,13 @@
 	.sheet-l {
 		margin: 0.75rem 0 0.35rem;
 		font-size: 0.8rem;
-		font-weight: 700;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
+		font-weight: 600;
 		color: var(--muted);
 	}
 	.opts {
 		display: grid;
 		border: 1px solid var(--line-soft);
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		overflow: hidden;
 	}
 	.opt {
@@ -1429,7 +1414,7 @@
 		margin: 0;
 		padding: 0;
 		border: 1px solid var(--card-line);
-		border-radius: 14px;
+		border-radius: var(--r-card);
 		overflow: hidden;
 		background: var(--surface);
 	}
@@ -1525,7 +1510,7 @@
 		}
 		.block {
 			padding: 1rem;
-			border-radius: 14px;
+			border-radius: var(--r-card);
 			box-shadow: var(--shadow);
 		}
 		.risk,

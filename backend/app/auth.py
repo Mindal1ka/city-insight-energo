@@ -28,7 +28,7 @@ TOKEN_TTL = 12 * 3600  # 12 год
 
 ROLES: dict[str, dict] = {
     "public": {"name": "Мешканець / журналіст / депутат",
-               "description": "Без входу: мапа, зведені цифри громади, ефект інвестицій у СЕС (агреговано)",
+               "description": "Внутрішня роль запиту без токена (гостьового режиму немає; клієнтам не показується)",
                "needs_building": False, "needs_department": False},
     "energy_manager": {"name": "Енергоменеджер міста",
                        "description": "Усі дані; редагує дані СЕС і вартість будь-якого об'єкта; завантажує UMUNI",
@@ -103,7 +103,7 @@ def demo_password() -> str | None:
     if pw:
         return pw
     if not _warned_pw:
-        log.warning("DEMO_PASSWORD не задано — вхід вимкнено (працює лише публічний режим). Задайте його в .env")
+        log.warning("DEMO_PASSWORD не задано — вхід неможливий (гостьового режиму немає). Задайте його в .env")
         _warned_pw = True
     return None
 
@@ -327,20 +327,37 @@ def authenticate(req: LoginIn, building_ids: Container[int]) -> User:
 
 RATE_LIMIT = 10
 RATE_WINDOW = 60.0
-_attempts: dict[str, deque] = defaultdict(deque)
+_attempts: dict[tuple[str, str], deque] = defaultdict(deque)
 
 
-def rate_limited(ip: str, now: float | None = None) -> bool:
-    """True, якщо з цієї IP за хвилину вже було ≥10 невдалих спроб."""
+def rate_key(ip: str, login: str | None = None) -> tuple[str, str]:
+    """Ключ лічильника: (IP, логін). За проксі всі користувачі можуть мати одну IP —
+    помилки одного логіна не блокують інших."""
+    return ip, (login or "").strip().lower()
+
+
+def rate_limited(ip: str, now: float | None = None, login: str | None = None) -> bool:
+    """True, якщо для цієї пари (IP, логін) за хвилину вже було ≥10 невдалих спроб."""
     now = time.time() if now is None else now
-    q = _attempts[ip]
+    key = rate_key(ip, login)
+    q = _attempts.get(key)
+    if q is None:
+        return False
     while q and now - q[0] > RATE_WINDOW:
         q.popleft()
+    if not q:
+        _attempts.pop(key, None)
+        return False
     return len(q) >= RATE_LIMIT
 
 
-def note_failure(ip: str, now: float | None = None) -> None:
-    _attempts[ip].append(time.time() if now is None else now)
+def note_failure(ip: str, now: float | None = None, login: str | None = None) -> None:
+    _attempts[rate_key(ip, login)].append(time.time() if now is None else now)
+
+
+def note_success(ip: str, login: str | None = None) -> None:
+    """Успішний вхід скидає лічильник цієї пари (IP, логін)."""
+    _attempts.pop(rate_key(ip, login), None)
 
 
 def reset_rate_limit() -> None:

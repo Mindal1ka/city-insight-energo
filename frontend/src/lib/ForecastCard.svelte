@@ -3,9 +3,9 @@
 	// kw — потужність станції; null → показуємо міський рівень «на 1 кВт панелей».
 	// compact — вузький варіант без перемикача днів (для бокових панелей і списків).
 	import { getForecast, ratioOf, type Forecast, type ForecastDay } from './api-forecast.ts';
+	import Icon from './Icon.svelte';
 	import { errMessage } from './api.ts';
 	import { num } from './format.ts';
-	import { fadeUp } from './motion.ts';
 	import Disclosure from './Disclosure.svelte';
 
 	let { kw = null, compact = false }: { kw?: number | null; compact?: boolean } = $props();
@@ -166,7 +166,7 @@
 		</div>
 	{:else if day}
 		{#key day.date}
-			<div class="fc-main" in:fadeUp={{ y: 6 }}>
+			<div class="fc-main">
 				<div class="wx wx-{t}" aria-hidden="true">
 					<svg viewBox="0 0 48 48" width={compact ? 44 : 56} height={compact ? 44 : 56}>
 						{#if t !== 'cloud'}
@@ -229,7 +229,7 @@
 		{#if data?.stale || data?.demo}
 			<p class="fc-flags">
 				{#if data?.demo}<span class="pill pill-warn" title="Прогноз ще не підключено — показано приклад">демо</span>{/if}
-				{#if data?.stale}<span class="pill pill-warn" role="note" title="Показано останній збережений прогноз">⚠ застарілий</span>{/if}
+				{#if data?.stale}<span class="pill pill-warn" role="note" title="Показано останній збережений прогноз"><Icon name="alert" size={13} /> застарілий</span>{/if}
 			</p>
 		{/if}
 
@@ -310,7 +310,7 @@
 		display: inline-flex;
 		gap: 3px;
 		padding: 3px;
-		border-radius: 10px;
+		border-radius: var(--r-card);
 		background: #f1ece0;
 	}
 	.fc-days button {
@@ -322,7 +322,7 @@
 		color: #4a3a1a;
 		min-height: 40px;
 		padding: 0.3rem 0.7rem;
-		border-radius: 7px;
+		border-radius: var(--r-input);
 		cursor: pointer;
 	}
 	.fc-days button:hover {
@@ -375,7 +375,7 @@
 	}
 	.lvl {
 		padding: 0 0.35rem;
-		border-radius: 6px;
+		border-radius: var(--r-input);
 		white-space: nowrap;
 	}
 	.lvl-low {
@@ -424,15 +424,13 @@
 		color: var(--muted);
 	}
 	@media (prefers-reduced-motion: no-preference) {
-		.rays {
-			transform-origin: 24px 24px;
-			animation: spin 6s ease-out 1;
-		}
+		/* Лінія прогнозу промальовується зліва направо (час іде вперед), пік позначається слідом.
+		   Декоративне обертання сонця прибрано. */
 		.spark .draw {
-			animation: reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both 0.1s;
+			animation: reveal var(--dur-slow) var(--ease-out) both;
 		}
 		.spark .pk {
-			animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both 0.6s;
+			animation: pop var(--dur-fast) var(--ease-out) both var(--dur-slow);
 			transform-box: fill-box;
 			transform-origin: center;
 		}
@@ -466,14 +464,14 @@
 	.norm-bar {
 		position: relative;
 		height: 8px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: #eef1f5;
 		overflow: visible;
 	}
 	.norm-fill {
 		position: absolute;
 		inset: 0 auto 0 0;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--sun);
 	}
 	.norm-fill.wx-part {
@@ -489,7 +487,7 @@
 		bottom: -4px;
 		width: 2px;
 		background: var(--text);
-		border-radius: 1px;
+		border-radius: var(--r-sm);
 	}
 	.norm-legend {
 		margin: 0;
@@ -564,7 +562,7 @@
 	.fc-skel i {
 		display: block;
 		height: 14px;
-		border-radius: 6px;
+		border-radius: var(--r-input);
 		background: linear-gradient(90deg, #f0ece2, #f8f5ee, #f0ece2);
 	}
 	.fc-skel i:first-child {
@@ -579,7 +577,7 @@
 		.fc {
 			padding: 0.85rem 1rem 0.8rem;
 			gap: 0.6rem;
-			border-radius: 14px;
+			border-radius: var(--r-card);
 		}
 		.fc-days {
 			display: grid;

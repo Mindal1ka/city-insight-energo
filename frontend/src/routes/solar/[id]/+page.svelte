@@ -2,6 +2,7 @@
 	// Розрахунок СЕС для однієї будівлі: відповідь одним реченням → повзунок «а якщо інша станція» → прогноз на завтра.
 	// Технічні цифри — у розкривних блоках унизу.
 	import { page } from '$app/state';
+	import Icon from '#lib/Icon.svelte';
 	import { getJSON, qs, errMessage, ApiError, type SolarDetail, type SolarList } from '#lib/api.ts';
 	import type { IndependenceItem } from '#lib/api-independence.ts';
 	import { num, MONTHS_FULL } from '#lib/format.ts';
@@ -146,7 +147,7 @@
 		<div>
 			<p class="muted kicker">
 				Сонячна станція · {catLabel(it.category_short)}
-				{#if critical}<span class="pill pill-bad"><span aria-hidden="true">✚</span> критичний заклад</span>{/if}
+				{#if critical}<span class="pill pill-bad"><Icon name="plus" size={13} stroke={2.6} /> критичний заклад</span>{/if}
 				{#if it.rank}<span class="pill">№ {it.rank} за окупністю</span>{/if}
 			</p>
 			<h1>{it.name}</h1>
@@ -421,7 +422,7 @@
 			gap: 0.75rem;
 			padding: 0.9rem 1rem;
 			margin-bottom: 0.875rem;
-			border-radius: 14px;
+			border-radius: var(--r-card);
 			box-shadow: var(--shadow);
 		}
 		.a-ico {

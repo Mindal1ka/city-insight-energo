@@ -8,9 +8,9 @@
  *   Кнопки:      .btn, .btn-secondary, .btn-ghost, .btn-sun, .btn-sm, .btn-lg
  *   Позначки:    .chip (aria-pressed для вибраного), .pill, .pill-ok/.pill-warn/.pill-bad
  *   Текст:       .eyebrow, .lead, .muted, .small, .tnum, .big-num, .unit-s
- *   Моушн:       .fade-in, .stagger (діти з'являються драбинкою), .lift (підйом при наведенні), .press
- *   Тривалості:  var(--dur-fast|--dur-base|--dur-slow), криві var(--ease-out|--ease-spring)
- *   Шкала:       --sp-1…--sp-8 (4…64 px), --fs-xs…--fs-3xl, --radius-sm|--radius|--radius-lg|--radius-xl
+ *   Моушн:       .lift (рамка при наведенні), .press (стискання при натисканні). Без масових появ.
+ *   Тривалості:  var(--dur-press|--dur-fast|--dur-base|--dur-slow), криві var(--ease-out|--ease-in-out|--ease-in|--ease-emph)
+ *   Шкала:       --sp-1…--sp-8 (4…64 px), --fs-xs…--fs-3xl, --r-sm|--r-input|--r-btn|--r-card|--r-modal|--r-pill
  *
  * ТЕЛЕФОН (див. блок «Мобільна версія» внизу)
  *   Брейкпоінти: ≤640 — телефон (компактні відступи, 2 колонки StatCard), ≤768 — нижня панель вкладок.
@@ -51,11 +51,21 @@
 	--bad-soft: #fbe9e8;
 	--focus: #ffbf47;
 
-	/* Радіуси */
-	--radius-sm: 4px;
-	--radius: 6px;
-	--radius-lg: 8px;
-	--radius-xl: 8px;
+	/* Радіуси — одна шкала:
+	   --r-sm: смужки, свотчі, дрібні мітки; --r-input: поля, сегменти; --r-btn: кнопки;
+	   --r-card: картки й панелі; --r-modal: шухляди, діалоги, шторки;
+	   --r-pill: лише фільтр-чипи, статусні бейджі, перемикачі, аватари */
+	--r-sm: 4px;
+	--r-input: 6px;
+	--r-btn: 8px;
+	--r-card: 12px;
+	--r-modal: 16px;
+	--r-pill: 999px;
+	/* старі назви — псевдоніми до шкали */
+	--radius-sm: var(--r-sm);
+	--radius: var(--r-input);
+	--radius-lg: var(--r-card);
+	--radius-xl: var(--r-card);
 
 	/* Тіні: багатошарові, з легким синім відтінком */
 	--shadow: none;
@@ -83,14 +93,19 @@
 	--fs-3xl: 2.5rem;
 	--fs-stat: 2.25rem; /* число в StatCard */
 
-	/* Моушн */
-	--dur-fast: 150ms;
-	--dur-base: 240ms;
-	--dur-slow: 420ms;
-	--ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-	--ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-	--ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	/* Моушн — єдине джерело тривалостей і кривих (див. також lib/motion.ts).
+	   press 100 / fast 140 — рутинний UI (наведення, натиск, чипи, вкладки);
+	   base 220 / slow 300 — значущі зміни (картка, шухляда, графік, сторінка). Без «пружин». */
+	--dur-press: 100ms;
+	--dur-fast: 140ms;
+	--dur-base: 220ms;
+	--dur-slow: 300ms;
+	--ease-out: cubic-bezier(0.2, 0.7, 0.2, 1); /* швидкий старт, м'яка посадка — поява, реакція */
+	--ease-in-out: cubic-bezier(0.55, 0, 0.25, 1); /* переміщення між двома станами (індикатор, вкладки) */
+	--ease-in: cubic-bezier(0.4, 0, 1, 1); /* зникнення — швидко геть з дороги */
+	--ease-emph: cubic-bezier(0.16, 1, 0.3, 1); /* акцент: відкриття картки/шухляди, без перельоту */
+	--ease: var(--ease-out);
+	--ease-spring: var(--ease-emph); /* сумісність: колишня «пружина» тепер без відскоку */
 
 	/* Бренд: нічне небо + сонце */
 	--navy: #0f2f52;
@@ -230,10 +245,12 @@ a:hover {
 }
 
 :focus-visible {
+	/* Кільце фокусу з'являється миттєво: рух тут лише заважав би читати, де фокус */
+	transition-property: transform !important;
 	outline: 3px solid var(--focus);
 	outline-offset: 2px;
 	box-shadow: 0 0 0 5px var(--text);
-	border-radius: 4px;
+	border-radius: var(--r-sm);
 }
 
 .muted {
@@ -395,7 +412,7 @@ td.empty-cell {
 	justify-content: center;
 	gap: 0.45rem;
 	padding: 0.55rem 1.1rem;
-	border-radius: 11px;
+	border-radius: var(--r-btn);
 	border: 1px solid var(--accent-dark);
 	background: linear-gradient(180deg, #1468bd, var(--accent));
 	color: #fff;
@@ -410,11 +427,11 @@ td.empty-cell {
 		0 1px 2px rgba(11, 92, 173, 0.25),
 		0 4px 12px -6px rgba(11, 92, 173, 0.5);
 	transition:
-		background var(--dur-fast),
-		box-shadow var(--dur-base) var(--ease-out),
-		transform var(--dur-base) var(--ease-out),
-		color var(--dur-fast),
-		border-color var(--dur-fast);
+		background var(--dur-fast) var(--ease-out),
+		box-shadow var(--dur-fast) var(--ease-out),
+		transform var(--dur-press) var(--ease-out),
+		color var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out);
 }
 .btn:hover {
 	background: linear-gradient(180deg, #0f5eac, var(--accent-dark));
@@ -427,8 +444,7 @@ td.empty-cell {
 		0 10px 22px -10px rgba(11, 92, 173, 0.6);
 }
 .btn:active {
-	transform: translateY(0) scale(0.98);
-	transition-duration: 60ms;
+	transform: scale(0.97);
 }
 .btn-secondary {
 	background: var(--surface);
@@ -472,13 +488,13 @@ td.empty-cell {
 	min-height: 34px;
 	padding: 0.3rem 0.75rem;
 	font-size: 0.875rem;
-	border-radius: 9px;
+	border-radius: var(--r-btn);
 }
 .btn-lg {
 	min-height: 50px;
 	padding: 0.7rem 1.5rem;
 	font-size: 1.0625rem;
-	border-radius: 13px;
+	border-radius: var(--r-btn);
 }
 .btn:disabled,
 .btn[aria-disabled='true'] {
@@ -502,7 +518,7 @@ textarea {
 	font: inherit;
 	padding: 0.5rem 0.7rem;
 	border: 1px solid var(--line-strong);
-	border-radius: 10px;
+	border-radius: var(--r-input);
 	background: #fff;
 	color: var(--text);
 	min-height: 42px;
@@ -560,11 +576,13 @@ input[type='radio'] {
 	cursor: pointer;
 	white-space: nowrap;
 	transition:
-		background var(--dur-fast),
-		border-color var(--dur-fast),
-		color var(--dur-fast),
-		transform var(--dur-base) var(--ease-out),
-		box-shadow var(--dur-base) var(--ease-out);
+		background var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out),
+		color var(--dur-fast) var(--ease-out),
+		transform var(--dur-press) var(--ease-out);
+}
+.chip:active {
+	transform: scale(0.97);
 }
 .chip:hover {
 	border-color: var(--line-strong);
@@ -692,8 +710,6 @@ td.name {
 .eyebrow {
 	font-size: 0.8125rem;
 	font-weight: 650;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 .panel {
@@ -744,10 +760,10 @@ td.name {
 	text-decoration: none;
 	cursor: pointer;
 	transition:
-		background var(--dur-fast),
-		box-shadow var(--dur-base) var(--ease-out),
-		color var(--dur-fast),
-		transform var(--dur-base) var(--ease-out);
+		background var(--dur-fast) var(--ease-out),
+		box-shadow var(--dur-fast) var(--ease-out),
+		color var(--dur-fast) var(--ease-out),
+		transform var(--dur-press) var(--ease-out);
 }
 .seg a:hover,
 .seg button:hover {
@@ -765,89 +781,105 @@ td.name {
 	color: var(--navy);
 	box-shadow: 0 0 0 1px #d3dae3;
 }
+/* Ковзна «таблетка» (дія segIndicator з lib/motion.ts): вибране підсвічує один елемент, що переїжджає */
+.seg.has-ind {
+	position: relative;
+}
+.seg.has-ind > :not(.seg-ind) {
+	position: relative;
+}
+.seg.has-ind > [aria-current='page'],
+.seg.has-ind > [aria-selected='true'],
+.seg.has-ind > [aria-pressed='true'],
+.seg.has-ind > [aria-checked='true'] {
+	background: transparent;
+	box-shadow: none;
+}
+.seg-ind {
+	position: absolute;
+	left: 0;
+	top: 0;
+	border-radius: var(--radius-sm);
+	background: #fff;
+	box-shadow: 0 0 0 1px #d3dae3;
+	pointer-events: none;
+	transform-origin: 0 50%;
+	will-change: transform;
+	transition:
+		transform var(--dur-base) var(--ease-in-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
 
 /* --- Моушн-утиліти --- */
 .lift {
 	transition:
-		transform var(--dur-base) var(--ease-out),
-		box-shadow var(--dur-base) var(--ease-out),
-		border-color var(--dur-base);
+		box-shadow var(--dur-fast) var(--ease-out),
+		border-color var(--dur-fast) var(--ease-out);
 }
 .lift:hover {
 	border-color: var(--card-line-hover);
 }
-.press:active {
-	transform: scale(0.98);
-	transition-duration: 60ms;
+/* Натиск: 0.97 за 100 мс — підтвердження, що клік «зайшов» */
+.press {
+	transition: transform var(--dur-press) var(--ease-out);
 }
-@media (prefers-reduced-motion: no-preference) {
-	.fade-in {
-		animation: fade-in 0.4s var(--ease-out) backwards;
-	}
-	@keyframes fade-in {
-		from {
-			opacity: 0;
-			transform: translateY(8px);
-		}
-	}
-	/* Діти з'являються драбинкою (до 10 штук), напр. <div class="stat-grid stagger"> */
-	.stagger > * {
-		animation: none;
-	}
-	.stagger > :nth-child(2) {
-		animation-delay: 30ms;
-	}
-	.stagger > :nth-child(3) {
-		animation-delay: 60ms;
-	}
-	.stagger > :nth-child(4) {
-		animation-delay: 90ms;
-	}
-	.stagger > :nth-child(5) {
-		animation-delay: 120ms;
-	}
-	.stagger > :nth-child(6) {
-		animation-delay: 150ms;
-	}
-	.stagger > :nth-child(7) {
-		animation-delay: 180ms;
-	}
-	.stagger > :nth-child(8) {
-		animation-delay: 210ms;
-	}
-	.stagger > :nth-child(9) {
-		animation-delay: 240ms;
-	}
-	.stagger > :nth-child(n + 10) {
-		animation-delay: 270ms;
-	}
+.press:active {
+	transform: scale(0.97);
+}
+/* Колишні .fade-in / .stagger свідомо порожні: вміст з'являється одразу, без масових «підйомів» */
+
+/* --- Тонка смуга прогресу навігації (див. +layout.svelte) --- */
+.nav-progress {
+	position: fixed;
+	inset: 0 0 auto 0;
+	height: 2px;
+	z-index: 2000;
+	pointer-events: none;
+	background: var(--sun, #f5a524);
+	transform-origin: 0 50%;
+	transform: scaleX(0);
+	opacity: 0;
+}
+.nav-progress.on {
+	opacity: 1;
+	transform: scaleX(0.7);
+	transition:
+		transform 900ms var(--ease-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+.nav-progress.done {
+	opacity: 0;
+	transform: scaleX(1);
+	transition:
+		transform var(--dur-fast) var(--ease-out),
+		opacity var(--dur-base) var(--ease-in) 80ms;
 }
 
-/* --- Переходи між сторінками (View Transitions API, див. +layout.svelte) --- */
+/* --- Переходи між сторінками (View Transitions API, див. +layout.svelte) ---
+   Лише перехресне згасання вмісту за 180 мс; меню стоїть на місці. */
 @media (prefers-reduced-motion: no-preference) {
 	::view-transition-old(root),
 	::view-transition-new(root) {
 		animation: none;
 	}
 	::view-transition-old(page) {
-		animation: vt-out 160ms var(--ease-in-out) both;
+		animation: vt-out 90ms var(--ease-in) both;
 	}
 	::view-transition-new(page) {
-		animation: vt-in 340ms var(--ease-out) 60ms both;
+		animation: vt-in 180ms var(--ease-out) both;
 	}
 	::view-transition-group(page) {
-		animation-duration: 340ms;
+		animation-duration: 180ms;
 	}
 	@keyframes vt-out {
 		to {
 			opacity: 0;
-			transform: translateY(-6px);
 		}
 	}
 	@keyframes vt-in {
 		from {
 			opacity: 0;
-			transform: translateY(12px);
+			transform: translateY(4px);
 		}
 	}
 }
@@ -857,7 +889,7 @@ td.name {
 	position: relative;
 	overflow: hidden;
 	background: linear-gradient(90deg, #e6ebf2, #edf1f6);
-	border-radius: 8px;
+	border-radius: var(--r-btn);
 }
 @media (prefers-reduced-motion: no-preference) {
 	.skeleton::after {
@@ -1016,7 +1048,7 @@ pre {
 	.card {
 		padding: 1rem;
 		margin-bottom: 0.875rem;
-		border-radius: 14px;
+		border-radius: var(--r-card);
 	}
 	.panel {
 		padding: 1rem;
@@ -1047,7 +1079,7 @@ pre {
 		max-width: 100%;
 		overscroll-behavior-x: contain;
 		-webkit-overflow-scrolling: touch;
-		border-radius: 12px;
+		border-radius: var(--r-card);
 	}
 	table {
 		font-size: 0.875rem;

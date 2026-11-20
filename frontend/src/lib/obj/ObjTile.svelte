@@ -32,7 +32,7 @@
 	const empty = $derived(text === null && (value === null || value === undefined));
 </script>
 
-<div class="tile t-{tone}" style="--d: {Math.min(i * 45, 400)}ms">
+<div class="tile t-{tone}">
 	<span class="ic" aria-hidden="true"><Icon name={icon} size={20} /></span>
 	<p class="l">{label}</p>
 	<p class="v" class:empty>
@@ -57,8 +57,6 @@
 		border: 1px solid var(--card-line);
 		border-radius: var(--radius);
 		min-width: 0;
-		animation: obj-rise 0.5s var(--ease-out) both;
-		animation-delay: var(--d);
 		transition:
 			border-color var(--dur-fast),
 			transform var(--dur-fast) var(--ease-out),
@@ -75,7 +73,7 @@
 		place-items: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 9px;
+		border-radius: var(--r-btn);
 		background: var(--neutral-soft);
 		color: var(--muted);
 	}
@@ -125,12 +123,6 @@
 		font-size: var(--fs-xs);
 		color: var(--muted);
 		font-variant-numeric: tabular-nums;
-	}
-	@keyframes obj-rise {
-		from {
-			opacity: 0;
-			transform: translateY(10px);
-		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.tile {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	// Паспорт даних будівлі: що про неї відомо з UMUNI, скільки електрики витрачає,
 	// як це порівняно зі схожими будівлями і які проблеми в даних треба виправити.
 	import { page } from '$app/state';
@@ -42,9 +43,11 @@
 		}
 	}
 
-	// Перезавантажуємо при зміні id в адресі
+	// Перезавантажуємо лише при зміні id в адресі. untrack: load() синхронно читає `all`, і без нього
+	// кожне завантаження перезапускало ефект — нескінченний цикл запитів (сторінка не доходила до network idle)
 	$effect(() => {
-		load(id);
+		const bid = id;
+		untrack(() => load(bid));
 	});
 
 	const years = $derived(b ? Object.keys(b.years).sort() : []);
@@ -343,14 +346,14 @@
 	.y-track {
 		display: block;
 		height: 12px;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--neutral-soft);
 		overflow: hidden;
 	}
 	.y-fill {
 		display: block;
 		height: 100%;
-		border-radius: 999px;
+		border-radius: var(--r-sm);
 		background: var(--navy-3);
 		transform-origin: left center;
 	}
@@ -359,7 +362,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.y-fill {
-			animation: grow-x 0.8s var(--ease) both;
+			animation: grow-x var(--dur-slow) var(--ease-emph) both;
 			animation-delay: calc(var(--i, 0) * 120ms + 250ms);
 		}
 		@keyframes grow-x {
@@ -410,7 +413,7 @@
 		padding: 0.75rem 1rem;
 		border: 1px solid var(--line);
 		border-left: 4px solid var(--line-strong);
-		border-radius: 10px;
+		border-radius: var(--r-card);
 	}
 	.dgroups li.sev-high {
 		border-left-color: var(--bad);
