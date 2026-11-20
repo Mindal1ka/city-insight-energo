@@ -3,7 +3,7 @@
 	// Текст і цифри — у lib/pitch/slides.ts. Сторінка публічна і не звертається до /api.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { SLIDES, FOOTER } from '#lib/pitch/slides.ts';
+	import { SLIDES, FOOTER, BRAND, type IconName } from '#lib/pitch/slides.ts';
 
 	const W = 1920;
 	const H = 1080;
@@ -76,12 +76,30 @@
 	});
 
 	// Діаграма «джерела → Insight → ролі»: координати в межах блока 1680×700
-	const FLOW_H = 700;
-	const srcY = (i: number) => 10 + 40 + i * 100;
-	const roleY = (i: number) => 24 + 46 + i * 112;
+	const FLOW_H = 660;
+	const CORE_Y = 140;
+	const srcY = (i: number) => 38 + i * 96;
+	const roleY = (i: number) => 128 + i * 70;
 
 	const maxBar = (vals: number[]) => Math.max(...vals);
 </script>
+
+{#snippet icon(name: IconName, size: number)}
+	<svg class="ico" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+		{#if name === 'bolt'}<path d="M13 2 4 14h7l-1 8 9-12h-7z" />
+		{:else if name === 'book'}<path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3zM21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z" />
+		{:else if name === 'cross'}<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" />
+		{:else if name === 'wallet'}<path d="M3 7h17v13H3zM3 7l13-4v4M15 13.5h5" />
+		{:else if name === 'building'}<path d="M4 21V6l8-3 8 3v15M2 21h20M9 21v-5h6v5M8 9h1M15 9h1M8 12.5h1M15 12.5h1" />
+		{:else if name === 'sun'}<circle cx="12" cy="12" r="4" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
+		{:else if name === 'coin'}<circle cx="12" cy="12" r="9" /><path d="M8.5 10.5h7M8.5 13.5h7M14.5 8.2c-1-1-4.5-1.2-5 .8-.6 2.4 5.6 2.4 5 5.2-.5 2-4 2-5.2.8" />
+		{:else if name === 'gov'}<path d="M3 9.5 12 4l9 5.5M4 10h16M6 10v8M10 10v8M14 10v8M18 10v8M3 20.5h18" />
+		{:else if name === 'culture'}<path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zM20 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3zM9 10l11-2" />
+		{:else if name === 'sport'}<circle cx="12" cy="12" r="9" /><path d="M3.5 9.5c4 1.5 13 1.5 17 0M3.5 14.5c4-1.5 13-1.5 17 0M12 3c-3 4-3 14 0 18" />
+		{:else if name === 'house'}<path d="M3 11 12 4l9 7M5 9.5V20h14V9.5M10 20v-6h4v6" />
+		{:else}<circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" />{/if}
+	</svg>
+{/snippet}
 
 <svelte:window bind:innerWidth={vw} bind:innerHeight={vh} onkeydown={onKey} />
 <svelte:head>
@@ -111,43 +129,59 @@
 			>
 				<section class="slide k-{s.kind}" aria-label="Слайд {i + 1} з {N}">
 					{#if s.kind === 'title'}
-						<div class="logos r" style:--i={0}>
-							<img class="partners" src={s.logos.partners} alt="Організатори хакатону" />
-							<div class="city">
-								<img src={s.logos.gerb} alt="Герб Полтави" onerror={hideImg} />
-								<img src={s.logos.emblem} alt="Емблема Полтавської міської ради" onerror={hideImg} />
+						<div class="t-grid">
+							<img class="t-banner r" style:--i={0} src={s.logos.banner} alt={s.logos.bannerAlt} width="2000" height="1125" />
+							<div class="t-right">
+								<div class="city r" style:--i={1}>
+									<img src={s.logos.gerb} alt="Герб Полтави" onerror={hideImg} />
+									<img src={s.logos.emblem} alt="Емблема Полтавської міської ради" onerror={hideImg} />
+								</div>
+								<h1 class="r" style:--i={1}>{s.title}</h1>
+								<p class="t-tag r" style:--i={2} lang="en">{s.tagline}</p>
+								<p class="t-sub r" style:--i={3}>{s.subtitle}</p>
+								<p class="t-lead r" style:--i={4}>{s.lead}</p>
+								<div class="t-meta r" style:--i={5}>
+									<p>{s.track}</p>
+									<p>{s.direction}</p>
+								</div>
 							</div>
 						</div>
-						<div class="t-body">
-							<div class="sunbar r" style:--i={1}></div>
-							<h1 class="r" style:--i={2}>{s.title}</h1>
-							<p class="t-tag r" style:--i={2.5} lang="en">{s.tagline}</p>
-							<p class="t-sub r" style:--i={3}>{s.subtitle}</p>
-							<p class="t-lead r" style:--i={4}>{s.lead}</p>
-						</div>
-						<div class="t-meta r" style:--i={5}>
-							<p>{s.track}</p>
-							<p>{s.direction}</p>
+						<div class="team r" style:--i={6}>
+							{#each s.team as m (m.name)}
+								<div class="tm"><b>{m.name}</b><span>{m.role}</span></div>
+							{/each}
 						</div>
 					{:else if s.kind === 'problem'}
 						<h2 class="r" style:--i={0}>{s.title}</h2>
+						<div class="stats r" style:--i={1}>
+							{#each s.stats as f (f.label)}
+								<div class="st"><div class="st-v">{f.value}{#if f.unit}<small>{f.unit}</small>{/if}</div><div class="st-l">{f.label}</div></div>
+							{/each}
+						</div>
 						<div class="p-grid">
-							<div class="p-problem r" style:--i={1}>
+							<div class="p-problem r" style:--i={2}>
 								<h3>{s.problemTitle}</h3>
-								<p>{s.problem}</p>
+								<ul class="dash">{#each s.problems as pr (pr)}<li>{pr}</li>{/each}</ul>
 							</div>
-							<div class="p-value">
-								<h3 class="r" style:--i={2}>{s.valueTitle}</h3>
-								<ul>
-									{#each s.values as v, j (j)}
-										<li class="r" style:--i={3 + j}>{v}</li>
-									{/each}
-								</ul>
+							<div class="p-value r" style:--i={3}>
+								<h3>{s.valueTitle}</h3>
+								<ul>{#each s.values as v (v)}<li>{v}</li>{/each}</ul>
 							</div>
 						</div>
-						<div class="users r" style:--i={9}>
+						<div class="users r" style:--i={4}>
 							<span class="users-t">{s.usersTitle}</span>
-							{#each s.users as u (u)}<span class="user">{u}</span>{/each}
+							{#each s.users as u (u.label)}
+								<div class="user">
+									<span class="ava">
+										<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+											<circle cx="32" cy="24" r="10" />
+											<path d="M12 54c2-11 10-16 20-16s18 5 20 16" />
+										</svg>
+										<span class="badge">{@render icon(u.icon, 20)}</span>
+									</span>
+									<span class="user-l">{u.label}</span>
+								</div>
+							{/each}
 						</div>
 					{:else if s.kind === 'profile'}
 						<h2 class="r" style:--i={0}>{s.title}</h2>
@@ -161,45 +195,60 @@
 									</div>
 								{/each}
 							</div>
-							<div class="chart r" style:--i={6}>
+							<div class="chart card r" style:--i={6}>
 								<h3>{s.chartTitle}</h3>
-								<svg viewBox="0 0 820 420" width="820" height="420" role="img" aria-label={s.chartTitle}>
+								<svg viewBox="0 0 760 420" width="760" height="420" role="img" aria-label={s.chartTitle}>
 									{#each s.bars as b, j (b.label)}
 										{@const y = j * 70}
-										<text x="0" y={y + 34} class="bl">{b.label}</text>
-										<rect x="300" y={y + 10} width={Math.max(4, (b.value / maxBar(s.bars.map((x) => x.value))) * 400)} height="36" rx="4" class="bar" class:first={j === 0} />
-										<text x={300 + Math.max(4, (b.value / maxBar(s.bars.map((x) => x.value))) * 400) + 14} y={y + 38} class="bv">{b.display}</text>
+										{@const w = Math.max(4, (b.value / maxBar(s.bars.map((x) => x.value))) * 360)}
+										<text x="0" y={y + 36} class="bl">{b.label}</text>
+										<rect x="270" y={y + 12} width={w} height="36" rx="4" class="cbar" class:first={j === 0} />
+										<text x={270 + w + 14} y={y + 40} class="bv">{b.display}</text>
 									{/each}
 								</svg>
 							</div>
 						</div>
-						<p class="note r" style:--i={7}>{s.note}</p>
+						<div class="defects r" style:--i={7}>
+							<span class="def-t">{s.defectsTitle}</span>
+							{#each s.defects as d (d.label)}
+								<div class="def"><b>{d.value}</b><span>{d.label}</span></div>
+							{/each}
+						</div>
 					{:else if s.kind === 'flow'}
 						<h2 class="r" style:--i={0}>{s.title}</h2>
 						<div class="flow" style:height="{FLOW_H}px">
 							<svg class="wires r" style:--i={3} viewBox="0 0 1680 {FLOW_H}" width="1680" height={FLOW_H} aria-hidden="true">
 								{#each s.sources as _, j (j)}
-									<path d="M 480 {srcY(j)} C 600 {srcY(j)}, 600 {FLOW_H / 2}, 690 {FLOW_H / 2}" />
+									<path d="M 470 {srcY(j)} C 590 {srcY(j)}, 590 {CORE_Y}, 680 {CORE_Y}" />
 								{/each}
 								{#each s.roles as _, j (j)}
-									<path d="M 1110 {FLOW_H / 2} C 1200 {FLOW_H / 2}, 1200 {roleY(j)}, 1300 {roleY(j)}" />
+									<path d="M 1120 {CORE_Y} C 1210 {CORE_Y}, 1210 {roleY(j)}, 1300 {roleY(j)}" />
 								{/each}
 							</svg>
 							<div class="col src">
 								{#each s.sources as src, j (src.name)}
-									<div class="node r" style:--i={1 + j * 0.3} style:top="{srcY(j) - 40}px">
+									<div class="node r" style:--i={1 + j * 0.3} style:top="{srcY(j) - 38}px">
 										<b>{src.name}</b><span>{src.detail}</span>
 									</div>
 								{/each}
 							</div>
-							<div class="core r" style:--i={4}>
-								<div class="core-t">{s.coreTitle}</div>
-								<ul>{#each s.core as c (c)}<li>{c}</li>{/each}</ul>
+							<div class="center">
+								<div class="core r" style:--i={4}>
+									<div class="core-t">{s.coreTitle}</div>
+									<ul>{#each s.core as c (c)}<li>{c}</li>{/each}</ul>
+								</div>
+								<div class="cstats r" style:--i={5}>
+									{#each s.stats as f (f.label)}
+										<div class="st"><div class="st-v">{f.value}</div><div class="st-l">{f.label}</div></div>
+									{/each}
+								</div>
 							</div>
 							<div class="col roles">
-								<div class="roles-t r" style:--i={5}>{s.rolesTitle}</div>
-								{#each s.roles as r, j (r)}
-									<div class="node role r" style:--i={5 + j * 0.3} style:top="{roleY(j) - 46}px">{r}</div>
+								<div class="roles-h r" style:--i={5}><b>{s.rolesTitle}</b><span>{s.rolesSub}</span></div>
+								{#each s.roles as r, j (r.label)}
+									<div class="node role r" style:--i={5 + j * 0.3} style:top="{roleY(j) - 28}px">
+										<span class="role-ic">{@render icon(r.icon, 22)}</span>{r.label}
+									</div>
 								{/each}
 							</div>
 						</div>
@@ -254,7 +303,7 @@
 									{/each}
 								</div>
 								<div class="r" style:--i={5}>
-									<svg viewBox="0 0 860 300" width="860" height="300" role="img" aria-label="Індекс K по місяцях">
+									<svg class="kchart" viewBox="0 0 860 300" width="860" height="300" role="img" aria-label="Індекс K по місяцях">
 										{#each s.months as m, j (j)}
 											{@const h = (m.k / 2.4) * 240}
 											<rect x={j * 72 + 6} y={250 - h} width="52" height={h} rx="4" class={m.k >= s.threshold ? 'kb ok' : 'kb low'} />
@@ -265,12 +314,34 @@
 									</svg>
 								</div>
 							</div>
-							<figure class="shot r" style:--i={3}>
-								<img src={s.shot} alt={s.shotCaption} />
-								<figcaption>{s.shotCaption}</figcaption>
-							</figure>
+							<div class="so-right">
+								<figure class="shot r" style:--i={3}>
+									<img src={s.shot} alt={s.shotCaption} />
+									<figcaption>{s.shotCaption}</figcaption>
+								</figure>
+								<div class="auto card r" style:--i={6}>
+									<div class="auto-main">
+										<span class="auto-ic">{@render icon('clock', 34)}</span>
+										<div>
+											<div class="auto-t">{s.autonomy.title} <span class="demo">ДЕМО</span></div>
+											<div class="auto-v">{s.autonomy.value}<small>год</small></div>
+											<div class="auto-l">{s.autonomy.label}</div>
+										</div>
+									</div>
+									<div class="auto-bars">
+										{#each s.autonomy.bars as b (b.label)}
+											<div class="ab">
+												<span class="ab-l">{b.label}</span>
+												<div class="ab-track"><div class="ab-fill" style:width="{(b.hours / 10) * 100}%"></div><div class="ab-goal"></div></div>
+												<span class="ab-v">{b.display}</span>
+											</div>
+										{/each}
+										<div class="ab-note">Риска — {s.autonomy.target}</div>
+									</div>
+								</div>
+							</div>
 						</div>
-						<p class="note r" style:--i={6}>{s.outage}</p>
+						<p class="note r" style:--i={7}>{s.autonomy.outage}</p>
 					{:else if s.kind === 'econ'}
 						<h2 class="r" style:--i={0}>{s.title}</h2>
 						<div class="ec-grid">
@@ -282,32 +353,44 @@
 								</tbody>
 							</table>
 							<div class="ec-res">
-								<p class="formula r" style:--i={2}>{s.formula}</p>
 								{#each s.result as f, j (j)}
-									<div class="fig r" style:--i={3 + j}>
+									<div class="fig r" style:--i={2 + j}>
 										<div class="fig-v">{f.value}{#if f.unit}<small>{f.unit}</small>{/if}{#if f.demo}<span class="demo">ДЕМО</span>{/if}</div>
 										<div class="fig-l">{f.label}</div>
 									</div>
 								{/each}
 							</div>
 						</div>
-						<p class="note r" style:--i={6}>{s.note}</p>
+						<div class="plain r" style:--i={5}>
+							<span class="plain-t">{s.plainTitle}</span>
+							{#each s.plain as pl (pl.big)}
+								<div class="pl">
+									<span class="pl-ic">{@render icon(pl.icon, 30)}</span>
+									<div><b>{pl.big}</b><span>{pl.text}</span></div>
+								</div>
+							{/each}
+						</div>
 					{:else if s.kind === 'poc'}
 						<h2 class="r" style:--i={0}>{s.title}</h2>
+						<p class="lead r" style:--i={1}>{s.subtitle}</p>
+						<div class="legend r" style:--i={2}>
+							<span><i class="lg real"></i>{s.legendReal}</span>
+							<span><i class="lg dm"></i>{s.legendDemo}</span>
+						</div>
 						<div class="poc">
-							<div class="poc-col real r" style:--i={1}>
-								<h3>{s.realTitle}</h3>
-								<ul>{#each s.real as d (d.name)}<li><b>{d.name}</b><span>{d.detail}</span></li>{/each}</ul>
+							<div class="poc-col r" style:--i={3}>
+								<h3><span class="cnt-b real">{s.real.length}</span>{s.realTitle}</h3>
+								<div class="chips">{#each s.real as d (d)}<span class="chip real">{d}</span>{/each}</div>
 							</div>
-							<div class="poc-col demo-col r" style:--i={2}>
-								<h3>{s.demoTitle}</h3>
-								<ul>{#each s.demo as d (d.name)}<li><b>{d.name}</b><span>{d.detail}</span></li>{/each}</ul>
+							<div class="poc-col r" style:--i={4}>
+								<h3><span class="cnt-b dm">{s.demo.length}</span>{s.demoTitle}</h3>
+								<div class="chips">{#each s.demo as d (d)}<span class="chip dm">{d}</span>{/each}</div>
 							</div>
 						</div>
 					{:else if s.kind === 'plan'}
 						<h2 class="r" style:--i={0}>{s.title}</h2>
 						<p class="lead r" style:--i={1}>{s.lead}</p>
-						<ol class="tl">
+						<ol class="tl" style:grid-template-columns="repeat({s.steps.length}, 1fr)">
 							{#each s.steps as st, j (j)}
 								<li class="r" style:--i={2 + j}>
 									<span class="dot">{j + 1}</span>
@@ -322,15 +405,16 @@
 						<h2 class="r" style:--i={0}>{s.title}</h2>
 						<ol class="grow">
 							{#each s.items as g, j (j)}
-								<li class="r" style:--i={1 + j}>
+								<li class="r g{j + 1}" style:--i={1 + j}>
 									<span class="g-n">{j + 1}</span>
 									<h3>{g.title}</h3>
 									<p class="g-t">{g.text}</p>
-									<div class="g-v"><b>Цінність</b><p>{g.value}</p></div>
+									<div class="g-v">{#each g.value as v (v)}<span class="gchip">{v}</span>{/each}</div>
 								</li>
 							{/each}
 						</ol>
 					{/if}
+					<span class="corner">{BRAND}</span>
 					<footer class="foot"><span>{FOOTER}</span><span>{i + 1} / {N}</span></footer>
 				</section>
 			</div>
@@ -688,10 +772,10 @@
 		font-weight: 650;
 		fill: var(--navy);
 	}
-	.bar {
+	.cbar {
 		fill: #7aa3cf;
 	}
-	.bar.first {
+	.cbar.first {
 		fill: var(--navy-2);
 	}
 
@@ -1162,6 +1246,736 @@
 	}
 	.g-v p {
 		margin: 6px 0 0;
+	}
+
+	/* ——— Ревізія 2: бренд у куті, команда, піктограми, картки ——— */
+	h2 {
+		font-size: 58px;
+		max-width: 1560px;
+	}
+	.corner {
+		position: absolute;
+		top: 40px;
+		right: 120px;
+		font-size: 20px;
+		font-weight: 600;
+		color: var(--muted-p);
+		letter-spacing: 0.01em;
+	}
+	.k-title .corner {
+		top: 214px;
+		color: #9fb3cc;
+	}
+	.ico {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		display: block;
+	}
+	.card {
+		background: var(--paper-2);
+		border: 1px solid #d6dce4;
+		border-radius: var(--r-card);
+		padding: 32px 36px;
+	}
+
+	/* 1 */
+	.t-body {
+		padding: 64px 120px 0;
+	}
+	h1 {
+		font-size: 120px;
+	}
+	.t-tag {
+		margin-top: 16px;
+		font-size: 34px;
+	}
+	.t-sub {
+		margin-top: 28px;
+		font-size: 38px;
+	}
+	.t-lead {
+		margin-top: 16px;
+		font-size: 28px;
+	}
+	.t-meta {
+		padding: 0 120px;
+		font-size: 24px;
+	}
+	.team {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: 28px;
+		margin: 26px 120px 110px;
+		padding-top: 22px;
+		border-top: 1px solid #23446f;
+	}
+	.tm b {
+		display: block;
+		font-size: 20px;
+		color: #fff;
+		line-height: 1.25;
+	}
+	.tm span {
+		display: block;
+		margin-top: 6px;
+		font-size: 16px;
+		line-height: 1.4;
+		color: #b7c6da;
+	}
+
+	/* 2 */
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 32px;
+		margin-top: 28px;
+	}
+	.st {
+		border-left: 4px solid var(--sun);
+		padding-left: 18px;
+	}
+	.st-v {
+		font-family: var(--font-display);
+		font-size: 60px;
+		font-weight: 700;
+		line-height: 1;
+		color: var(--navy);
+		font-variant-numeric: tabular-nums;
+	}
+	.st-v small {
+		font-size: 24px;
+		font-weight: 600;
+		margin-left: 8px;
+	}
+	.st-l {
+		margin-top: 6px;
+		font-size: 20px;
+		color: var(--muted-p);
+		line-height: 1.3;
+	}
+	.k-problem .p-grid {
+		margin-top: 32px;
+		gap: 56px;
+	}
+	.k-problem .p-problem {
+		padding: 30px 40px;
+	}
+	.dash {
+		list-style: none;
+		margin: 14px 0 0;
+		padding: 0;
+	}
+	.dash li {
+		position: relative;
+		font-size: 25px;
+		line-height: 1.35;
+		padding: 6px 0 6px 38px;
+	}
+	.dash li::before {
+		content: '—';
+		position: absolute;
+		left: 0;
+		color: var(--sun);
+	}
+	.k-problem .p-value ul {
+		margin-top: 8px;
+	}
+	.k-problem .p-value li {
+		font-size: 23px;
+		padding: 7px 0 7px 32px;
+	}
+	.k-problem .p-value li::before {
+		top: 17px;
+	}
+	.k-problem .users {
+		display: grid;
+		grid-template-columns: repeat(8, 1fr);
+		gap: 14px;
+		align-items: start;
+		padding-top: 18px;
+	}
+	.k-problem .users-t {
+		grid-column: 1 / -1;
+		font-size: 24px;
+		margin: 0;
+	}
+	.k-problem .user {
+		background: none;
+		padding: 0;
+		border-radius: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+		text-align: center;
+	}
+	.ava {
+		position: relative;
+		width: 72px;
+		height: 72px;
+		border-radius: 50%;
+		background: #e8f1fb;
+		display: grid;
+		place-items: center;
+		color: var(--navy-2);
+	}
+	.ava > svg {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 3;
+		stroke-linecap: round;
+		width: 48px;
+		height: 48px;
+	}
+	.badge {
+		position: absolute;
+		right: -8px;
+		bottom: -4px;
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		background: var(--sun);
+		color: var(--navy);
+		display: grid;
+		place-items: center;
+		border: 3px solid #fff;
+	}
+	.user-l {
+		font-size: 18px;
+		line-height: 1.25;
+		color: var(--ink-p);
+	}
+
+	/* 3 */
+	.k-profile .pr-grid {
+		grid-template-columns: 800px 1fr;
+		gap: 64px;
+		margin-top: 40px;
+	}
+	.k-profile .chart h3 {
+		margin-bottom: 18px;
+	}
+	.defects {
+		margin-top: auto;
+		margin-bottom: 8px;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 14px 18px;
+	}
+	.def-t {
+		width: 100%;
+		font-size: 22px;
+		color: var(--muted-p);
+	}
+	.def {
+		display: flex;
+		align-items: baseline;
+		gap: 12px;
+		background: #fdebe2;
+		border-radius: var(--r-btn);
+		padding: 10px 22px;
+	}
+	.def b {
+		font-size: 36px;
+		color: #9a330a;
+		font-variant-numeric: tabular-nums;
+	}
+	.def span {
+		font-size: 22px;
+	}
+
+	/* 4 */
+	.k-flow .flow {
+		margin-top: 32px;
+	}
+	.k-flow .node {
+		height: 76px;
+	}
+	.k-flow .node.role {
+		height: 56px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-start;
+		gap: 14px;
+		font-size: 20px;
+	}
+	.role-ic {
+		color: var(--navy-2);
+		flex: none;
+	}
+	.roles-h {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.roles-h b {
+		font-size: 30px;
+		color: var(--navy);
+		font-family: var(--font-display);
+	}
+	.roles-h span {
+		font-size: 19px;
+		line-height: 1.3;
+		color: var(--muted-p);
+	}
+	.center {
+		position: absolute;
+		left: 680px;
+		width: 440px;
+		top: 0;
+		bottom: 0;
+	}
+	.k-flow .core {
+		position: relative;
+		left: auto;
+		top: auto;
+		width: 100%;
+		transform: none;
+		padding: 30px 36px;
+	}
+	.frame.on .k-flow .core.r,
+	.stacked .k-flow .core.r,
+	.print .k-flow .core.r {
+		transform: none;
+	}
+	.k-flow .core-t {
+		font-size: 40px;
+	}
+	.k-flow .core ul {
+		margin-top: 16px;
+		font-size: 24px;
+	}
+	.k-flow .core li {
+		padding: 5px 0;
+	}
+	.cstats {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 14px;
+		margin-top: 20px;
+	}
+	.cstats .st {
+		background: var(--paper-2);
+		border-radius: var(--r-btn);
+		padding: 14px 18px;
+	}
+	.cstats .st-v {
+		font-size: 46px;
+	}
+	.cstats .st-l {
+		font-size: 19px;
+	}
+
+	/* 6 */
+	.k-solar .so-grid {
+		grid-template-columns: 820px 1fr;
+		gap: 56px;
+		margin-top: 30px;
+	}
+	.k-solar .so-figs .fig-v {
+		font-size: 56px;
+	}
+	.kchart {
+		width: auto !important;
+		height: 230px !important;
+	}
+	.so-right {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+	}
+	.k-solar .shot img {
+		height: 320px;
+		object-view-box: inset(3% 0 3% 16%);
+		object-position: 50% 60%;
+	}
+	.k-solar .shot figcaption {
+		margin-top: 8px;
+		font-size: 19px;
+	}
+	.auto {
+		display: grid;
+		grid-template-columns: 290px 1fr;
+		gap: 28px;
+		align-items: center;
+		padding: 22px 28px;
+	}
+	.auto-main {
+		display: flex;
+		gap: 14px;
+		align-items: flex-start;
+	}
+	.auto-ic {
+		color: var(--navy);
+		margin-top: 2px;
+	}
+	.auto-t {
+		font-size: 22px;
+		font-weight: 650;
+		color: var(--navy);
+	}
+	.auto-t .demo {
+		margin-left: 8px;
+		font-size: 14px;
+	}
+	.auto-v {
+		font-family: var(--font-display);
+		font-size: 84px;
+		font-weight: 700;
+		line-height: 1;
+		color: var(--navy);
+		margin-top: 6px;
+	}
+	.auto-v small {
+		font-size: 30px;
+		margin-left: 8px;
+	}
+	.auto-l {
+		font-size: 17px;
+		line-height: 1.35;
+		color: var(--muted-p);
+		margin-top: 6px;
+	}
+	.ab {
+		display: grid;
+		grid-template-columns: 190px 1fr 86px;
+		gap: 12px;
+		align-items: center;
+		margin-bottom: 12px;
+		font-size: 18px;
+	}
+	.ab-track {
+		position: relative;
+		height: 18px;
+		background: #e2e8ef;
+		border-radius: var(--r-sm);
+	}
+	.ab-fill {
+		height: 100%;
+		background: #0b5cad;
+		border-radius: var(--r-sm);
+	}
+	.ab-goal {
+		position: absolute;
+		top: -5px;
+		bottom: -5px;
+		left: 80%;
+		width: 3px;
+		background: var(--ink-p);
+	}
+	.ab-v {
+		font-weight: 650;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.ab-note {
+		font-size: 16px;
+		color: var(--muted-p);
+	}
+
+	/* 7 */
+	.k-econ .ec-grid {
+		margin-top: 36px;
+		gap: 80px;
+	}
+	.k-econ .params th,
+	.k-econ .params td {
+		padding: 14px 20px 14px 0;
+	}
+	.k-econ .ec-res {
+		gap: 22px;
+	}
+	.k-econ .ec-res .fig-v {
+		font-size: 64px;
+	}
+	.plain {
+		margin-top: auto;
+		margin-bottom: 8px;
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 24px;
+	}
+	.plain-t {
+		grid-column: 1 / -1;
+		font-size: 22px;
+		color: var(--muted-p);
+	}
+	.pl {
+		display: flex;
+		gap: 18px;
+		align-items: flex-start;
+		background: #fff4dc;
+		border-radius: var(--r-card);
+		padding: 20px 24px;
+	}
+	.pl-ic {
+		flex: none;
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		background: #fff;
+		color: #8a4f00;
+		display: grid;
+		place-items: center;
+	}
+	.pl b {
+		display: block;
+		font-size: 28px;
+		color: var(--navy);
+	}
+	.pl span {
+		display: block;
+		font-size: 20px;
+		line-height: 1.35;
+		color: var(--text-2);
+		margin-top: 4px;
+	}
+
+	/* 8 */
+	.legend {
+		display: flex;
+		gap: 36px;
+		margin-top: 24px;
+		font-size: 22px;
+		color: var(--text-2);
+	}
+	.lg {
+		display: inline-block;
+		width: 18px;
+		height: 18px;
+		border-radius: var(--r-sm);
+		margin-right: 10px;
+		vertical-align: -2px;
+	}
+	.lg.real,
+	.cnt-b.real {
+		background: #1a7f37;
+	}
+	.lg.dm,
+	.cnt-b.dm {
+		background: var(--sun);
+	}
+	.k-poc .poc {
+		grid-template-columns: 1.3fr 1fr;
+		gap: 40px;
+		margin-top: 32px;
+	}
+	.k-poc .poc-col {
+		background: var(--paper-2);
+		padding: 36px 40px;
+	}
+	.k-poc .poc-col h3 {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+	}
+	.cnt-b {
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		color: #fff;
+		font-size: 26px;
+	}
+	.cnt-b.dm {
+		color: #1a1200;
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 14px;
+		margin-top: 24px;
+	}
+	.chip {
+		font-size: 24px;
+		padding: 12px 20px;
+		border-radius: var(--r-btn);
+	}
+	.chip.real {
+		background: #e3f4e8;
+		color: #14632b;
+		border: 1px solid #a7d8b5;
+	}
+	.chip.dm {
+		background: #fff4dc;
+		color: #8a4f00;
+		border: 1px solid #f5c060;
+	}
+
+	/* 9 */
+	.tl li:nth-child(2) .dot {
+		background: var(--navy);
+	}
+	.tl li:nth-child(3) .dot {
+		background: #1a7f37;
+	}
+	.tl li:nth-child(4) .dot {
+		background: #0b5cad;
+	}
+	.tl li:nth-child(5) .dot {
+		background: #0f766e;
+	}
+
+	/* 10 */
+	.k-growth .grow {
+		grid-template-columns: 1.35fr 1fr;
+		grid-template-rows: 1fr 1fr;
+		gap: 28px;
+		margin: 40px 0 36px;
+	}
+	.k-growth .grow li {
+		border-top: none;
+		border-radius: var(--r-card);
+		padding: 26px 34px;
+	}
+	.k-growth .grow li.g1 {
+		grid-row: 1 / span 2;
+		background: var(--navy);
+		color: #fff;
+		padding: 48px 52px;
+	}
+	.k-growth .grow li.g2 {
+		background: #e8f1fb;
+	}
+	.k-growth .grow li.g3 {
+		background: #f1f6fc;
+	}
+	.k-growth .g-n {
+		font-size: 34px;
+		margin-bottom: 8px;
+	}
+	.k-growth .g1 .g-n {
+		font-size: 72px;
+		color: var(--sun);
+		margin-bottom: 24px;
+	}
+	.k-growth .grow h3 {
+		font-size: 26px;
+	}
+	.k-growth .g1 h3 {
+		font-size: 42px;
+		line-height: 1.15;
+		color: #fff;
+	}
+	.k-growth .g-t {
+		font-size: 18px;
+		margin-top: 10px;
+	}
+	.k-growth .g1 .g-t {
+		font-size: 26px;
+		line-height: 1.45;
+		color: #d5e0ee;
+		margin-top: 24px;
+	}
+	.k-growth .g-v {
+		margin-top: auto;
+		padding-top: 14px;
+		border-top: none;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+	.gchip {
+		font-size: 18px;
+		padding: 6px 14px;
+		border-radius: var(--r-btn);
+		background: #fff;
+		color: var(--navy-2);
+		border: 1px solid #b9d1ec;
+	}
+	.g1 .gchip {
+		font-size: 22px;
+		padding: 10px 18px;
+		background: #173a64;
+		color: #fff;
+		border-color: #2f5788;
+	}
+	@media print {
+		.k-flow .core {
+			transform: none !important;
+		}
+	}
+
+	/* Ревізія 3: титул = повний банер хакатону зліва + назва справа, команда внизу */
+	.t-grid {
+		display: grid;
+		grid-template-columns: 1000px 1fr;
+		gap: 56px;
+		padding: 80px 120px 0;
+		align-items: start;
+	}
+	.t-banner {
+		display: block;
+		width: 1000px;
+		height: 563px;
+		object-fit: contain;
+		background: #000;
+		border-radius: var(--r-card);
+		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+	}
+	.t-right {
+		display: flex;
+		flex-direction: column;
+		min-height: 563px;
+	}
+	.k-title .city {
+		gap: 20px;
+	}
+	.k-title .city img {
+		height: 72px;
+		margin-bottom: 20px;
+	}
+	.k-title h1 {
+		font-size: 84px;
+		line-height: 1;
+	}
+	.k-title .t-tag {
+		margin-top: 18px;
+		font-size: 27px;
+		line-height: 1.3;
+	}
+	.k-title .t-sub {
+		margin-top: 26px;
+		font-size: 28px;
+		line-height: 1.3;
+	}
+	.k-title .t-lead {
+		margin-top: 14px;
+		font-size: 22px;
+		line-height: 1.4;
+	}
+	.k-title .t-meta {
+		margin-top: auto;
+		padding: 0;
+		font-size: 19px;
+		line-height: 1.4;
+	}
+	.k-title .corner {
+		top: 34px;
+	}
+	.k-title .team {
+		margin-top: auto;
+	}
+	.tl li:nth-child(6) .dot {
+		background: #8a4f00;
+	}
+	.tl {
+		gap: 26px;
+	}
+	.tl b {
+		font-size: 27px;
+	}
+	.tx {
+		font-size: 21px;
 	}
 
 	/* Панель керування */
