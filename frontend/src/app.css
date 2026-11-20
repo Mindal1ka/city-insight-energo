@@ -856,20 +856,32 @@ td.name {
 }
 
 /* --- Переходи між сторінками (View Transitions API, див. +layout.svelte) ---
-   Лише перехресне згасання вмісту за 180 мс; меню стоїть на місці. */
+   Послідовно, без накладання двох сторінок: стара згасає за 80 мс, нова проявляється з 80-ї мс
+   за 120 мс (разом 200 мс). Група не «морфить» розмір — висоти сторінок різні, тож без розтягування.
+   Меню й верхня смуга стоять на місці (вони у root, а root не анімується). */
 @media (prefers-reduced-motion: no-preference) {
 	::view-transition-old(root),
 	::view-transition-new(root) {
 		animation: none;
 	}
+	::view-transition-group(page) {
+		animation: none;
+	}
+	::view-transition-image-pair(page) {
+		isolation: auto;
+	}
 	::view-transition-old(page) {
-		animation: vt-out 90ms var(--ease-in) both;
+		animation: vt-out 80ms var(--ease-in) both;
 	}
 	::view-transition-new(page) {
-		animation: vt-in 180ms var(--ease-out) both;
+		animation: vt-in 120ms var(--ease-out) 80ms both;
+		mix-blend-mode: normal;
 	}
-	::view-transition-group(page) {
-		animation-duration: 180ms;
+	::view-transition-old(page),
+	::view-transition-new(page) {
+		height: 100%;
+		object-fit: none;
+		object-position: top left;
 	}
 	@keyframes vt-out {
 		to {
@@ -879,7 +891,6 @@ td.name {
 	@keyframes vt-in {
 		from {
 			opacity: 0;
-			transform: translateY(4px);
 		}
 	}
 }

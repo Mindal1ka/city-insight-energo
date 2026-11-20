@@ -25,7 +25,8 @@
 	import SourceTag from '#lib/SourceTag.svelte';
 	import { fetchInsight, updateLimit, type Insight, type MonthRow } from '#lib/api-v2.ts';
 	import { onDestroy } from 'svelte';
-	import { segIndicator } from '#lib/motion.ts';
+	import { segIndicator, reveal, revealKids } from '#lib/motion.ts';
+	import Skeleton from '#lib/Skeleton.svelte';
 	import { loadObj, saveObj, normSes, normCosts, emptySes, emptyCosts, type ObjDetail, type ObjPatch } from '#lib/obj/ObjApi.ts';
 
 	const id = $derived(page.params.id ?? '');
@@ -58,19 +59,30 @@
 
 	// --- v2: insight (ліміти, live, розподіл, сайзинг); live оновлюється кожні 60 с ---
 	let ins = $state<Insight | null>(null);
+	// Шлюз появи: картку показуємо, коли прийшли І об'єкт, І insight (шапка/вкладки залежать від обох),
+	// інакше блоки «доїжджають» і зсувають сторінку. Якщо insight затримується > 1,5 с — показуємо без нього.
+	let insReady = $state(false);
 	async function loadIns(oid: string, silent = false) {
 		const n = Number(oid);
-		if (!Number.isFinite(n)) return;
+		if (!Number.isFinite(n)) {
+			insReady = true;
+			return;
+		}
 		try {
 			const r = await fetchInsight(n);
 			if (oid === id) ins = r;
 		} catch {
 			if (!silent && oid === id) ins = null;
+		} finally {
+			if (oid === id) insReady = true;
 		}
 	}
 	$effect(() => {
 		ins = null;
+		insReady = false;
 		loadIns(id);
+		const t = setTimeout(() => (insReady = true), 1500);
+		return () => clearTimeout(t);
 	});
 	const insTimer = setInterval(() => {
 		if (id && typeof document !== 'undefined' && !document.hidden) loadIns(id, true);
@@ -238,14 +250,26 @@
 {#if notFound}
 	<div class="notice notice-warn"><p><strong>Об’єкт не знайдено.</strong> <a href="/">До мапи</a></p></div>
 {/if}
-<Status loading={loading && !d} {error} retry={() => load(id)} />
+<Status loading={false} {error} retry={() => load(id)} />
 
-{#if d}
+{#if (loading && !d) || (d && !insReady)}
+	<!-- Каркас картки: шапка (назва, K, період), великі числа, вкладки, графік — ті самі розміри -->
+	<div class="obj" role="status" aria-label="Завантаження об’єкта">
+		<div class="panel hero sk-hero">
+			<Skeleton variant="line" w="30%" h="0.75rem" />
+			<Skeleton variant="line" w="70%" h="1.6rem" />
+			<Skeleton variant="line" w="45%" h="0.85rem" />
+			<div class="sk-nums">{#each { length: 4 } as _, i (i)}<Skeleton variant="block" h="3.4rem" />{/each}</div>
+		</div>
+		<Skeleton variant="block" h="2.75rem" />
+		<Skeleton variant="block" h="22rem" />
+	</div>
+{:else if d}
 	{@const b = d.building}
 	<div class="obj" class:stale={loading} aria-busy={loading}>
 		<!-- ============ 1. Шапка ============ -->
 		<header class="panel hero">
-			<div class="h-top">
+			<div class="h-top" use:reveal={{ i: 0, y: 0 }}>
 				<div class="h-main">
 					<p class="eyebrow">
 						{catLabel(b.category_short ?? '')}
@@ -278,7 +302,7 @@
 			</div>
 
 			{#if bigNums.length}
-				<div class="nums">
+				<div class="nums" use:revealKids={{ delay: 40 }}>
 					{#each bigNums as n (n.k)}
 						<div class="num {n.k}">
 							<span class="n-l"><Icon name={n.icon} size={15} /> {n.pre}</span>
@@ -310,7 +334,7 @@
 
 		<!-- ============ 2. Вкладки ============ -->
 		{#if tabs.length > 1}
-			<div class="tabs" role="tablist" aria-label="Розділи картки" use:segIndicator>
+			<div class="tabs" role="tablist" aria-label="Розділи картки" use:segIndicator use:reveal={{ delay: 120, y: 4 }}>
 				{#each tabs as t (t.id)}
 					<button
 						type="button"
@@ -337,7 +361,7 @@
 		{/snippet}
 
 		<!-- ---- Огляд ---- -->
-		<div class="tp" class:swap={tabDir !== 0} style:--tp-dx="{tabDir * 12}px" id="tp-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={cur !== 'overview'}>
+		<div class="tp" use:reveal={{ delay: 180 }} class:swap={tabDir !== 0} style:--tp-dx="{tabDir * 12}px" id="tp-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={cur !== 'overview'}>
 			{#if ins?.months?.length && !noCons}
 				<div class="panel pad"><V2Monthly months={ins.months} capacity={ins.battery_capacity_kwh} months2026={ins.y2026?.months_2026 ?? null} /></div>
 			{:else if !hasCons && !(ses && e?.gen_kwh)}
@@ -438,6 +462,23 @@
 {/if}
 
 <style>
+	.sk-hero {
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+		min-height: 15rem;
+	}
+	@media (max-width: 700px) {
+		.sk-hero {
+			min-height: 22rem;
+		}
+	}
+	.sk-nums {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+		gap: 0.75rem;
+		margin-top: 0.5rem;
+	}
 	.nodata {
 		display: flex;
 		align-items: center;

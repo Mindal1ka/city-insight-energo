@@ -12,6 +12,8 @@
 	import DemoPill from '#lib/DemoPill.svelte';
 	import CountUp from '#lib/CountUp.svelte';
 	import DashMonthly from '#lib/dash/DashMonthly.svelte';
+	import Skeleton from '#lib/Skeleton.svelte';
+	import { reveal, revealKids, revealRows } from '#lib/motion.ts';
 
 	let ses = $state<SesList | null>(null);
 	let dept = $state<Departments | null>(null);
@@ -87,16 +89,29 @@
 	{/if}
 </header>
 
-<Status loading={loading && !ses} {error} retry={load} />
+<Status loading={false} {error} retry={load} />
 
-{#if ses}
+{#if loading && !ses}
+	<!-- Каркас = кінцевий макет: заголовок розділу + смуга з 4 і 3 плиток + графік -->
+	<div role="status" aria-label="Завантаження даних">
+		<section class="sec" aria-hidden="true">
+			<div class="sec-h"><Skeleton variant="line" w="16rem" h="1.25rem" /></div>
+			<div class="strip">{#each { length: 4 } as _, i (i)}<div class="cell"><Skeleton variant="line" w="50%" /><Skeleton variant="line" w="70%" h="1.9rem" /></div>{/each}</div>
+		</section>
+		<section class="sec" aria-hidden="true">
+			<div class="sec-h"><Skeleton variant="line" w="14rem" h="1.25rem" /></div>
+			<div class="strip three" use:revealKids={{ delay: 140 }}>{#each { length: 3 } as _, i (i)}<div class="cell"><Skeleton variant="line" w="60%" /><Skeleton variant="line" w="55%" h="1.9rem" /><Skeleton variant="line" w="40%" /></div>{/each}</div>
+			<div class="panel-x"><Skeleton variant="line" w="18rem" h="1rem" /><Skeleton variant="block" h="15rem" /></div>
+		</section>
+	</div>
+{:else if ses}
 	<!-- 1. Ефект СЕС -->
 	<section class="sec" aria-labelledby="s1">
 		<div class="sec-h">
 			<h2 id="s1">Ефект сонячних станцій</h2>
 			<span class="sec-note">За рік, {withSes ?? '—'} об’єктів зі станцією</span>
 		</div>
-		<div class="strip">
+		<div class="strip" use:revealKids>
 			<div class="cell">
 				<span class="l">Вкладено</span>
 				<span class="v"><CountUp value={capexS.v} decimals={capexS.d} /><small>{capexS.unit}</small></span>
@@ -121,7 +136,7 @@
 		<div class="sec-h">
 			<h2 id="s2">Споживання і бюджет 2026</h2>
 		</div>
-		<div class="strip three">
+		<div class="strip three" use:revealKids={{ delay: 140 }}>
 			<div class="cell">
 				<span class="l">Споживання за рік (оцінка) <SourceTag kind="umuni" /></span>
 				{#if trend?.kwh_2026_est}
@@ -148,7 +163,7 @@
 			</a>
 		</div>
 		{#if monthly}
-			<div class="panel-x">
+			<div class="panel-x" style="--dm-delay:200ms" use:reveal={{ delay: 120, y: 0, duration: 140 }}>
 				<h3>Помісячно: генерація СЕС і споживання</h3>
 				<DashMonthly months={monthly} />
 			</div>
@@ -169,7 +184,7 @@
 					{/if}
 				</span>
 			</div>
-			<div class="strip">
+			<div class="strip" use:revealKids={{ delay: 300 }}>
 				<div class="cell">
 					<span class="l">Генераторів</span>
 					<span class="v">{gt.count}{#if gt.kw != null}<small>сумарно {num(gt.kw, 0)} кВт</small>{/if}</span>
@@ -207,7 +222,7 @@
 							<th class="r">Сонце дає</th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody use:revealRows={{ delay: 320 }}>
 						{#each needExpand as i (i.id)}
 							<tr>
 								<td><a href="/object/{i.id}">{i.name}</a></td>

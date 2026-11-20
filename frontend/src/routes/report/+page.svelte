@@ -1,6 +1,7 @@
 <script lang="ts">
 	// «Звіт за місяць»: підсумки, фін. ефект вкладень, таблиця об'єктів, CSV і друк.
 	import { errMessage } from '#lib/api.ts';
+	import { revealKids, revealRows } from '#lib/motion.ts';
 	import { auth } from '#lib/auth.svelte.ts';
 	import { fetchReport, downloadReportCsv, DEPARTMENTS, type Report, type ReportRow } from '#lib/api-v2.ts';
 	import { uah, kwh } from '#lib/api-ses.ts';
@@ -105,7 +106,7 @@
 {:else if error && !data}
 	<div class="state err" role="alert">{error} <button type="button" onclick={() => load(month)}>Повторити</button></div>
 {:else if data && t}
-	<div class="kpis">
+	<div class="kpis" use:revealKids>
 		<StatCard label="Спожито" value={t.cons_kwh} format={kwh} icon="plug" />
 		<StatCard
 			label="Вартість · ліміт {uah(t.limit_uah)}"
@@ -155,7 +156,7 @@
 						{/each}
 					</tr>
 				</thead>
-				<tbody>
+				<tbody use:revealRows={{ delay: 160 }}>
 					{#each rows as r (r.id)}
 						<tr>
 							<td class="nm">

@@ -10,26 +10,29 @@
 	  {/each}
 	  <Reveal y={24} class="my-grid-cell">…</Reveal>
 
-	Props: delay?=0 (мс), y?=14 (px підйому), class?:string, children
+	Props: delay?=0 (мс, діється на 2, ≤160), y?=6 (px підйому); анімується лише в першій хвилі появи маршруту (motion.ts → inFirstWave), class?:string, children
 	Обгортка — звичайний <div> (display:block); для grid/flex дайте їй свій class.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { isReduced } from './motion.ts';
+	import { isReduced, inFirstWave } from './motion.ts';
 
 	let {
 		delay = 0,
-		y = 14,
+		y = 6,
 		class: klass = '',
 		children
 	}: { delay?: number; y?: number; class?: string; children: Snippet } = $props();
 
 	let el = $state<HTMLDivElement>();
 	let shown = $state(false);
+	let instant = $state(false);
 
 	$effect(() => {
 		if (!el) return;
-		if (isReduced() || typeof IntersectionObserver === 'undefined') {
+		// Лише перша поява даних на маршруті; фільтри й повернення на сторінку — без руху
+		if (isReduced() || typeof IntersectionObserver === 'undefined' || !inFirstWave()) {
+			instant = true;
 			shown = true;
 			return;
 		}
@@ -51,7 +54,8 @@
 	bind:this={el}
 	class="reveal {klass}"
 	class:in={shown}
-	style:--rv-delay="{Math.min(delay, 240)}ms"
+	class:instant
+	style:--rv-delay="{Math.min(Math.round(delay / 2), 160)}ms"
 	style:--rv-y="{y}px"
 >
 	{@render children()}
@@ -63,8 +67,11 @@
 			opacity: 0;
 			transform: translateY(var(--rv-y));
 			transition:
-				opacity 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay),
-				transform 400ms cubic-bezier(0.22, 1, 0.36, 1) var(--rv-delay);
+				opacity var(--dur-base) var(--ease-out) var(--rv-delay),
+				transform var(--dur-base) var(--ease-out) var(--rv-delay);
+		}
+		.reveal.instant {
+			transition: none;
 		}
 		.reveal.in {
 			opacity: 1;

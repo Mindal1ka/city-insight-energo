@@ -1,6 +1,7 @@
 <script lang="ts">
 	// «Розподіл енергії» (вікно 3): live по всіх СЕС громади. Автооновлення щохвилини.
 	import { onMount } from 'svelte';
+	import { revealKids, revealRows } from '#lib/motion.ts';
 	import { page } from '$app/state';
 	import { errMessage } from '#lib/api.ts';
 	import { fetchLive, DEPARTMENTS, type LiveAll } from '#lib/api-v2.ts';
@@ -52,7 +53,7 @@
 <header class="page-head">
 	<div class="ph-text">
 		<h1>Розподіл енергії зараз</h1>
-		{#if data}<p class="ph-sub"><Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}</p>{/if}
+		<p class="ph-sub">{#if data}<Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}{:else}<Skeleton variant="line" w="9rem" h="0.8rem" />{/if}</p>
 	</div>
 	<div class="head-side">
 		<span class="mok" title="Дані інверторів підключаться через API">ДЕМО</span>
@@ -64,7 +65,7 @@
 {:else if error && !data}
 	<Status {error} retry={load} />
 {:else if data && t}
-	<div class="kpis">
+	<div class="kpis" use:revealKids>
 		<StatCard label="Генерація зараз" value={t.gen_kw} decimals={1} unit="кВт" icon="sun" tone="good" />
 		<StatCard label="Навантаження" value={t.load_kw} decimals={1} unit="кВт" icon="bolt" />
 		<StatCard
@@ -117,7 +118,7 @@
 							<th class="num">Баланс, кВт·год</th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody use:revealRows={{ delay: 160 }}>
 						{#each items as r (r.id)}
 							<tr>
 								<td><div class="tn">
@@ -158,6 +159,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.3rem;
+		min-height: 1.25rem;
 		margin: 0.15rem 0 0;
 		font-size: 0.8125rem;
 		color: var(--muted);

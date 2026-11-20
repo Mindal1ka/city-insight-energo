@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Список усіх комунальних об'єктів: K, генерація/споживання, заощаджено, окупність. Сортування + фільтри.
 	import { goto } from '$app/navigation';
+	import { revealRows } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
 	import { page } from '$app/state';
 	import SesFilters from '#lib/SesFilters.svelte';
@@ -167,7 +168,7 @@
 						{/each}
 					</tr>
 				</thead>
-				<tbody>
+				<tbody use:revealRows>
 					{#each rows as r, i (r.id)}
 						<tr onclick={() => open(r.id)}>
 							<td class="name">
@@ -190,7 +191,7 @@
 		</div>
 
 		<!-- Телефон: компактні рядки -->
-		<ul class="cards" class:dim={loading}>
+		<ul class="cards" class:dim={loading} use:revealRows>
 			{#each rows as r, i (r.id)}
 				<li>
 					<a href="/object/{r.id}">

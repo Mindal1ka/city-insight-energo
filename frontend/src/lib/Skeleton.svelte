@@ -1,18 +1,43 @@
 <script lang="ts">
 	// Каркас сторінки, поки вантажаться дані: сірі «заготовки» замість стрибків макета.
-	// <Skeleton variant="kpis" count={4} />, <Skeleton variant="table" rows={8} />, <Skeleton variant="text" rows={3} />
+	// Готові макети:  <Skeleton variant="kpis" count={4} />, <Skeleton variant="table" rows={8} />, <Skeleton variant="text" rows={3} />
+	// Примітиви (резервують ТОЧНИЙ розмір слота, куди потім стане вміст — тож поява не зсуває макет):
+	//   <Skeleton variant="line" w="60%" />            рядок тексту (h типово 0.85rem)
+	//   <Skeleton variant="block" h="16rem" />         графік / мапа / таблиця
+	//   <Skeleton variant="tile" h="7.5rem" />         плитка KPI з рамкою картки
+	// Мерехтіння повільне (1.4 с) і вимикається при prefers-reduced-motion (див. .skeleton в app.css).
 	let {
 		variant = 'table',
 		rows = 6,
 		count = 4,
+		w,
+		h,
 		label = 'Завантаження даних…'
 	}: {
-		variant?: 'kpis' | 'table' | 'text' | 'cards' | 'page';
+		variant?: 'kpis' | 'table' | 'text' | 'cards' | 'page' | 'line' | 'block' | 'tile';
 		rows?: number;
 		count?: number;
+		w?: string;
+		h?: string;
 		label?: string;
 	} = $props();
 </script>
+
+{#if variant === 'line' || variant === 'block'}
+	<span
+		class="skeleton sk-prim"
+		class:sk-l={variant === 'line'}
+		style:width={w ?? (variant === 'line' ? '60%' : '100%')}
+		style:height={h ?? (variant === 'line' ? '0.85rem' : '12rem')}
+		aria-hidden="true"
+	></span>
+{:else if variant === 'tile'}
+	<div class="sk-kpi sk-tile" style:min-height={h ?? '7.5rem'} style:width={w} aria-hidden="true">
+		<span class="skeleton sk-line" style="width:55%"></span>
+		<span class="skeleton sk-big"></span>
+		<span class="skeleton sk-line" style="width:75%"></span>
+	</div>
+{:else}
 
 <div class="sk-root" role="status" aria-live="polite">
 	<span class="visually-hidden">{label}</span>
@@ -60,8 +85,19 @@
 		{/if}
 	</div>
 </div>
+{/if}
 
 <style>
+	.sk-prim {
+		display: block;
+	}
+	.sk-prim.sk-l {
+		display: inline-block;
+		vertical-align: middle;
+	}
+	.sk-tile {
+		min-height: auto;
+	}
 	.sk-root {
 		margin-bottom: 1.25rem;
 	}

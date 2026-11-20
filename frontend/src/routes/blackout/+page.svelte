@@ -1,6 +1,7 @@
 <script lang="ts">
 	// «Готовність до блекауту»: скільки годин протримається кожен об'єкт. Лише службові ролі (інакше 403).
 	import { onMount } from 'svelte';
+	import { revealKids, revealRows } from '#lib/motion.ts';
 	import { errMessage, ApiError } from '#lib/api.ts';
 	import { fetchBlackoutAll, fetchOutages, DEPARTMENTS, type Outages } from '#lib/api-v2.ts';
 	import { num, dateTime } from '#lib/format.ts';
@@ -51,7 +52,7 @@
 <header class="page-head">
 	<div class="ph-text">
 		<h1>Готовність до блекауту</h1>
-		{#if data}<p class="ph-sub"><Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}</p>{/if}
+		<p class="ph-sub">{#if data}<Icon name="clock" size={14} /> Оновлено {dateTime(data.updated_at)}{:else}<Skeleton variant="line" w="9rem" h="0.8rem" />{/if}</p>
 	</div>
 	<div class="head-side">
 		<span class="mok" title="Демонстраційні дані">ДЕМО</span>
@@ -65,7 +66,7 @@
 {:else if error && !data}
 	<Status {error} retry={load} />
 {:else if data && t}
-	<div class="kpis">
+	<div class="kpis" use:revealKids>
 		<StatCard label="Об'єктів" value={t.objects} icon="building" />
 		<StatCard label="З генератором" value={t.with_generator} icon="bolt" tone="good" />
 		{#if t.outage_today_h != null}
@@ -122,7 +123,7 @@
 						<th class="hcol">Години</th>
 					</tr>
 				</thead>
-				<tbody>
+				<tbody use:revealRows={{ delay: 160 }}>
 					{#each items as r (r.id)}
 						{@const h = hoursOf(r)}
 						<tr>
@@ -184,6 +185,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.3rem;
+		min-height: 1.25rem;
 		margin: 0.15rem 0 0;
 		font-size: 0.8125rem;
 		color: var(--muted);

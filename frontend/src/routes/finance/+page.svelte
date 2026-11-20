@@ -12,6 +12,7 @@
 	import Skeleton from '#lib/Skeleton.svelte';
 	import SourceTag from '#lib/SourceTag.svelte';
 	import { MONTHS } from '#lib/format.ts';
+	import { reveal, revealKids, revealRows, growOnce } from '#lib/motion.ts';
 
 	let data = $state<Departments | null>(null);
 	let real = $state<BudgetReal | null>(null);
@@ -26,11 +27,18 @@
 		loading = true;
 		error = null;
 		try {
-			fetchBudgetReal().then((r) => (real = r), () => (real = null));
-			fetchSpending().then((r) => (sp = r), () => (sp = null));
-			if (canSeeGenerators(auth.user)) fetchGenerators().then((r) => (gens = r), () => (gens = null));
-			else gens = null;
-			data = await fetchDepartments();
+			// Ті самі 4 запити паралельно, але показуємо разом — без «вискакування» блоків, що зсувають сторінку
+			const [d, r, s, g] = await Promise.allSettled([
+				fetchDepartments(),
+				fetchBudgetReal(),
+				fetchSpending(),
+				canSeeGenerators(auth.user) ? fetchGenerators() : Promise.reject(null)
+			]);
+			real = r.status === 'fulfilled' ? r.value : null;
+			sp = s.status === 'fulfilled' ? s.value : null;
+			gens = g.status === 'fulfilled' ? g.value : null;
+			if (d.status === 'rejected') throw d.reason;
+			data = d.value;
 		} catch (e) {
 			error = errMessage(e);
 		} finally {
@@ -71,22 +79,22 @@
 <header class="page-head">
 	<div class="ph-text">
 		<h1>Фінанси</h1>
-		{#if data}<p class="ph-sub">Ліміти й оплата за електроенергію, дані за {MONTHS_FULL[(data.month ?? 1) - 1].toLowerCase()}</p>{/if}
+		<p class="ph-sub">{#if data}Ліміти й оплата за електроенергію, дані за {MONTHS_FULL[(data.month ?? 1) - 1].toLowerCase()}{:else}<Skeleton variant="line" w="16rem" h="0.8rem" />{/if}</p>
 	</div>
 	<div class="head-side">
 		<span class="mok" title="Ліміти змодельовані: споживання 2025 × тариф × 0,9–1,1">ДЕМО</span>
 	</div>
 </header>
 
-{#if real}
-	<section class="card list real" aria-label="Реальний бюджет">
+{#if real && data}
+	<section class="card list real" aria-label="Реальний бюджет" use:reveal={{ i: 0 }}>
 		<h2>Реальний бюджет на електроенергію (КЕКВ {real.kekv ?? 2273}) <SourceTag kind="openbudget" /></h2>
 		<div class="scroll-x">
 			<table class="rt tnum">
 				<thead>
 					<tr><th>Програма</th><th>План 2026</th><th>Сплачено 2026</th><th>Факт 2025</th><th>Ціна 2025, грн/кВт·год</th><th>Будівель</th></tr>
 				</thead>
-				<tbody>
+				<tbody use:revealRows={{ delay: 60 }}>
 					{#each real.items.filter((x) => x.buildings > 0) as p (p.program)}
 						<tr class:muted={!p.allocated}>
 							<th scope="row" title={p.name}>
@@ -119,7 +127,7 @@
 		<div class="bars" role="img" aria-label="Платежі по місяцях, грн">
 			{#each MONTHS as m, i (m)}
 				<div class="col" title="{m}: 2025 — {m25[i] == null ? '—' : uah(m25[i])}; 2026 — {m26[i] == null ? '—' : uah(m26[i])}">
-					<div class="pair">
+					<div class="pair" style="transform-origin:50% 100%" use:growOnce>
 						<span class="b y25" style="height:{hh(m25[i])}"></span>
 						<span class="b y26" style="height:{hh(m26[i])}"></span>
 					</div>
@@ -141,11 +149,13 @@
 {/if}
 
 {#if loading && !data}
+	<!-- Каркас повторює кінцевий макет: таблиця бюджету, 4 плитки, список розпорядників -->
+	<div class="card list sk-real" aria-hidden="true"><Skeleton variant="line" w="70%" h="1.1rem" /><Skeleton variant="block" h="22rem" /></div>
 	<Skeleton variant="kpis" count={4} />
 {:else if error && !data}
 	<div class="state err" role="alert">{error} <button type="button" onclick={load}>Повторити</button></div>
 {:else if data && t}
-	<div class="kpis">
+	<div class="kpis" use:revealKids={{ delay: 40 }}>
 		<StatCard label="Ліміт на рік" value={t.limit_uah_year} format={uah} icon="wallet" />
 		<StatCard label="Оплачено" value={t.paid_uah_year} format={uah} icon="plug" tone={t.used_pct_year != null && t.used_pct_year > 100 ? 'bad' : 'neutral'} />
 		<StatCard label="Заощаджено СЕС" value={t.saved_uah_year} format={uah} icon="sun" tone="good" />
@@ -184,7 +194,7 @@
 		</section>
 	{/if}
 
-	<section class="card list" aria-label="Розпорядники">
+	<section class="card list" aria-label="Розпорядники" use:revealRows={{ delay: 180, max: 9 }}>
 		<h2>Розпорядники</h2>
 		{#each data.items as d (d.department)}
 			{@const over = d.paid_uah_year > d.limit_uah_year}
@@ -213,6 +223,14 @@
 {/if}
 
 <style>
+	.sk-real {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.ph-sub {
+		min-height: 1.2em;
+	}
 	.gnote {
 		margin: 0 0 0.75rem;
 		color: var(--text-2);

@@ -88,13 +88,13 @@
 		.bar {
 			transform-box: fill-box;
 			transform-origin: 50% 100%;
-			animation: dm-grow 280ms var(--ease-emph) both;
+			animation: dm-grow 280ms var(--ease-emph) var(--dm-delay, 0ms) both;
 		}
 		.ln {
-			animation: dm-draw 300ms var(--ease-out) 100ms both;
+			animation: dm-draw 300ms var(--ease-out) calc(var(--dm-delay, 0ms) + 200ms) both;
 		}
 		.pt {
-			animation: dm-pt var(--dur-fast) var(--ease-out) 300ms both;
+			animation: dm-pt var(--dur-fast) var(--ease-out) calc(var(--dm-delay, 0ms) + 420ms) both;
 		}
 	}
 	@keyframes dm-grow {

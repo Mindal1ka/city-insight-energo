@@ -2,6 +2,7 @@
 	// «Споживання електроенергії»: скільки електрики споживають комунальні будівлі громади і хто найбільше.
 	// Принцип: одне речення «що тут» → 4 картки → дві прості візуалізації; деталі — за «Детальніше».
 	import { api, errMessage, type Summary, type Building } from '#lib/api.ts';
+	import { revealRows } from '#lib/motion.ts';
 	import { num, pct, date, dateTime, scaleKwh, kwhText, plural } from '#lib/format.ts';
 	import { catLabel } from '#lib/categories.ts';
 	import Status from '#lib/Status.svelte';
@@ -198,7 +199,7 @@
 									</th>
 								</tr>
 							</thead>
-							<tbody>
+							<tbody use:revealRows={{ delay: 160 }}>
 								{#each byCategory as c (c.name)}
 									<tr>
 										<th scope="row">{c.name}</th>

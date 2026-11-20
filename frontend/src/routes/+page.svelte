@@ -16,7 +16,7 @@
 	import { CATEGORIES } from '#lib/api-map.ts';
 	import { errMessage } from '#lib/api.ts';
 	import { auth } from '#lib/auth.svelte.ts';
-	import { isReduced, slideIn } from '#lib/motion.ts';
+	import { isReduced, slideIn, reveal, revealKids } from '#lib/motion.ts';
 	import { matchExtra, seasonDay, SEASONS, kwhMonth, type Season } from '#lib/ses-extra.ts';
 	import {
 		fetchSes,
@@ -115,9 +115,18 @@
 
 	// Висота: від верху блоку до низу вікна (мінус нижня панель вкладок на телефоні)
 	let root: HTMLDivElement;
-	let h = $state(600);
+	// Перший кадр одразу з правильними розмірами (інакше 600 px → висота вікна = зсув макета)
+	function initial() {
+		if (typeof document === 'undefined') return { h: 600, pad: 0 };
+		const main = document.querySelector('main');
+		const pad = main ? parseFloat(getComputedStyle(main).paddingTop) || 0 : 0;
+		const top = main ? main.getBoundingClientRect().top + window.scrollY : 0;
+		return { h: Math.max(380, window.innerHeight - top), pad };
+	}
+	const init0 = initial();
+	let h = $state(init0.h);
 	let phone = $state(false);
-	let padTop = $state(0);
+	let padTop = $state(init0.pad);
 	function measure() {
 		if (!root) return;
 		const main = root.closest('main');
@@ -212,7 +221,7 @@
 	<!-- Верх: KPI (ліворуч) + пошук/період/фільтри (праворуч) -->
 	<div class="top" bind:offsetHeight={topH}>
 		{#if t}
-			<dl class="kpi">
+			<dl class="kpi" use:revealKids={{ y: -6, step: 30 }}>
 				<div><dt>Об’єктів</dt><dd>{t.objects}</dd></div>
 				<div><dt>З СЕС</dt><dd>{t.with_ses ?? '—'}</dd></div>
 				{#if restricted}
@@ -258,7 +267,7 @@
 
 	<!-- Єдина легенда: класи K (+ зони, коли шар увімкнено) -->
 	{#if data}
-		<div class="legend" class:expanded={legendOpen} aria-label="Легенда">
+		<div class="legend" class:expanded={legendOpen} aria-label="Легенда" use:reveal={{ delay: 160, y: 6 }}>
 			<button type="button" class="lg-tog" aria-expanded={legendOpen} onclick={() => (legendOpen = !legendOpen)}>
 				Легенда <span aria-hidden="true">{legendOpen ? '▾' : '▴'}</span>
 			</button>

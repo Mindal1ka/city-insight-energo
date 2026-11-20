@@ -250,3 +250,85 @@ export const pulseOnce: Action<HTMLElement, unknown> = (node, key) => {
 		}
 	};
 };
+
+/*
+ * ПЕРША ПОЯВА ДАНИХ НА СТОРІНЦІ (reveal)
+ *
+ *   <div class="tile" use:reveal={0}>…</div>  <div class="tile" use:reveal={1}>…</div>
+ *   <div class="chart" use:reveal={{ i: 4, y: 0 }}>…</div>
+ *   <tbody use:revealRows>…</tbody>            // перші 8 рядків — драбинка 20 мс, решта миттєво
+ *
+ * Анімує лише перша «хвиля» вмісту на маршруті: перший вузол із reveal відкриває вікно ~1.2 с
+ * для цього шляху; усе, що змонтується пізніше (зміна фільтра, періоду, повернення на вже
+ * відкриту сторінку в межах сесії), з'являється миттєво. Лише opacity + transform, WAAPI,
+ * reduced-motion → без руху. Вміст має стояти у слоті-каркасі такої ж висоти — тоді поява
+ * не зсуває макет.
+ */
+const firstWave = new Map<string, number>();
+const WAVE_MS = 1200;
+
+/** Чи ще триває перша хвиля появи для поточного маршруту (і відкриває її, якщо це перший виклик) */
+export function inFirstWave(): boolean {
+	if (typeof location === 'undefined') return false;
+	const key = location.pathname;
+	const now = performance.now();
+	const t0 = firstWave.get(key);
+	if (t0 == null) {
+		firstWave.set(key, now);
+		return true;
+	}
+	return now - t0 < WAVE_MS;
+}
+
+export interface RevealParams {
+	/** порядковий номер у ряду — затримка i × step */
+	i?: number;
+	/** зсув знизу, px (типово 6) */
+	y?: number;
+	/** крок драбинки, мс (типово 35) */
+	step?: number;
+	/** додаткова затримка, мс (напр. графік після плиток) */
+	delay?: number;
+	duration?: number;
+}
+
+function play(el: HTMLElement, delay: number, y: number, duration: number) {
+	if (typeof el.animate !== 'function') return;
+	el.animate(
+		[
+			{ opacity: 0, transform: `translateY(${y}px)` },
+			{ opacity: 1, transform: 'none' }
+		],
+		{ duration, delay, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)', fill: 'backwards' }
+	);
+}
+
+export const reveal: Action<HTMLElement, number | RevealParams | undefined> = (node, p) => {
+	if (isReduced() || !inFirstWave()) return;
+	const o: RevealParams = typeof p === 'number' ? { i: p } : (p ?? {});
+	const i = Math.min(o.i ?? 0, 6);
+	play(node, (o.delay ?? 0) + i * (o.step ?? 35), o.y ?? 6, o.duration ?? DUR.base);
+};
+
+/**
+ * Діти контейнера по черзі: перші `max` — драбинка `step` мс, решта — одразу.
+ *   <div class="kpis" use:revealKids>…плитки…</div>        (типово 35 мс, y 6, 220 мс, max 6)
+ *   <tbody use:revealRows>…</tbody>                        (рядки: 20 мс, y 4, 180 мс, max 8)
+ */
+export interface RevealKidsParams {
+	max?: number;
+	delay?: number;
+	step?: number;
+	y?: number;
+	duration?: number;
+}
+export const revealKids: Action<HTMLElement, RevealKidsParams | undefined> = (node, p) => {
+	if (isReduced() || !inFirstWave()) return;
+	const { max = 6, delay = 0, step = 35, y = 6, duration = DUR.base } = p ?? {};
+	const kids = Array.from(node.children).filter((k) => !k.classList.contains('seg-ind')).slice(0, max) as HTMLElement[];
+	kids.forEach((k, i) => play(k, delay + i * step, y, duration));
+};
+
+/** Рядки таблиці/списку: перші `max` (типово 8) — 20 мс драбинка, решта — одразу */
+export const revealRows: Action<HTMLElement, RevealKidsParams | undefined> = (node, p) =>
+	revealKids(node, { max: 8, step: 20, y: 4, duration: 180, ...p });
