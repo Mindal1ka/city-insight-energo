@@ -83,7 +83,7 @@
 			(it.self_consumed_kwh_year && it.savings_uah_year ? it.savings_uah_year / it.self_consumed_kwh_year : 8);
 		return {
 			tariff,
-			capex: prm?.capex_uah_per_kw ?? 30000,
+			capex: prm?.capex_uah_per_kw ?? 22000,
 			fixed: prm?.capex_fixed_uah ?? 60000,
 			daytime: prm?.daytime_share ?? 0.6
 		};

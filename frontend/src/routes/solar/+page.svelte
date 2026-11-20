@@ -44,7 +44,7 @@
 	};
 
 	// Значення за замовчуванням бекенду (METHODOLOGY §7) — для кнопки «Скинути»
-	const DEF = { tariff: 8, capex: 30000, fixed: 60000, budget: 10 };
+	const DEF = { tariff: 11.57, capex: 22000, fixed: 60000, budget: 10 };
 	const HEALTH = "Охорона здоров'я";
 	const EDU = ['Заклади освіти', 'Дошкільні заклади'];
 
