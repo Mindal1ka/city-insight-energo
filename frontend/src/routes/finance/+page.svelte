@@ -74,7 +74,7 @@
 	const sgn = (v: number) => `${v >= 0 ? '+' : '−'}${uah(Math.abs(v))}`;
 </script>
 
-<svelte:head><title>Фінанси · Insight Tool</title></svelte:head>
+<svelte:head><title>Фінанси · City Insight Map</title></svelte:head>
 
 <header class="page-head">
 	<div class="ph-text">

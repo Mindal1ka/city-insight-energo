@@ -46,7 +46,7 @@
 	const shown = $derived(showAll ? (data?.pairs ?? []) : (data?.pairs ?? []).slice(0, 10));
 </script>
 
-<svelte:head><title>Баланс мережі · Insight Tool</title></svelte:head>
+<svelte:head><title>Баланс мережі · City Insight Map</title></svelte:head>
 
 <header class="page-head">
 	<div class="ph-text">

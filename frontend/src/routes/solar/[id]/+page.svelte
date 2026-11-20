@@ -127,7 +127,7 @@
 	});
 </script>
 
-<svelte:head><title>{it ? it.name : 'Розрахунок СЕС'} · Insight Tool</title></svelte:head>
+<svelte:head><title>{it ? it.name : 'Розрахунок СЕС'} · City Insight Map</title></svelte:head>
 
 <p class="no-print back"><a href="/solar{backQs}" data-sveltekit-reset="false">← Нові СЕС</a></p>
 

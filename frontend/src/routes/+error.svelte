@@ -6,7 +6,7 @@
 	const notFound = $derived(page.status === 404);
 </script>
 
-<svelte:head><title>{notFound ? 'Сторінку не знайдено' : 'Помилка'} · Insight Tool</title></svelte:head>
+<svelte:head><title>{notFound ? 'Сторінку не знайдено' : 'Помилка'} · City Insight Map</title></svelte:head>
 
 <section class="err-page" aria-labelledby="err-h">
 	<span class="code" aria-hidden="true">{page.status}</span>

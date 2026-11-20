@@ -106,7 +106,7 @@
 	}
 </script>
 
-<svelte:head><title>Оновити дані · Insight Tool</title></svelte:head>
+<svelte:head><title>Оновити дані · City Insight Map</title></svelte:head>
 
 <div class="page-head">
 	<div>

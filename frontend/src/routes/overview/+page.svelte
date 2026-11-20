@@ -95,7 +95,7 @@
 	);
 </script>
 
-<svelte:head><title>Споживання електроенергії · Insight Tool</title></svelte:head>
+<svelte:head><title>Споживання електроенергії · City Insight Map</title></svelte:head>
 
 <div class="page-head">
 	<div>

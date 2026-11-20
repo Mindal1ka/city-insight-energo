@@ -77,7 +77,7 @@
 	const gFuel = $derived(moneyShort(gt?.fuel_year_uah ?? 0));
 </script>
 
-<svelte:head><title>Огляд · Insight Tool</title></svelte:head>
+<svelte:head><title>Огляд · City Insight Map</title></svelte:head>
 
 <header class="ph">
 	<div>

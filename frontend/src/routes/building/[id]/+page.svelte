@@ -72,7 +72,7 @@
 </script>
 
 <svelte:head>
-	<title>{b ? b.name : 'Паспорт будівлі'} · Insight Tool</title>
+	<title>{b ? b.name : 'Паспорт будівлі'} · City Insight Map</title>
 </svelte:head>
 
 <p class="no-print back">

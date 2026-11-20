@@ -94,7 +94,7 @@
 	}
 </script>
 
-<svelte:head><title>Рейтинг будівель · Insight Tool</title></svelte:head>
+<svelte:head><title>Рейтинг будівель · City Insight Map</title></svelte:head>
 
 <div class="page-head">
 	<div>

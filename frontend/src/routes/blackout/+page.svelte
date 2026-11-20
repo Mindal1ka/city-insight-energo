@@ -47,7 +47,7 @@
 	const t = $derived(data?.totals);
 </script>
 
-<svelte:head><title>Блекаут · Insight Tool</title></svelte:head>
+<svelte:head><title>Блекаут · City Insight Map</title></svelte:head>
 
 <header class="page-head">
 	<div class="ph-text">

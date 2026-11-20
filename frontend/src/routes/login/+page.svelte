@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { login, safeNext, LoginError } from '#lib/auth.svelte.ts';
 	import Icon from '#lib/Icon.svelte';
+	import BrandMark from '#lib/BrandMark.svelte';
 
 	let loginName = $state('');
 	let password = $state('');
@@ -38,7 +39,7 @@
 	}
 </script>
 
-<svelte:head><title>Вхід · Insight Tool</title></svelte:head>
+<svelte:head><title>Вхід · City Insight Map</title></svelte:head>
 
 <div class="login">
 	<div class="bg" aria-hidden="true">
@@ -49,8 +50,8 @@
 
 	<main class="wrap-login">
 		<header class="brand rise" style="--d: 0ms">
-			<span class="logo" aria-hidden="true"><Icon name="bolt" size={26} stroke={2.2} /></span>
-			<h1>Insight Tool</h1>
+			<span class="logo"><BrandMark size={64} tone="dark" /></span>
+			<h1>City Insight <span class="acc">Map</span></h1>
 			<p class="city">Полтавська громада</p>
 			<p class="one">Управління та деталізація споживання електроенергії комунальними закладами.</p>
 		</header>
@@ -166,15 +167,11 @@
 	.logo {
 		display: inline-grid;
 		place-items: center;
-		width: 3.25rem;
-		height: 3.25rem;
 		margin-bottom: 0.9rem;
-		border-radius: var(--r-card);
-		background: linear-gradient(145deg, #ffd978, #f5a524 60%, #e88f05);
-		color: #0f2f52;
-		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.5),
-			0 8px 24px -6px rgba(245, 165, 36, 0.7);
+		filter: drop-shadow(0 8px 22px rgba(245, 184, 74, 0.35));
+	}
+	.acc {
+		color: #f5b84a;
 	}
 	h1 {
 		color: #fff;

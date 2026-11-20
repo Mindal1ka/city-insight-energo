@@ -202,7 +202,7 @@
 	};
 </script>
 
-<svelte:head><title>Енергонезалежність громади · Insight Tool</title></svelte:head>
+<svelte:head><title>Енергонезалежність громади · City Insight Map</title></svelte:head>
 
 <header class="head">
 	<div>

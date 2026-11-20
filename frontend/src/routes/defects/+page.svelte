@@ -90,7 +90,7 @@
 	}
 </script>
 
-<svelte:head><title>Якість даних · Insight Tool</title></svelte:head>
+<svelte:head><title>Якість даних · City Insight Map</title></svelte:head>
 
 <div class="page-head">
 	<div>

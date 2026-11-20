@@ -87,7 +87,7 @@
 	];
 </script>
 
-<svelte:head><title>Звіт за місяць · Insight Tool</title></svelte:head>
+<svelte:head><title>Звіт за місяць · City Insight Map</title></svelte:head>
 
 <header class="page-head">
 	<div class="ph-text">

@@ -51,7 +51,7 @@
 	const showSoc = $derived(auth.user?.role !== 'finance' && (data?.items ?? []).some((r) => r.soc_pct != null));
 </script>
 
-<svelte:head><title>Розподіл енергії · Insight Tool</title></svelte:head>
+<svelte:head><title>Розподіл енергії · City Insight Map</title></svelte:head>
 
 <header class="page-head">
 	<div class="ph-text">

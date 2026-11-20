@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 112" width="560" height="112" role="img" aria-label="City Insight Map">
+<g transform="translate(4 4)"><path d="M48 4l40 23v46L48 96 8 73V27z" fill="#FFFFFF"/>
+<g stroke="#0B2545" stroke-width="4" stroke-linecap="round" opacity=".9"><path d="M48 50V12M48 50L81 69M48 50L15 69"/></g>
+<g fill="#0B2545"><circle cx="48" cy="14" r="5"/><circle cx="80" cy="68" r="5"/><circle cx="16" cy="68" r="5"/></g>
+<circle cx="48" cy="50" r="13" fill="#F5B84A" stroke="#FFFFFF" stroke-width="4"/></g>
+<text x="118" y="60" font-family="'Segoe UI Variable Display','Segoe UI','Inter','Helvetica Neue',Arial,sans-serif" font-size="46" font-weight="700" letter-spacing="-0.5" fill="#FFFFFF">City Insight <tspan fill="#F5B84A">Map</tspan></text>
+<text x="120" y="92" font-family="'Segoe UI Variable Display','Segoe UI','Inter','Helvetica Neue',Arial,sans-serif" font-size="19" font-weight="500" fill="#9FB3CC">Energy Intelligence &amp; Decision Support</text>
+</svg>

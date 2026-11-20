@@ -3,7 +3,8 @@
 	// Текст і цифри — у lib/pitch/slides.ts. Сторінка публічна і не звертається до /api.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { SLIDES, FOOTER, BRAND, type IconName } from '#lib/pitch/slides.ts';
+	import { SLIDES, FOOTER, type IconName } from '#lib/pitch/slides.ts';
+	import BrandMark from '#lib/BrandMark.svelte';
 
 	const W = 1920;
 	const H = 1080;
@@ -142,7 +143,10 @@
 						</div>
 						<div class="ti-body">
 							<p class="ti-kicker r" style:--i={1}>Poltava Open Data Hackathon 2026 · Трек 2</p>
-							<h1 class="ti-h1 r" style:--i={2}>{s.title}</h1>
+							<div class="ti-row r" style:--i={2}>
+								<BrandMark size={150} tone="dark" />
+								<h1 class="ti-h1">{s.title}</h1>
+							</div>
 							<p class="ti-tag r" style:--i={3} lang="en">{s.tagline}</p>
 							<p class="ti-sub r" style:--i={4}>{s.subtitle}</p>
 						</div>
@@ -234,7 +238,7 @@
 							</div>
 							<div class="center">
 								<div class="core r" style:--i={4}>
-									<div class="core-t">{s.coreTitle}</div>
+									<div class="core-t"><BrandMark size={44} tone="dark" />{s.coreTitle}</div>
 									<ul>{#each s.core as c (c)}<li>{c}</li>{/each}</ul>
 								</div>
 								<div class="cstats r" style:--i={5}>
@@ -414,7 +418,7 @@
 							{/each}
 						</ol>
 					{/if}
-					<span class="corner">{BRAND}</span>
+					<span class="corner"><BrandMark size={34} /><span>City Insight <b>Map</b></span></span>
 					<footer class="foot"><span>{FOOTER}</span><span>{i + 1} / {N}</span></footer>
 				</section>
 			</div>
@@ -1278,12 +1282,28 @@
 	}
 	.corner {
 		position: absolute;
-		top: 40px;
+		top: 34px;
 		right: 120px;
-		font-size: 20px;
-		font-weight: 600;
-		color: var(--muted-p);
-		letter-spacing: 0.01em;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		font-family: var(--font-display);
+		font-size: 24px;
+		font-weight: 700;
+		color: var(--navy);
+		letter-spacing: -0.01em;
+	}
+	.corner b {
+		color: #d9951f;
+	}
+	.ti-row {
+		display: flex;
+		align-items: center;
+		gap: 44px;
+		margin-top: 22px;
+	}
+	.ti-row .ti-h1 {
+		margin-top: 0;
 	}
 	.ico {
 		fill: none;
@@ -1534,6 +1554,9 @@
 	}
 	.k-flow .core-t {
 		font-size: 40px;
+		display: flex;
+		align-items: center;
+		gap: 16px;
 	}
 	.k-flow .core ul {
 		margin-top: 16px;

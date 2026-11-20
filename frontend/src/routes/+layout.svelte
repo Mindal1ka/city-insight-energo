@@ -2,6 +2,7 @@
 	// Каркас: бокове меню з групами розділів (десктоп) і висувне меню (телефон).
 	import '../app.css';
 	import '#lib/motion-speed.ts';
+	import BrandMark from '#lib/BrandMark.svelte';
 	import favicon from '#lib/assets/favicon.svg';
 	import { page, navigating } from '$app/state';
 	import { untrack } from 'svelte';
@@ -150,7 +151,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>Insight Tool · Полтавська громада</title>
+	<title>City Insight Map · Полтавська громада</title>
 </svelte:head>
 
 <svelte:window onkeydown={globalKey} />
@@ -165,7 +166,7 @@
 		<button type="button" class="mbar-btn" aria-label="Меню" aria-expanded={drawer} aria-controls="side" onclick={() => (drawer = !drawer)}>
 			<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
 		</button>
-		<span class="mbar-title">{current?.label ?? 'Insight Tool'}</span>
+		<span class="mbar-title">{current?.label ?? 'City Insight Map'}</span>
 		<button type="button" class="mbar-btn" aria-label="Пошук будівлі" onclick={() => (paletteOpen = true)}>
 			<Icon name="search" size={18} />
 		</button>
@@ -177,9 +178,9 @@
 
 	<aside id="side" class="side no-print" class:open={drawer} aria-label="Навігація">
 		<a class="brand" href="/dashboard">
-			<span class="logo" aria-hidden="true"><Icon name="bolt" size={16} stroke={2.2} /></span>
+			<BrandMark size={30} />
 			<span class="brand-txt">
-				<span class="brand-name">Insight Tool</span>
+				<span class="brand-name">City Insight <span class="brand-acc">Map</span></span>
 				<span class="brand-sub">Полтавська громада</span>
 			</span>
 		</a>
@@ -280,15 +281,8 @@
 		border-bottom: 1px solid var(--line-soft);
 		margin-bottom: 0.75rem;
 	}
-	.logo {
-		width: 30px;
-		height: 30px;
-		border-radius: var(--radius);
-		background: var(--navy);
-		color: var(--sun);
-		display: grid;
-		place-items: center;
-		flex: none;
+	.brand-acc {
+		color: #d9951f;
 	}
 	.brand-txt {
 		display: flex;
