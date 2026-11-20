@@ -1223,6 +1223,20 @@ pre {
 	}
 }
 
+/* --- Поява при прокручуванні (motion.ts → revealNode): блок нижче екрана чекає прихованим, макет не змінюється --- */
+@media (prefers-reduced-motion: no-preference) {
+	.rv-wait {
+		opacity: 0;
+		transform: translateY(var(--rv-y0, 6px));
+	}
+}
+@media print {
+	.rv-wait {
+		opacity: 1 !important;
+		transform: none !important;
+	}
+}
+
 /* --- Глобальний вимикач анімацій --- */
 @media (prefers-reduced-motion: reduce) {
 	*,

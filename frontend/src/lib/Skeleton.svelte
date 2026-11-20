@@ -21,6 +21,11 @@
 		h?: string;
 		label?: string;
 	} = $props();
+
+	// Вміст, що заміняє каркас, з'являється з рухом навіть після довгого завантаження (motion.ts → inFirstWave)
+	import { onDestroy } from 'svelte';
+	import { skeletonMounted } from './motion.ts';
+	onDestroy(skeletonMounted());
 </script>
 
 {#if variant === 'line' || variant === 'block'}

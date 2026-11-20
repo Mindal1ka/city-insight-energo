@@ -256,11 +256,14 @@ export const pulseOnce: Action<HTMLElement, unknown> = (node, key) => {
  *
  *   <div class="tile" use:reveal={0}>…</div>  <div class="tile" use:reveal={1}>…</div>
  *   <div class="chart" use:reveal={{ i: 4, y: 0 }}>…</div>
- *   <tbody use:revealRows>…</tbody>            // перші 8 рядків — драбинка 20 мс, решта миттєво
+ *   <tbody use:revealRows>…</tbody>            // видимі рядки — драбинка 20 мс, нижчі — при прокручуванні
  *
- * Анімує лише перша «хвиля» вмісту на маршруті: перший вузол із reveal відкриває вікно ~1.2 с
- * для цього шляху; усе, що змонтується пізніше (зміна фільтра, періоду, повернення на вже
- * відкриту сторінку в межах сесії), з'являється миттєво. Лише opacity + transform, WAAPI,
+ * У видимій області анімує лише перша «хвиля» вмісту на маршруті: перший вузол із reveal відкриває
+ * вікно ~1.2 с для цього шляху (а також вміст, що заміняє Skeleton, хоч би як довго вантажилось);
+ * те, що змонтується у видимій області пізніше (зміна фільтра, періоду), з'являється миттєво.
+ * Блоки нижче екрана завжди чекають прихованими (.rv-wait) і з'являються при прокручуванні до них
+ * (спільний IntersectionObserver). Блоки без власного reveal підхоплює autoReveal на <main>
+ * у +layout.svelte. Лише opacity + transform, WAAPI,
  * reduced-motion → без руху. Вміст має стояти у слоті-каркасі такої ж висоти — тоді поява
  * не зсуває макет.
  */
@@ -277,7 +280,23 @@ export function inFirstWave(): boolean {
 		firstWave.set(key, now);
 		return true;
 	}
-	return now - t0 < WAVE_MS;
+	if (now - t0 < WAVE_MS) return true;
+	// Дані прийшли пізніше за вікно: вміст, що заміняє каркас (Skeleton), теж з'являється з рухом
+	return now - skelEnd < SKEL_GRACE_MS || (skelLive > 0 && now - t0 < 15000);
+}
+
+/** Каркаси на екрані: лічильник і час зняття останнього (див. inFirstWave) */
+let skelLive = 0;
+let skelEnd = -1e9;
+const SKEL_GRACE_MS = 300;
+
+/** Викликає Skeleton.svelte при монтуванні; повернена функція — при знятті */
+export function skeletonMounted(): () => void {
+	skelLive++;
+	return () => {
+		skelLive = Math.max(0, skelLive - 1);
+		skelEnd = performance.now();
+	};
 }
 
 export interface RevealParams {
@@ -303,15 +322,95 @@ function play(el: HTMLElement, delay: number, y: number, duration: number) {
 	);
 }
 
+/*
+ * ПОЯВА ПРИ ПРОКРУЧУВАННІ. Блок, що змонтувався нижче видимої області, ховається (клас .rv-wait у
+ * app.css: opacity 0 + зсув, макет не змінюється) і з'являється, коли доїде до екрана. Один спільний
+ * IntersectionObserver; unobserve одразу після показу. Блоки, що зайшли в екран одним кадром,
+ * отримують невелику драбинку (зверху вниз, зліва направо).
+ */
+type Pending = { y: number; duration: number; step: number; run?: (k: number) => void };
+const pending = new Map<Element, Pending>();
+let io: IntersectionObserver | null = null;
+
+function getIO(): IntersectionObserver {
+	if (io) return io;
+	io = new IntersectionObserver(
+		(entries) => {
+			const hits = entries
+				.filter((e) => e.isIntersecting && pending.has(e.target))
+				.sort(
+					(a, b) =>
+						a.boundingClientRect.top - b.boundingClientRect.top || a.boundingClientRect.left - b.boundingClientRect.left
+				);
+			hits.forEach((e, k) => {
+				const el = e.target as HTMLElement;
+				const o = pending.get(el)!;
+				pending.delete(el);
+				io!.unobserve(el);
+				if (o.run) return o.run(k);
+				el.classList.remove('rv-wait');
+				el.style.removeProperty('--rv-y0');
+				play(el, Math.min(k, 6) * o.step, o.y, o.duration);
+			});
+		},
+		{ rootMargin: '0px 0px -4% 0px', threshold: 0 }
+	);
+	return io;
+}
+
+/** Зняти блок з очікування (вузол знищено або більше не потрібен) — він не лишиться прихованим */
+export function unwatch(el: Element): void {
+	if (pending.delete(el)) io?.unobserve(el);
+	if (!el.classList.contains('rv-wait')) return;
+	el.classList.remove('rv-wait');
+	(el as HTMLElement).style?.removeProperty('--rv-y0');
+}
+
+/** Викликати run(k) один раз, коли елемент доїде до екрана (k — номер у пачці, що зайшла одним кадром); повертає скасування */
+export function whenVisible(el: Element, run: (k: number) => void): () => void {
+	pending.set(el, { y: 0, duration: 0, step: 0, run });
+	getIO().observe(el);
+	return () => {
+		pending.delete(el);
+		io?.unobserve(el);
+	};
+}
+
+/**
+ * Одна поява блоку: у видимій області — одразу (лише в першій хвилі; фільтри й повторні рендери —
+ * без руху); нижче екрана — при прокручуванні до нього (користувач його ще не бачив); вище екрана
+ * чи прихований (display:none) — без руху. Повертає true, якщо блок узято в роботу.
+ */
+export function revealNode(el: HTMLElement, delay = 0, y = 6, duration: number = DUR.base, step = 35): boolean {
+	if (isReduced() || typeof el.animate !== 'function' || pending.has(el)) return false;
+	const wave = inFirstWave();
+	const r = el.getBoundingClientRect();
+	if (!r.width && !r.height) return false;
+	const vh = window.innerHeight || document.documentElement.clientHeight;
+	if (r.top < vh * 0.96) {
+		if (r.bottom <= 0 || !wave) return false;
+		play(el, delay, y, duration);
+		return true;
+	}
+	if (typeof IntersectionObserver === 'undefined') return false;
+	el.style.setProperty('--rv-y0', `${y}px`);
+	el.classList.add('rv-wait');
+	pending.set(el, { y, duration, step });
+	getIO().observe(el);
+	return true;
+}
+
 export const reveal: Action<HTMLElement, number | RevealParams | undefined> = (node, p) => {
-	if (isReduced() || !inFirstWave()) return;
+	node.dataset.rv = '';
 	const o: RevealParams = typeof p === 'number' ? { i: p } : (p ?? {});
 	const i = Math.min(o.i ?? 0, 6);
-	play(node, (o.delay ?? 0) + i * (o.step ?? 35), o.y ?? 6, o.duration ?? DUR.base);
+	revealNode(node, (o.delay ?? 0) + i * (o.step ?? 35), o.y ?? 6, o.duration ?? DUR.base, o.step ?? 35);
+	return { destroy: () => unwatch(node) };
 };
 
 /**
- * Діти контейнера по черзі: перші `max` — драбинка `step` мс, решта — одразу.
+ * Діти контейнера по черзі: видимі — драбинка `step` мс (після `max`-го — без подальшої затримки);
+ * діти нижче екрана з'являються при прокручуванні до них.
  *   <div class="kpis" use:revealKids>…плитки…</div>        (типово 35 мс, y 6, 220 мс, max 6)
  *   <tbody use:revealRows>…</tbody>                        (рядки: 20 мс, y 4, 180 мс, max 8)
  */
@@ -323,15 +422,102 @@ export interface RevealKidsParams {
 	duration?: number;
 }
 export const revealKids: Action<HTMLElement, RevealKidsParams | undefined> = (node, p) => {
-	if (isReduced() || !inFirstWave()) return;
+	node.dataset.rv = '';
 	const { max = 6, delay = 0, step = 35, y = 6, duration = DUR.base } = p ?? {};
-	const kids = Array.from(node.children).filter((k) => !k.classList.contains('seg-ind')).slice(0, max) as HTMLElement[];
-	kids.forEach((k, i) => play(k, delay + i * step, y, duration));
+	const kids = Array.from(node.children).filter((k) => !k.classList.contains('seg-ind')) as HTMLElement[];
+	if (isReduced()) return;
+	let n = 0;
+	for (const k of kids) {
+		// Видимі після перших `max` — разом з останнім кроком драбинки (не «вискакують» на високих екранах)
+		revealNode(k, delay + Math.min(n, max) * step, y, duration, step);
+		n++;
+	}
+	return { destroy: () => kids.forEach(unwatch) };
 };
 
-/** Рядки таблиці/списку: перші `max` (типово 8) — 20 мс драбинка, решта — одразу */
+/** Рядки таблиці/списку: перші `max` (типово 8) — 20 мс драбинка, решта видимих — разом, нижчі — при прокручуванні */
 export const revealRows: Action<HTMLElement, RevealKidsParams | undefined> = (node, p) =>
 	revealKids(node, { max: 8, step: 20, y: 4, duration: 180, ...p });
+
+/*
+ * АВТОПОЯВА для <main> (use:autoReveal у +layout.svelte): кожен блок сторінки (картки, секції,
+ * таблиці, графіки, списки) з'являється один раз — у першій хвилі або при прокручуванні. Високі
+ * обгортки (вищі за екран) розбиваються на дітей, тож нижні частини довгих сторінок теж
+ * анімуються. Блоки з власною появою (use:reveal*, <Reveal>) і [data-no-reveal] пропускаються.
+ * Ловить і заміну каркаса (Skeleton) на вміст усередині вже показаних блоків. Фонове оновлення
+ * даних нових вузлів зазвичай не створює, а якщо й створює — у видимій області вони без руху.
+ */
+const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'LINK', 'TEMPLATE', 'DIALOG', 'BR', 'HR']);
+const OWN = '[data-rv], [data-no-reveal], .reveal, .rv-wait';
+
+function collectBlocks(el: Element, out: HTMLElement[], depth: number, vh: number) {
+	if (!(el instanceof HTMLElement) || SKIP_TAGS.has(el.tagName)) return;
+	if (el.closest(OWN) || el.classList.contains('skeleton') || el.classList.contains('sk-root')) return;
+	const kids = Array.from(el.children).filter((k) => !SKIP_TAGS.has(k.tagName));
+	const cs = getComputedStyle(el);
+	if (cs.display === 'contents') {
+		for (const k of kids) collectBlocks(k, out, depth + 1, vh);
+		return;
+	}
+	if (cs.display === 'none' || cs.position === 'fixed' || cs.position === 'absolute') return;
+	const r = el.getBoundingClientRect();
+	if (!r.width && !r.height) return;
+	// Висока обгортка або контейнер із власною появою всередині — анімуємо дітей, а не цілий блок
+	// (інакше нижня частина «вже показана» або подвійна прозорість)
+	if (depth < 6 && kids.length && (r.height > vh * 0.9 || el.querySelector('[data-rv], .reveal'))) {
+		for (const k of kids) collectBlocks(k, out, depth + 1, vh);
+		return;
+	}
+	out.push(el);
+}
+
+function isSkeletonNode(n: Node): boolean {
+	return (
+		n instanceof Element &&
+		(n.classList.contains('skeleton') ||
+			n.classList.contains('sk-root') ||
+			n.classList.contains('sk-kpi') ||
+			!!n.querySelector('.skeleton'))
+	);
+}
+
+export const autoReveal: Action<HTMLElement> = (main) => {
+	if (typeof MutationObserver === 'undefined') return;
+	const handle = (roots: Element[]) => {
+		if (isReduced() || !roots.length) return;
+		const vh = window.innerHeight || document.documentElement.clientHeight;
+		const blocks: HTMLElement[] = [];
+		for (const r of roots) collectBlocks(r, blocks, 0, vh);
+		let n = 0;
+		for (const b of blocks) if (revealNode(b, Math.min(n, 6) * 35)) n++;
+	};
+	handle(Array.from(main.children));
+	const mo = new MutationObserver((recs) => {
+		// Блоки, що зникли до показу (зміна сторінки, фільтра), не тримаємо в спостерігачі
+		if (pending.size && recs.some((r) => r.removedNodes.length))
+			for (const el of [...pending.keys()]) if (!el.isConnected) unwatch(el);
+		const swapped = new Set<Node>();
+		for (const rec of recs) if (Array.from(rec.removedNodes).some(isSkeletonNode)) swapped.add(rec.target);
+		const roots: Element[] = [];
+		for (const rec of recs) {
+			if (rec.target !== main && !swapped.has(rec.target)) continue;
+			rec.addedNodes.forEach((a) => {
+				if (!(a instanceof HTMLElement) || !a.isConnected || isSkeletonNode(a)) return;
+				// Дрібні вставки на місці каркаса (іконка, текст у рядку) не анімуємо
+				if (rec.target !== main && (a.offsetHeight < 24 || a.offsetWidth < 60)) return;
+				roots.push(a);
+			});
+		}
+		handle(roots);
+	});
+	mo.observe(main, { childList: true, subtree: true });
+	return {
+		destroy() {
+			mo.disconnect();
+			main.querySelectorAll('.rv-wait').forEach(unwatch);
+		}
+	};
+};
 
 /**
  * Нова навігація (зокрема повторний візит, «назад/вперед») відкриває нову першу хвилю для

@@ -10,12 +10,12 @@
 	  {/each}
 	  <Reveal y={24} class="my-grid-cell">…</Reveal>
 
-	Props: delay?=0 (мс, діється на 2, ≤160), y?=6 (px підйому); анімується лише в першій хвилі появи маршруту (motion.ts → inFirstWave), class?:string, children
+	Props: delay?=0 (мс, діється на 2, ≤160), y?=6 (px підйому); у видимій області анімується лише в першій хвилі появи маршруту (motion.ts → inFirstWave), нижче екрана — завжди при прокручуванні; class?:string, children
 	Обгортка — звичайний <div> (display:block); для grid/flex дайте їй свій class.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { isReduced, inFirstWave } from './motion.ts';
+	import { isReduced, inFirstWave, whenVisible } from './motion.ts';
 
 	let {
 		delay = 0,
@@ -30,23 +30,23 @@
 
 	$effect(() => {
 		if (!el) return;
-		// Лише перша поява даних на маршруті; фільтри й повернення на сторінку — без руху
-		if (isReduced() || typeof IntersectionObserver === 'undefined' || !inFirstWave()) {
+		if (isReduced() || typeof IntersectionObserver === 'undefined') {
 			instant = true;
 			shown = true;
 			return;
 		}
-		const io = new IntersectionObserver(
-			(entries) => {
-				if (entries.some((e) => e.isIntersecting)) {
-					shown = true;
-					io.disconnect();
-				}
-			},
-			{ rootMargin: '0px 0px -6% 0px', threshold: 0.05 }
-		);
-		io.observe(el);
-		return () => io.disconnect();
+		const wave = inFirstWave();
+		const r = el.getBoundingClientRect();
+		const vh = window.innerHeight || document.documentElement.clientHeight;
+		if (r.top < vh * 0.96) {
+			// У видимій області (або вище чи прихований): рух лише в першій хвилі появи маршруту;
+			// фільтри, повторні рендери — без руху
+			if (!wave || r.bottom <= 0) instant = true;
+			shown = true;
+			return;
+		}
+		// Нижче екрана — з'являється, коли до нього прокрутять (спільний IntersectionObserver)
+		return whenVisible(el, () => (shown = true));
 	});
 </script>
 

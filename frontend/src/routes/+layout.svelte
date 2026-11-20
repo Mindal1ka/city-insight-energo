@@ -8,7 +8,7 @@
 	import { goto, afterNavigate, onNavigate } from '$app/navigation';
 	import { auth, logout, initials, verifySession } from '#lib/auth.svelte.ts';
 	import { isCityWide, isInternal, canUpload, roleLabel } from '#lib/roles.ts';
-	import { isReduced, resetWave, navIndicator } from '#lib/motion.ts';
+	import { isReduced, resetWave, navIndicator, autoReveal } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
 	import FreshnessBadge from '#lib/FreshnessBadge.svelte';
 	import { startBackgroundData, onUserReady } from '#lib/prefetch.ts';
@@ -228,7 +228,7 @@
 	<div class="nav-progress no-print" class:on={navBar === 'on'} class:done={navBar === 'done'} aria-hidden="true"></div>
 
 	<div class="shell">
-		<main id="main" class="wrap" tabindex="-1">
+		<main id="main" class="wrap" tabindex="-1" use:autoReveal>
 			{@render children()}
 		</main>
 	</div>
