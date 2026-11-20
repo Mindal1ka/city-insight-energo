@@ -134,7 +134,7 @@ export const SLIDES: Slide[] = [
 			banner: '/pitch/hackathon-banner.webp',
 			bannerAlt: 'Poltava Open Data Hackathon, 19–20 листопада',
 			// смуга партнерів окремо на титулі не показується — вона вже є на банері
-			partners: '/pitch/partners.png',
+			partners: '/pitch/partners-poltava.png',
 			gerb: '/pitch/gerb-poltava.svg',
 			emblem: '/pitch/emblema-poltava-mr.png'
 		},
@@ -142,8 +142,8 @@ export const SLIDES: Slide[] = [
 		tagline: 'Energy Intelligence & Decision Support Platform',
 		subtitle: 'Інтегрована аналітична платформа енергетичної стійкості громади',
 		lead: 'Від розрізнених енергетичних даних — до обґрунтованих управлінських рішень.',
-		track: 'Трек 2. Енергетичний менеджмент та енергетична стійкість',
-		direction: 'Напрям: Сонячна генерація — потенціал і моніторинг СЕС. Команда Insight',
+		track: 'Енергетичний менеджмент та енергетична стійкість',
+		direction: 'Сонячна генерація — потенціал і моніторинг СЕС',
 		teamTitle: 'Команда Insight',
 		team: [
 			{

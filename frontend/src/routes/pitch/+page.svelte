@@ -67,6 +67,7 @@
 		const dy = e.changedTouches[0].clientY - ty;
 		if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(cur + (dx < 0 ? 1 : -1));
 	}
+	const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 	const hideImg = (e: Event) => ((e.currentTarget as HTMLElement).style.display = 'none');
 
 	onMount(() => {
@@ -129,26 +130,36 @@
 			>
 				<section class="slide k-{s.kind}" aria-label="Слайд {i + 1} з {N}">
 					{#if s.kind === 'title'}
-						<div class="t-grid">
-							<img class="t-banner r" style:--i={0} src={s.logos.banner} alt={s.logos.bannerAlt} width="2000" height="1125" />
-							<div class="t-right">
-								<div class="city r" style:--i={1}>
-									<img src={s.logos.gerb} alt="Герб Полтави" onerror={hideImg} />
-									<img src={s.logos.emblem} alt="Емблема Полтавської міської ради" onerror={hideImg} />
-								</div>
-								<h1 class="r" style:--i={1}>{s.title}</h1>
-								<p class="t-tag r" style:--i={2} lang="en">{s.tagline}</p>
-								<p class="t-sub r" style:--i={3}>{s.subtitle}</p>
-								<p class="t-lead r" style:--i={4}>{s.lead}</p>
-								<div class="t-meta r" style:--i={5}>
-									<p>{s.track}</p>
-									<p>{s.direction}</p>
-								</div>
+						<div class="ti-logos r" style:--i={0}>
+							<img
+								class="ti-partners"
+								src={s.logos.partners}
+								alt="Організатори й партнери: Полтавська міська рада, EUACI, Європейський Союз, МЗС Данії, співпраця з Німеччиною, UK International Development"
+							/>
+							<div class="ti-city">
+								<img src={s.logos.gerb} alt="Герб Полтави" onerror={hideImg} />
+								<img src={s.logos.emblem} alt="Емблема Полтавської міської ради" onerror={hideImg} />
 							</div>
 						</div>
-						<div class="team r" style:--i={6}>
-							{#each s.team as m (m.name)}
-								<div class="tm"><b>{m.name}</b><span>{m.role}</span></div>
+						<div class="ti-body">
+							<p class="ti-kicker r" style:--i={1}>Poltava Open Data Hackathon · 19–20 листопада 2026</p>
+							<h1 class="ti-h1 r" style:--i={2}>{s.title}</h1>
+							<p class="ti-tag r" style:--i={3} lang="en">{s.tagline}</p>
+							<p class="ti-sub r" style:--i={4}>{s.subtitle}</p>
+							<div class="ti-meta r" style:--i={5}>
+								<span class="ti-pill"><b>Трек 2</b>{s.track}</span>
+								<span class="ti-pill"><b>Напрям</b>{s.direction}</span>
+							</div>
+						</div>
+						<div class="ti-team">
+							{#each s.team as m, k (m.name)}
+								<div class="ti-card r" style:--i={6 + k}>
+									<div class="ti-who">
+										<span class="ti-av" aria-hidden="true">{initials(m.name)}</span>
+										<b>{m.name}</b>
+									</div>
+									<p>{m.role}</p>
+								</div>
 							{/each}
 						</div>
 					{:else if s.kind === 'problem'}
@@ -463,22 +474,22 @@
 		inset: 0;
 		opacity: 0;
 		visibility: hidden;
-		transform: translateX(calc(12px * var(--dir)));
+		transform: translateX(calc(32px * var(--dir)));
 		transition:
-			opacity 220ms var(--ease-out),
-			transform 220ms var(--ease-out),
-			visibility 0s linear 220ms;
+			opacity 420ms var(--ease-out),
+			transform 520ms var(--ease-out),
+			visibility 0s linear 520ms;
 	}
 	.frame.before {
-		transform: translateX(calc(-12px * var(--dir)));
+		transform: translateX(calc(-32px * var(--dir)));
 	}
 	.frame.on {
 		opacity: 1;
 		visibility: visible;
 		transform: none;
 		transition:
-			opacity 220ms var(--ease-out),
-			transform 220ms var(--ease-out),
+			opacity 480ms var(--ease-out),
+			transform 620ms var(--ease-out),
 			visibility 0s;
 	}
 	.slide {
@@ -498,14 +509,17 @@
 		font-size: 30px;
 		line-height: 1.4;
 	}
-	/* Поява елементів слайда: каскад ≤ 40 мс */
+	/* Поява елементів слайда: спокійний каскад, кожен наступний блок на 90 мс пізніше */
 	.r {
 		opacity: 0;
-		transform: translateY(10px);
+		transform: translateY(24px);
 		transition:
-			opacity 260ms var(--ease-out),
-			transform 260ms var(--ease-out);
-		transition-delay: calc(var(--i, 0) * 40ms + 60ms);
+			opacity 600ms var(--ease-out),
+			transform 760ms var(--ease-out);
+		transition-delay: 0ms;
+	}
+	.frame.on .r {
+		transition-delay: calc(var(--i, 0) * 90ms + 220ms);
 	}
 	.frame.on .r,
 	.stacked .r,
@@ -601,78 +615,158 @@
 	}
 
 	/* 1 — титул */
+
+	/* 1 — титул: біла смуга організаторів зверху (як в офіційному шаблоні), темно-синє тіло, великі шрифти */
 	.k-title {
-		background: var(--navy);
+		--gold: #f5b84a;
+		background:
+			radial-gradient(1100px 600px at 92% 30%, rgba(245, 184, 74, 0.12), transparent 70%),
+			var(--navy);
 		color: #fff;
 		padding: 0;
 	}
-	.logos {
-		background: #fff;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 48px;
-		padding: 28px 120px;
-		height: 190px;
-		box-sizing: border-box;
-	}
-	.partners {
-		height: 130px;
-		width: auto;
-		max-width: 1300px;
-		object-fit: contain;
-	}
-	.city {
-		display: flex;
-		gap: 36px;
-		align-items: center;
-	}
-	.city img {
-		height: 130px;
-		width: auto;
-	}
-	.t-body {
-		padding: 90px 120px 0;
-	}
-	.sunbar {
-		width: 120px;
-		height: 10px;
-		background: var(--sun);
-		border-radius: var(--r-sm);
-		margin-bottom: 40px;
-	}
-	h1 {
-		font-size: 140px;
-		line-height: 0.95;
-		font-weight: 750;
-		letter-spacing: -0.02em;
-		color: #fff;
-	}
-	.t-sub {
-		margin: 36px 0 0;
-		font-size: 46px;
-		line-height: 1.2;
-		max-width: 1500px;
-		color: #fff;
-		font-weight: 500;
-	}
-	.t-lead {
-		margin: 28px 0 0;
-		font-size: 34px;
-		color: #f5c060;
-	}
-	.t-meta {
-		margin-top: auto;
-		padding: 0 120px 120px;
-		font-size: 28px;
-		color: #c9d6e8;
-	}
-	.t-meta p {
-		margin: 6px 0 0;
+	.k-title .corner {
+		display: none;
 	}
 	.k-title .foot {
 		color: #9fb3cc;
 		border-color: #23446f;
+	}
+	.ti-logos {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 56px;
+		height: 150px;
+		padding: 0 120px;
+		background: #fff;
+		box-sizing: border-box;
+	}
+	.ti-partners {
+		height: 104px;
+		width: auto;
+		max-width: 100%;
+		object-fit: contain;
+	}
+	.ti-city {
+		display: flex;
+		gap: 24px;
+		align-items: center;
+	}
+	.ti-city img {
+		height: 96px;
+		width: auto;
+	}
+	.ti-body {
+		padding: 56px 120px 0;
+	}
+	.ti-kicker {
+		margin: 0;
+		font-size: 28px;
+		font-weight: 600;
+		color: var(--gold);
+	}
+	.ti-kicker::before {
+		content: '';
+		display: inline-block;
+		width: 48px;
+		height: 5px;
+		border-radius: 3px;
+		background: var(--gold);
+		vertical-align: middle;
+		margin: -4px 18px 0 0;
+	}
+	.ti-h1 {
+		margin-top: 18px;
+		font-size: 150px;
+		line-height: 0.95;
+		font-weight: 800;
+		letter-spacing: -0.025em;
+		color: #fff;
+		white-space: nowrap;
+	}
+	.ti-tag {
+		margin: 22px 0 0;
+		font-size: 42px;
+		line-height: 1.2;
+		font-weight: 600;
+		color: var(--gold);
+	}
+	.ti-sub {
+		margin: 18px 0 0;
+		font-size: 36px;
+		line-height: 1.3;
+		font-weight: 500;
+		color: #fff;
+	}
+	.ti-meta {
+		display: flex;
+		gap: 16px;
+		margin-top: 30px;
+	}
+	.ti-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 14px;
+		padding: 10px 24px 10px 10px;
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.07);
+		border: 1px solid #2c5285;
+		font-size: 23px;
+		color: #e3ebf5;
+		white-space: nowrap;
+	}
+	.ti-pill b {
+		padding: 4px 14px;
+		border-radius: 999px;
+		background: var(--gold);
+		color: #1d1405;
+		font-size: 19px;
+		font-weight: 700;
+	}
+	.ti-team {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: 18px;
+		margin: 36px 120px 0;
+	}
+	.ti-card {
+		padding: 20px 22px 20px;
+		border-radius: 14px;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid #23446f;
+	}
+	.ti-who {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		min-height: 58px;
+	}
+	.ti-av {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		background: var(--gold);
+		color: #1d1405;
+		font-family: var(--font-display);
+		font-size: 21px;
+		font-weight: 800;
+	}
+	.ti-who b {
+		font-family: var(--font-display);
+		font-size: 23px;
+		line-height: 1.2;
+		font-weight: 700;
+		color: #fff;
+	}
+	.ti-card p {
+		margin: 12px 0 0;
+		font-size: 19px;
+		line-height: 1.4;
+		color: #c9d6e8;
 	}
 
 	/* 2 — проблема і цінність */
@@ -1186,13 +1280,6 @@
 		padding-left: 28px;
 	}
 
-	.t-tag {
-		margin: 20px 0 0;
-		font-size: 38px;
-		font-weight: 500;
-		color: #f5c060;
-		letter-spacing: 0.005em;
-	}
 
 	/* 10 — масштабування */
 	.grow {
@@ -1262,10 +1349,6 @@
 		color: var(--muted-p);
 		letter-spacing: 0.01em;
 	}
-	.k-title .corner {
-		top: 214px;
-		color: #9fb3cc;
-	}
 	.ico {
 		fill: none;
 		stroke: currentColor;
@@ -1282,49 +1365,6 @@
 	}
 
 	/* 1 */
-	.t-body {
-		padding: 64px 120px 0;
-	}
-	h1 {
-		font-size: 120px;
-	}
-	.t-tag {
-		margin-top: 16px;
-		font-size: 34px;
-	}
-	.t-sub {
-		margin-top: 28px;
-		font-size: 38px;
-	}
-	.t-lead {
-		margin-top: 16px;
-		font-size: 28px;
-	}
-	.t-meta {
-		padding: 0 120px;
-		font-size: 24px;
-	}
-	.team {
-		display: grid;
-		grid-template-columns: repeat(5, 1fr);
-		gap: 28px;
-		margin: 26px 120px 110px;
-		padding-top: 22px;
-		border-top: 1px solid #23446f;
-	}
-	.tm b {
-		display: block;
-		font-size: 20px;
-		color: #fff;
-		line-height: 1.25;
-	}
-	.tm span {
-		display: block;
-		margin-top: 6px;
-		font-size: 16px;
-		line-height: 1.4;
-		color: #b7c6da;
-	}
 
 	/* 2 */
 	.stats {
@@ -1906,65 +1946,6 @@
 	}
 
 	/* Ревізія 3: титул = повний банер хакатону зліва + назва справа, команда внизу */
-	.t-grid {
-		display: grid;
-		grid-template-columns: 1000px 1fr;
-		gap: 56px;
-		padding: 80px 120px 0;
-		align-items: start;
-	}
-	.t-banner {
-		display: block;
-		width: 1000px;
-		height: 563px;
-		object-fit: contain;
-		background: #000;
-		border-radius: var(--r-card);
-		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
-	}
-	.t-right {
-		display: flex;
-		flex-direction: column;
-		min-height: 563px;
-	}
-	.k-title .city {
-		gap: 20px;
-	}
-	.k-title .city img {
-		height: 72px;
-		margin-bottom: 20px;
-	}
-	.k-title h1 {
-		font-size: 84px;
-		line-height: 1;
-	}
-	.k-title .t-tag {
-		margin-top: 18px;
-		font-size: 27px;
-		line-height: 1.3;
-	}
-	.k-title .t-sub {
-		margin-top: 26px;
-		font-size: 28px;
-		line-height: 1.3;
-	}
-	.k-title .t-lead {
-		margin-top: 14px;
-		font-size: 22px;
-		line-height: 1.4;
-	}
-	.k-title .t-meta {
-		margin-top: auto;
-		padding: 0;
-		font-size: 19px;
-		line-height: 1.4;
-	}
-	.k-title .corner {
-		top: 34px;
-	}
-	.k-title .team {
-		margin-top: auto;
-	}
 	.tl li:nth-child(6) .dot {
 		background: #8a4f00;
 	}
