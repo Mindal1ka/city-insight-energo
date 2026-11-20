@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import freshness
 from .analytics import Store
 from .auth import User, can_see_ses, can_see_sensitive, require, require_login
 from .import_umuni import detect_kind
@@ -82,9 +83,38 @@ def defects_csv():
                              headers={"Content-Disposition": "attachment; filename=data-defects.csv"})
 
 
+@app.get("/api/freshness")
+def data_freshness(user: User = Depends(require_login)):
+    """Свіжість джерел: дата, вік, статус за очікуваною періодичністю."""
+    return freshness.freshness(store, DATA_DIR)
+
+
+@app.get("/api/uploads/history")
+def upload_history(limit: int = 50, user: User = Depends(require("energy_manager", "data_admin"))):
+    """Журнал завантажень (справжні + ДЕМО-історія з позначкою demo)."""
+    return freshness.history(store, DATA_DIR, limit=max(1, min(limit, 300)))
+
+
 @app.post("/api/upload")
 async def upload(file: UploadFile, user: User = Depends(require("energy_manager", "data_admin"))):
-    """Нове вивантаження UMUNI → перерахунок без участі розробника."""
+    """Нове вивантаження UMUNI → перерахунок без участі розробника. Кожна спроба — у журнал."""
+    name = Path(file.filename or "").name or "без назви"
+    log = lambda **kw: freshness.record(DATA_DIR, file=name, user=user.full_name or user.role_name,
+                                        role=user.role, **kw)
+    try:
+        res = await _upload(file)
+    except HTTPException as e:
+        log(kind="unknown", ok=False, error=str(e.detail))
+        raise
+    kind = res["kind"]
+    year = next((y for y, r in store.reports.items() if r.source == name), None) if kind == "annual" else None
+    rows = (len(store.reports[year].rows) if year else len(store.buildings) if kind == "buildings"
+            else sum(len(v) for v in (store.meters or {}).values()))
+    log(kind=kind, ok=True, rows=rows, year=year)
+    return res
+
+
+async def _upload(file: UploadFile) -> dict:
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(400, "Потрібен файл XLSX з UMUNI")
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:

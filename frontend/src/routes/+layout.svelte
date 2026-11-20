@@ -9,6 +9,7 @@
 	import { isReduced } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
 	import CommandPalette from '#lib/CommandPalette.svelte';
+	import FreshnessBadge from '#lib/FreshnessBadge.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
@@ -167,6 +168,8 @@
 				</ul>
 			{/each}
 		</nav>
+
+		<FreshnessBadge />
 
 		<div class="me">
 			<span class="avatar" aria-hidden="true">{initials(auth.user.full_name)}</span>

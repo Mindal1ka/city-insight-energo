@@ -143,6 +143,51 @@ export interface SolarDetail {
 	params?: SolarParams;
 }
 
+export type FreshStatus = 'fresh' | 'due' | 'stale';
+
+export interface FreshSource {
+	key: string;
+	kind: string;
+	label: string;
+	as_of: string | null;
+	age_days: number | null;
+	status: FreshStatus;
+	demo: boolean;
+	how: 'upload' | 'script';
+	how_hint: string;
+	period: string;
+	detail: string;
+}
+
+export interface Freshness {
+	checked_at: string;
+	overall: FreshStatus;
+	as_of: string | null;
+	counts: Record<FreshStatus, number>;
+	sources: FreshSource[];
+}
+
+export interface UploadLogItem {
+	at: string;
+	file: string;
+	kind: string;
+	kind_label: string;
+	year: number | null;
+	ok: boolean;
+	rows: number | null;
+	error: string | null;
+	user: string;
+	role: string;
+	channel: 'upload' | 'script';
+	demo: boolean;
+}
+
+export interface UploadHistory {
+	items: UploadLogItem[];
+	real: number;
+	demo: number;
+}
+
 export interface UploadResult {
 	ok: boolean;
 	kind: string;
@@ -377,6 +422,8 @@ export function viewQs(view?: ViewKey): string {
 
 export const api = {
 	summary: () => getJSON<Summary>('/api/summary'),
+	freshness: () => getJSON<Freshness>('/api/freshness'),
+	uploadHistory: (limit = 50) => getJSON<UploadHistory>('/api/uploads/history' + qs({ limit })),
 	buildings: (category?: string) => getJSON<Building[]>('/api/buildings' + qs({ category })),
 	building: (id: string | number) =>
 		getJSON<BuildingFull>(`/api/buildings/${encodeURIComponent(id)}`),

@@ -8,6 +8,7 @@
 	import Icon from '#lib/Icon.svelte';
 	import { fadeUp, scaleIn, stagger } from '#lib/motion.ts';
 	import Disclosure from '#lib/Disclosure.svelte';
+	import DataStatus from '#lib/DataStatus.svelte';
 	import { auth } from '#lib/auth.svelte.ts';
 	import { canUpload, isInternal } from '#lib/roles.ts';
 
@@ -24,6 +25,7 @@
 	let input = $state<HTMLInputElement>();
 	let startBtn = $state<HTMLButtonElement>();
 	let statusEl = $state<HTMLElement>();
+	let version = $state(0); // після кожної спроби — перечитати свіжість і журнал
 
 	function isXlsx(f: File): boolean {
 		return f.name.toLowerCase().endsWith('.xlsx');
@@ -85,6 +87,7 @@
 			error = errMessage(err);
 			phase = 'error';
 		}
+		version++;
 		queueMicrotask(() => statusEl?.focus());
 	}
 
@@ -276,6 +279,8 @@
 		</Disclosure>
 	</aside>
 </div>
+
+<DataStatus {version} />
 {/if}
 
 <style>

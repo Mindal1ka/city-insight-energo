@@ -31,3 +31,4 @@ backend/data/poe_schedule.json
 backend/data/generators.csv
 backend/data/fuel_log.csv
 docs/presentation/slides/
+backend/data/upload_log.json
