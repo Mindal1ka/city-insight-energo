@@ -67,7 +67,6 @@
 		const dy = e.changedTouches[0].clientY - ty;
 		if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(cur + (dx < 0 ? 1 : -1));
 	}
-	const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 	const hideImg = (e: Event) => ((e.currentTarget as HTMLElement).style.display = 'none');
 
 	onMount(() => {
@@ -142,26 +141,16 @@
 							</div>
 						</div>
 						<div class="ti-body">
-							<p class="ti-kicker r" style:--i={1}>Poltava Open Data Hackathon · 19–20 листопада 2026</p>
+							<p class="ti-kicker r" style:--i={1}>Poltava Open Data Hackathon 2026 · Трек 2</p>
 							<h1 class="ti-h1 r" style:--i={2}>{s.title}</h1>
 							<p class="ti-tag r" style:--i={3} lang="en">{s.tagline}</p>
 							<p class="ti-sub r" style:--i={4}>{s.subtitle}</p>
-							<div class="ti-meta r" style:--i={5}>
-								<span class="ti-pill"><b>Трек 2</b>{s.track}</span>
-								<span class="ti-pill"><b>Напрям</b>{s.direction}</span>
-							</div>
 						</div>
-						<div class="ti-team">
-							{#each s.team as m, k (m.name)}
-								<div class="ti-card r" style:--i={6 + k}>
-									<div class="ti-who">
-										<span class="ti-av" aria-hidden="true">{initials(m.name)}</span>
-										<b>{m.name}</b>
-									</div>
-									<p>{m.role}</p>
-								</div>
+						<ul class="ti-team r" style:--i={5}>
+							{#each s.team as m (m.name)}
+								<li><b>{m.name}</b><span>{m.role}</span></li>
 							{/each}
-						</div>
+						</ul>
 					{:else if s.kind === 'problem'}
 						<h2 class="r" style:--i={0}>{s.title}</h2>
 						<div class="stats r" style:--i={1}>
@@ -616,12 +605,10 @@
 
 	/* 1 — титул */
 
-	/* 1 — титул: біла смуга організаторів зверху (як в офіційному шаблоні), темно-синє тіло, великі шрифти */
+	/* 1 — титул: три рівні (логотипи → назва → команда), один акцентний колір, нічого зайвого */
 	.k-title {
 		--gold: #f5b84a;
-		background:
-			radial-gradient(1100px 600px at 92% 30%, rgba(245, 184, 74, 0.12), transparent 70%),
-			var(--navy);
+		background: var(--navy);
 		color: #fff;
 		padding: 0;
 	}
@@ -629,7 +616,7 @@
 		display: none;
 	}
 	.k-title .foot {
-		color: #9fb3cc;
+		color: #8fa5c2;
 		border-color: #23446f;
 	}
 	.ti-logos {
@@ -658,27 +645,21 @@
 		width: auto;
 	}
 	.ti-body {
-		padding: 56px 120px 0;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 0 120px;
 	}
 	.ti-kicker {
 		margin: 0;
-		font-size: 28px;
+		font-size: 30px;
 		font-weight: 600;
-		color: var(--gold);
-	}
-	.ti-kicker::before {
-		content: '';
-		display: inline-block;
-		width: 48px;
-		height: 5px;
-		border-radius: 3px;
-		background: var(--gold);
-		vertical-align: middle;
-		margin: -4px 18px 0 0;
+		color: #9fb3cc;
 	}
 	.ti-h1 {
-		margin-top: 18px;
-		font-size: 150px;
+		margin-top: 20px;
+		font-size: 156px;
 		line-height: 0.95;
 		font-weight: 800;
 		letter-spacing: -0.025em;
@@ -686,87 +667,42 @@
 		white-space: nowrap;
 	}
 	.ti-tag {
-		margin: 22px 0 0;
-		font-size: 42px;
+		margin: 26px 0 0;
+		font-size: 46px;
 		line-height: 1.2;
 		font-weight: 600;
 		color: var(--gold);
 	}
 	.ti-sub {
-		margin: 18px 0 0;
-		font-size: 36px;
+		margin: 20px 0 0;
+		font-size: 38px;
 		line-height: 1.3;
-		font-weight: 500;
-		color: #fff;
-	}
-	.ti-meta {
-		display: flex;
-		gap: 16px;
-		margin-top: 30px;
-	}
-	.ti-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 14px;
-		padding: 10px 24px 10px 10px;
-		border-radius: 999px;
-		background: rgba(255, 255, 255, 0.07);
-		border: 1px solid #2c5285;
-		font-size: 23px;
-		color: #e3ebf5;
-		white-space: nowrap;
-	}
-	.ti-pill b {
-		padding: 4px 14px;
-		border-radius: 999px;
-		background: var(--gold);
-		color: #1d1405;
-		font-size: 19px;
-		font-weight: 700;
+		font-weight: 400;
+		color: #dfe7f1;
 	}
 	.ti-team {
+		list-style: none;
+		margin: 0 120px 150px;
+		padding: 28px 0 0;
+		border-top: 1px solid #2c4f7c;
 		display: grid;
 		grid-template-columns: repeat(5, 1fr);
-		gap: 18px;
-		margin: 36px 120px 0;
+		gap: 32px;
 	}
-	.ti-card {
-		padding: 20px 22px 20px;
-		border-radius: 14px;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid #23446f;
-	}
-	.ti-who {
-		display: flex;
-		align-items: center;
-		gap: 14px;
-		min-height: 58px;
-	}
-	.ti-av {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 52px;
-		height: 52px;
-		border-radius: 50%;
-		background: var(--gold);
-		color: #1d1405;
+	.ti-team b {
+		display: block;
 		font-family: var(--font-display);
-		font-size: 21px;
-		font-weight: 800;
-	}
-	.ti-who b {
-		font-family: var(--font-display);
-		font-size: 23px;
+		font-size: 30px;
 		line-height: 1.2;
 		font-weight: 700;
 		color: #fff;
 	}
-	.ti-card p {
-		margin: 12px 0 0;
-		font-size: 19px;
-		line-height: 1.4;
-		color: #c9d6e8;
+	.ti-team span {
+		display: block;
+		margin-top: 8px;
+		font-size: 22px;
+		line-height: 1.35;
+		color: #9fb3cc;
 	}
 
 	/* 2 — проблема і цінність */
@@ -1771,7 +1707,7 @@
 		font-size: 28px;
 		color: var(--navy);
 	}
-	.pl span {
+	.pl div > span {
 		display: block;
 		font-size: 20px;
 		line-height: 1.35;
@@ -1865,79 +1801,59 @@
 		background: #0f766e;
 	}
 
-	/* 10 */
+	/* 10 — три рівні картки, кожна свого кольору */
 	.k-growth .grow {
-		grid-template-columns: 1.35fr 1fr;
-		grid-template-rows: 1fr 1fr;
-		gap: 28px;
-		margin: 40px 0 36px;
+		grid-template-columns: repeat(3, 1fr);
+		grid-template-rows: none;
+		gap: 32px;
+		margin: 48px 0 40px;
 	}
 	.k-growth .grow li {
 		border-top: none;
 		border-radius: var(--r-card);
-		padding: 26px 34px;
+		padding: 40px 40px 36px;
+		color: #fff;
 	}
 	.k-growth .grow li.g1 {
-		grid-row: 1 / span 2;
 		background: var(--navy);
-		color: #fff;
-		padding: 48px 52px;
 	}
 	.k-growth .grow li.g2 {
-		background: #e8f1fb;
+		background: #0f6b5c;
 	}
 	.k-growth .grow li.g3 {
-		background: #f1f6fc;
+		background: #9a5a08;
 	}
 	.k-growth .g-n {
-		font-size: 34px;
-		margin-bottom: 8px;
-	}
-	.k-growth .g1 .g-n {
-		font-size: 72px;
-		color: var(--sun);
-		margin-bottom: 24px;
+		font-size: 64px;
+		color: rgba(255, 255, 255, 0.55);
+		margin-bottom: 20px;
 	}
 	.k-growth .grow h3 {
-		font-size: 26px;
-	}
-	.k-growth .g1 h3 {
-		font-size: 42px;
-		line-height: 1.15;
+		font-size: 32px;
+		line-height: 1.2;
 		color: #fff;
 	}
 	.k-growth .g-t {
-		font-size: 18px;
-		margin-top: 10px;
-	}
-	.k-growth .g1 .g-t {
-		font-size: 26px;
+		font-size: 22px;
 		line-height: 1.45;
-		color: #d5e0ee;
-		margin-top: 24px;
+		color: rgba(255, 255, 255, 0.82);
+		margin-top: 18px;
 	}
 	.k-growth .g-v {
 		margin-top: auto;
-		padding-top: 14px;
+		padding-top: 24px;
 		border-top: none;
 		display: flex;
 		flex-wrap: wrap;
 		gap: 10px;
 	}
 	.gchip {
-		font-size: 18px;
-		padding: 6px 14px;
+		font-size: 20px;
+		padding: 8px 16px;
 		border-radius: var(--r-btn);
-		background: #fff;
-		color: var(--navy-2);
-		border: 1px solid #b9d1ec;
-	}
-	.g1 .gchip {
-		font-size: 22px;
-		padding: 10px 18px;
-		background: #173a64;
+		background: rgba(255, 255, 255, 0.14);
 		color: #fff;
-		border-color: #2f5788;
+		border: 1px solid rgba(255, 255, 255, 0.28);
 	}
 	@media print {
 		.k-flow .core {
