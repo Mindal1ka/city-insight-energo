@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Каркас: бокове меню з групами розділів (десктоп) і висувне меню (телефон).
 	import '../app.css';
+	import '#lib/motion-speed.ts';
 	import favicon from '#lib/assets/favicon.svg';
 	import { page, navigating } from '$app/state';
 	import { untrack } from 'svelte';
@@ -495,11 +496,11 @@
 		/* Меню: відкриття — 260 мс --ease-emph (виїжджає з-за краю), закриття — 160 мс --ease-in */
 		.side {
 			transform: translateX(-100%);
-			transition: transform 160ms var(--ease-in);
+			transition: transform 320ms var(--ease-in);
 			box-shadow: none;
 		}
 		.side.open {
-			transition: transform 260ms var(--ease-emph);
+			transition: transform 520ms var(--ease-emph);
 		}
 		.side.open {
 			transform: none;

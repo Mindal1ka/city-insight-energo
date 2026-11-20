@@ -652,7 +652,7 @@
 		color: #fff;
 		font-weight: 700;
 		text-decoration: none;
-		transition: background 0.2s;
+		transition: background 0.4s;
 	}
 	.open:hover {
 		background: #084684;
@@ -661,7 +661,7 @@
 		transform: translateX(3px);
 	}
 	.open span {
-		transition: transform 0.2s;
+		transition: transform 0.4s;
 	}
 	a:focus-visible,
 	button:focus-visible {

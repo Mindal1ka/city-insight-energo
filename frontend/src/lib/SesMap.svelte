@@ -534,7 +534,7 @@
 		border: 2px solid var(--c);
 		pointer-events: none;
 		opacity: 0;
-		animation: sm-ping 600ms var(--ease-out) 1;
+		animation: sm-ping 1200ms var(--ease-out) 1;
 	}
 	@keyframes -global-sm-ping {
 		from {
@@ -548,7 +548,7 @@
 	}
 	.sm-root :global(.sm-mk.wave) {
 		/* Єдиний «момент» мапи: перша поява маркерів хвилею від центру (≤ 360 мс затримки + 240 мс) */
-		animation: sm-in 240ms var(--ease-emph) backwards;
+		animation: sm-in 480ms var(--ease-emph) backwards;
 		animation-delay: var(--d);
 	}
 	@keyframes -global-sm-in {

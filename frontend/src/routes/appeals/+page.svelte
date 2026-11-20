@@ -278,7 +278,7 @@
 	.cnt { color: var(--muted); font-size: var(--fs-sm); }
 	.ap { position: relative; }
 	@media (prefers-reduced-motion: no-preference) {
-		.ap.fresh::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--accent-soft); mix-blend-mode: multiply; pointer-events: none; animation: ap-flash 600ms var(--ease-out) both; }
+		.ap.fresh::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--accent-soft); mix-blend-mode: multiply; pointer-events: none; animation: ap-flash 1200ms var(--ease-out) both; }
 		@keyframes ap-flash { to { opacity: 0; } }
 	}
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }

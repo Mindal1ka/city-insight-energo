@@ -339,7 +339,7 @@
 		border-radius: var(--radius);
 		box-shadow: var(--shadow);
 		padding: 1rem 1.25rem 0.5rem;
-		transition: box-shadow 0.2s;
+		transition: box-shadow 0.4s;
 	}
 	.group:hover,
 	.group.open {
@@ -433,7 +433,7 @@
 		min-height: 40px;
 	}
 	.g-toggle svg {
-		transition: transform 0.24s var(--ease);
+		transition: transform 0.48s var(--ease);
 	}
 	.open .g-toggle svg {
 		transform: rotate(180deg);

@@ -331,7 +331,7 @@
 		background: #fff;
 		border: 4px solid var(--sun-strong);
 		box-shadow: 0 2px 8px rgba(138, 79, 0, 0.3);
-		transition: transform var(--dur-fast, 150ms) var(--ease-out, ease);
+		transition: transform var(--dur-fast, 300ms) var(--ease-out, ease);
 	}
 	.big-range::-moz-range-thumb {
 		width: 26px;

@@ -97,9 +97,9 @@
 	   press 100 / fast 140 — рутинний UI (наведення, натиск, чипи, вкладки);
 	   base 220 / slow 300 — значущі зміни (картка, шухляда, графік, сторінка). Без «пружин». */
 	--dur-press: 100ms;
-	--dur-fast: 140ms;
-	--dur-base: 220ms;
-	--dur-slow: 300ms;
+	--dur-fast: 280ms;
+	--dur-base: 440ms;
+	--dur-slow: 600ms;
 	--ease-out: cubic-bezier(0.2, 0.7, 0.2, 1); /* швидкий старт, м'яка посадка — поява, реакція */
 	--ease-in-out: cubic-bezier(0.55, 0, 0.25, 1); /* переміщення між двома станами (індикатор, вкладки) */
 	--ease-in: cubic-bezier(0.4, 0, 1, 1); /* зникнення — швидко геть з дороги */
@@ -911,8 +911,8 @@ nav.nav.has-nav-ind a[aria-current='page']::before {
 }
 
 /* --- Переходи між сторінками (View Transitions API, див. +layout.svelte) ---
-   Послідовно, без накладання двох сторінок: стара згасає за 80 мс, нова проявляється з 80-ї мс
-   за 120 мс (разом 200 мс). Група не «морфить» розмір — висоти сторінок різні, тож без розтягування.
+   Послідовно, без накладання двох сторінок: стара згасає за 160 мс, нова проявляється з 160-ї мс
+   за 240 мс (разом 400 мс). Група не «морфить» розмір — висоти сторінок різні, тож без розтягування.
    Меню й верхня смуга стоять на місці (вони у root, а root не анімується). */
 @media (prefers-reduced-motion: no-preference) {
 	::view-transition-old(root),
@@ -926,10 +926,10 @@ nav.nav.has-nav-ind a[aria-current='page']::before {
 		isolation: auto;
 	}
 	::view-transition-old(page) {
-		animation: vt-out 80ms var(--ease-in) both;
+		animation: vt-out 320ms var(--ease-in) both;
 	}
 	::view-transition-new(page) {
-		animation: vt-in 120ms var(--ease-out) 80ms both;
+		animation: vt-in 480ms var(--ease-out) 320ms both;
 		mix-blend-mode: normal;
 	}
 	::view-transition-old(page),

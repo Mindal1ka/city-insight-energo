@@ -328,7 +328,7 @@
 		border-radius: var(--r-card);
 		border: 1px solid;
 		border-left-width: 6px;
-		transition: opacity 0.2s;
+		transition: opacity 0.4s;
 	}
 	.result.ok {
 		background: var(--surplus-soft);
@@ -408,7 +408,7 @@
 	}
 	/* Стрічка часу відключення */
 	.run {
-		transition: opacity 0.2s;
+		transition: opacity 0.4s;
 	}
 	.run-track {
 		position: relative;
@@ -515,14 +515,14 @@
 	.stack span {
 		flex-basis: 0;
 		min-height: 0;
-		transition: flex-grow 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+		transition: flex-grow 1s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	.stack {
-		transition: height 0.55s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 18ms);
+		transition: height 1.1s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 18ms);
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.col {
-			animation: col-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 25ms) backwards;
+			animation: col-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 25ms) backwards;
 		}
 		@keyframes col-in {
 			from {
@@ -531,7 +531,7 @@
 			}
 		}
 		.r-glyph {
-			animation: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+			animation: pop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
 		}
 		@keyframes pop {
 			from {

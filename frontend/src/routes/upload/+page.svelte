@@ -517,7 +517,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.res-bad {
-			animation: shake 0.42s var(--ease);
+			animation: shake 0.84s var(--ease);
 		}
 		@keyframes shake {
 			20% {
@@ -534,7 +534,7 @@
 			}
 		}
 		.ok-ico {
-			animation: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+			animation: pop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 		}
 		@keyframes pop {
 			from {
@@ -545,7 +545,7 @@
 		.tick {
 			stroke-dasharray: 22;
 			stroke-dashoffset: 22;
-			animation: draw 0.45s var(--ease) 0.25s forwards;
+			animation: draw 0.9s var(--ease) 0.5s forwards;
 		}
 		@keyframes draw {
 			to {
@@ -646,7 +646,7 @@
 			font-size: 1.125rem;
 			font-weight: 700;
 			box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 28%, transparent);
-			transition: transform 0.15s;
+			transition: transform 0.3s;
 		}
 		.drop-label:active .pick-btn {
 			transform: scale(0.98);

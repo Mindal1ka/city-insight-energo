@@ -590,7 +590,7 @@
 		display: block;
 	}
 	.cm-root :global(.cm-pin.cm-in) {
-		animation: cm-pop 240ms var(--ease-emph) var(--d) both;
+		animation: cm-pop 480ms var(--ease-emph) var(--d) both;
 	}
 	@keyframes -global-cm-pop {
 		from {
@@ -648,7 +648,7 @@
 		border-radius: 50%;
 		border: 2px solid var(--c);
 		/* Одне кільце-імпульс у момент вибору — «ось він», без нескінченного миготіння */
-		animation: cm-pulse 600ms var(--ease-out) 1 both;
+		animation: cm-pulse 1200ms var(--ease-out) 1 both;
 		pointer-events: none;
 	}
 	@keyframes -global-cm-pulse {
@@ -799,7 +799,7 @@
 		font-weight: 650;
 		font-size: 0.9rem;
 		text-decoration: none;
-		transition: background-color 0.15s;
+		transition: background-color 0.3s;
 	}
 	.cm-root :global(.cm-card-btn:hover) {
 		background: var(--accent-dark);
@@ -966,7 +966,7 @@
 		font-weight: 650;
 		text-decoration: none;
 		transform: translateY(-160%);
-		transition: transform 0.15s;
+		transition: transform 0.3s;
 	}
 	.cm-skip:focus-visible,
 	.cm-skip:focus {

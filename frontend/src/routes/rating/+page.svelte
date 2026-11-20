@@ -436,7 +436,7 @@
 		position: relative;
 		border-bottom: 1px solid #edf0f4;
 		background: var(--surface);
-		transition: background 0.15s;
+		transition: background 0.3s;
 	}
 	.row:last-child {
 		border-bottom: 0;
@@ -490,7 +490,7 @@
 	@media (prefers-reduced-motion: no-preference) {
 		.fill {
 			transform: scaleX(0);
-			transition: transform 0.7s var(--ease) calc(var(--i, 0) * 30ms + 150ms);
+			transition: transform 0.7s var(--ease) calc(var(--i, 0) * 30ms + 300ms);
 		}
 		:global(.grown) .fill {
 			transform: none;

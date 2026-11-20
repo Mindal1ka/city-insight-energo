@@ -1189,7 +1189,7 @@
 	.prog div {
 		height: 100%;
 		background: var(--sun);
-		transition: width 220ms var(--ease-out);
+		transition: width 440ms var(--ease-out);
 	}
 	.bar button {
 		font: inherit;

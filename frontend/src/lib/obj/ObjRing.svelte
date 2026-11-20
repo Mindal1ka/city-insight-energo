@@ -54,7 +54,7 @@
 		stroke: var(--sun-strong);
 		stroke-linecap: round;
 		/* Заповнюється один раз разом із числом у центрі: той самий час (450 мс) і крива */
-		transition: stroke-dashoffset 450ms var(--ease-out);
+		transition: stroke-dashoffset 900ms var(--ease-out);
 	}
 	.bar.done {
 		stroke: var(--surplus);

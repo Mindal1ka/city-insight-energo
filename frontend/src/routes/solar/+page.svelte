@@ -826,7 +826,7 @@
 		background: #fff;
 		border: 4px solid var(--sun-strong);
 		box-shadow: 0 2px 8px rgba(138, 79, 0, 0.3);
-		transition: transform var(--dur-fast, 150ms) var(--ease-out, ease);
+		transition: transform var(--dur-fast, 300ms) var(--ease-out, ease);
 	}
 	.big-range::-moz-range-thumb {
 		width: 26px;
@@ -967,7 +967,7 @@
 		background: #fff;
 		display: grid;
 		place-items: center;
-		transition: border-color var(--dur-fast, 150ms);
+		transition: border-color var(--dur-fast, 300ms);
 	}
 	.opt-mark::after {
 		content: '';
@@ -976,7 +976,7 @@
 		border-radius: 50%;
 		background: var(--navy-3);
 		transform: scale(0);
-		transition: transform var(--dur-base, 240ms) var(--ease-spring, ease);
+		transition: transform var(--dur-base, 480ms) var(--ease-spring, ease);
 	}
 	.opt.on .opt-mark {
 		border-color: var(--navy-3);
@@ -1006,7 +1006,7 @@
 	/* ——— Відповідь ——— */
 	.answer {
 		margin-bottom: 1.25rem;
-		transition: opacity var(--dur-base, 240ms);
+		transition: opacity var(--dur-base, 480ms);
 	}
 	.answer.dim {
 		opacity: 0.6;
@@ -1354,7 +1354,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.cline {
-			animation: draw 0.6s var(--ease-out, ease-out) both 0.1s;
+			animation: draw 1.2s var(--ease-out, ease-out) both 0.1s;
 		}
 	}
 	@keyframes draw {
@@ -1437,7 +1437,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.sbar i {
-			animation: grow 0.5s var(--ease-out, ease-out) both 0.15s;
+			animation: grow 1s var(--ease-out, ease-out) both 0.3s;
 		}
 	}
 	@keyframes grow {

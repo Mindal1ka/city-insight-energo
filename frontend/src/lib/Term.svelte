@@ -285,7 +285,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.term-tip.sheet.open {
-			animation: tip-sheet 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+			animation: tip-sheet 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 		}
 		@keyframes tip-sheet {
 			from {
@@ -293,7 +293,7 @@
 			}
 		}
 		.term-tip.open {
-			animation: tip-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+			animation: tip-in 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 		}
 		.term-tip.above.open {
 			animation-name: tip-in-up;

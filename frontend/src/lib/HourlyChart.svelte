@@ -460,7 +460,7 @@
 			stroke-dashoffset: 1;
 		}
 		.fade {
-			transition: opacity var(--dur-base) var(--ease-out) 120ms;
+			transition: opacity var(--dur-base) var(--ease-out) 240ms;
 		}
 		.fade.late {
 			transition-delay: 240ms;

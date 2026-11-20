@@ -135,7 +135,7 @@
 		transform-box: fill-box;
 		transform-origin: bottom;
 		/* Перший показ: стовпці ростуть від осі разом (без «драбинки»), 280 мс */
-		animation: grow 280ms var(--ease-emph) both;
+		animation: grow 560ms var(--ease-emph) both;
 	}
 	.gen { fill: var(--sun); }
 	.cons { fill: var(--cons); opacity: 0.85; }
@@ -145,7 +145,7 @@
 		stroke-width: 2.5;
 		stroke-linejoin: round;
 		stroke-dasharray: 1;
-		animation: draw 300ms 120ms var(--ease-out) both;
+		animation: draw 600ms 240ms var(--ease-out) both;
 	}
 	.kdot { fill: var(--surface); stroke: var(--surplus); stroke-width: 2; transition: r var(--dur-fast); }
 	.tip {

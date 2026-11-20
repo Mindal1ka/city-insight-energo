@@ -389,7 +389,7 @@
 		color: #1a2433;
 		cursor: pointer;
 		white-space: nowrap;
-		transition: background 0.2s, border-color 0.2s, transform 0.15s;
+		transition: background 0.4s, border-color 0.4s, transform 0.3s;
 	}
 	.chip:hover {
 		border-color: var(--c);

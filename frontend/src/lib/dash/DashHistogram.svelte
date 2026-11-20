@@ -125,7 +125,7 @@
 		.bar {
 			transform-box: fill-box;
 			transform-origin: 50% 100%;
-			animation: dh-grow 280ms var(--ease-emph) both;
+			animation: dh-grow 560ms var(--ease-emph) both;
 		}
 	}
 	@keyframes dh-grow {

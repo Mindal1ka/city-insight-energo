@@ -589,7 +589,7 @@
 	}
 	.demo-quiet {
 		opacity: 0.8;
-		transition: opacity 0.2s;
+		transition: opacity 0.4s;
 	}
 	.demo-quiet:hover,
 	.demo-quiet:focus-within {
@@ -597,7 +597,7 @@
 	}
 	.stale {
 		opacity: 0.55;
-		transition: opacity 0.2s;
+		transition: opacity 0.4s;
 	}
 	.story {
 		display: grid;
@@ -833,7 +833,7 @@
 			opacity: 0;
 		}
 		.crit-list.seen li {
-			animation: rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+			animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 			animation-delay: calc(var(--i, 0) * 40ms);
 		}
 		@keyframes rise {
@@ -909,7 +909,7 @@
 		.pot-bars .seg-now,
 		.pot-bars .seg-add,
 		.mix-sun {
-			transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+			transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
 		}
 		.pot-bars .seg-add {
 			transition-delay: 0.15s;
@@ -1023,7 +1023,7 @@
 		height: 1.4rem;
 		border-radius: var(--r-pill);
 		background: #cbd5e1;
-		transition: background 0.2s;
+		transition: background 0.4s;
 	}
 	.sw i {
 		position: absolute;
@@ -1034,7 +1034,7 @@
 		border-radius: 50%;
 		background: #fff;
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-		transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+		transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	.tgl-detail[aria-pressed='true'] .sw {
 		background: var(--navy-3);
@@ -1304,7 +1304,7 @@
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.sheet[open] {
-			animation: sheet-up 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+			animation: sheet-up 0.64s cubic-bezier(0.22, 1, 0.36, 1);
 		}
 		@keyframes sheet-up {
 			from {

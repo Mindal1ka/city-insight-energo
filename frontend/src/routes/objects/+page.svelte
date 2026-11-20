@@ -330,7 +330,7 @@
 		border-radius: var(--r-card);
 		box-shadow: 0 1px 2px rgba(15, 35, 65, 0.05), 0 8px 24px -14px rgba(15, 35, 65, 0.2);
 		overflow: hidden;
-		transition: opacity 0.2s;
+		transition: opacity 0.4s;
 	}
 	.dim {
 		opacity: 0.55;

@@ -351,7 +351,7 @@
 	@media (prefers-reduced-motion: no-preference) {
 		.fill {
 			transform: scaleX(0);
-			transition: transform 0.8s var(--ease) calc(var(--i, 0) * 60ms + 120ms);
+			transition: transform 0.8s var(--ease) calc(var(--i, 0) * 60ms + 240ms);
 		}
 		:global(.grown) .fill {
 			transform: none;

@@ -119,7 +119,7 @@
 	.community {
 		display: grid;
 		gap: 1.25rem;
-		transition: opacity 0.2s;
+		transition: opacity 0.4s;
 	}
 	.stale {
 		opacity: 0.55;
