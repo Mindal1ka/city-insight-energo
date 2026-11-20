@@ -7,25 +7,35 @@
 	import { goto, afterNavigate, onNavigate } from '$app/navigation';
 	import { auth, logout, initials, verifySession } from '#lib/auth.svelte.ts';
 	import { isCityWide, isInternal, canUpload, roleLabel } from '#lib/roles.ts';
-	import { isReduced } from '#lib/motion.ts';
+	import { isReduced, resetWave, navIndicator } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
 	import FreshnessBadge from '#lib/FreshnessBadge.svelte';
+	import { startBackgroundData, onUserReady } from '#lib/prefetch.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
 
 	const isLogin = $derived(page.url.pathname === '/login');
+	// Публічні сторінки без каркаса й без входу: /login і презентація /pitch
+	const isPublic = $derived(isLogin || page.url.pathname === '/pitch' || page.url.pathname.startsWith('/pitch/'));
 	const roleText = $derived(roleLabel(auth.user));
 
 	// Шлюз входу: без користувача доступна лише /login
 	$effect(() => {
-		if (auth.user || isLogin) return;
+		if (auth.user || isPublic) return;
 		const back = page.url.pathname + page.url.search;
 		goto('/login' + (back !== '/' ? `?next=${encodeURIComponent(back)}` : ''), { replace: true, reset: false });
 	});
 
 	// Збережений токен перевіряємо один раз (прострочений → вихід → /login)
 	verifySession();
+
+	// Фонове завантаження даних усіх розділів ролі + періодичне оновлення «живих» (lib/prefetch.ts)
+	startBackgroundData();
+	const userKey = $derived(auth.user ? `${auth.user.role}|${auth.user.building_id}|${auth.user.department}|${auth.user.full_name}` : '');
+	$effect(() => {
+		if (userKey) untrack(onUserReady);
+	});
 
 	function signOut() {
 		logout();
@@ -35,6 +45,8 @@
 
 	// Плавна зміна сторінки (View Transitions API), меню лишається на місці
 	onNavigate((nav) => {
+		// Кожен перехід (і повторний візит, і «назад») — нова перша хвиля появи для сторінки-цілі
+		if (nav.from?.url.pathname !== nav.to?.url.pathname) resetWave(nav.to?.url.pathname);
 		if (typeof document === 'undefined' || !('startViewTransition' in document) || isReduced()) return;
 		if (nav.from?.url.pathname === nav.to?.url.pathname) return;
 		return new Promise<void>((resolve) => {
@@ -142,7 +154,7 @@
 
 <svelte:window onkeydown={globalKey} />
 
-{#if isLogin}
+{#if isPublic}
 	{@render children()}
 {:else if auth.user}
 	<a class="skip no-print" href="#main">Перейти до змісту</a>
@@ -177,7 +189,7 @@
 			<kbd>Ctrl K</kbd>
 		</button>
 
-		<nav class="nav" aria-label="Розділи">
+		<nav class="nav" aria-label="Розділи" use:navIndicator>
 			{#each groups as g (g.title)}
 				<p class="g-title">{g.title}</p>
 				<ul>

@@ -8,6 +8,7 @@ import os
 
 os.environ.setdefault("REQUIRE_LOGIN", "0")  # тести доступу ролей перевіряють залежності, а не загальний бар'єр
 os.environ.setdefault("SURPLUS_CLASS", "1")  # тести класів перевіряють повну шкалу
+os.environ.setdefault("RESPONSE_CACHE", "0")  # мемоізацію відповідей вмикають лише тести кешу (test_httpcache)
 
 import pytest
 

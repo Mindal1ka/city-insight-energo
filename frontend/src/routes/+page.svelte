@@ -5,7 +5,7 @@
 	import Icon from '#lib/Icon.svelte';
 	import { fade } from 'svelte/transition';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { goto, beforeNavigate } from '$app/navigation';
 	import SesMap from '#lib/SesMap.svelte';
 	import SesFilters from '#lib/SesFilters.svelte';
 	import ZonePanel from '#lib/ZonePanel.svelte';
@@ -46,6 +46,12 @@
 	let zoneId = $state<number | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state(true);
+	// Картка має |global-переходи (щоб їхала й при відкритті/закритті блоку {#if}); при переході на іншу
+	// сторінку — без виїзду, інакше стара сторінка «висіла б» 140 мс поверх нової
+	let leaving = $state(false);
+	beforeNavigate((nav) => {
+		if (nav.to?.url.pathname !== nav.from?.url.pathname) leaving = true;
+	});
 	let selectedId = $state<number | null>(Number(page.url.searchParams.get('id')) || null);
 
 	const restricted = $derived(!!data?.restricted);
@@ -315,8 +321,8 @@
 				bind:this={cardEl}
 				bind:offsetHeight={cardH}
 				aria-labelledby="card-title"
-				in:slideIn={phone ? { y: 40 } : { x: 24 }}
-				out:slideIn={phone ? { y: 40, out: true } : { x: 24, out: true }}
+				in:slideIn|global={phone ? { y: 40 } : { x: 24 }}
+				out:slideIn|global={leaving ? { duration: 0 } : phone ? { y: 40, out: true } : { x: 24, out: true }}
 			>
 				<button type="button" class="x" onclick={() => select(null)} aria-label="Закрити картку"><Icon name="x" size={18} /></button>
 				<div class="type">

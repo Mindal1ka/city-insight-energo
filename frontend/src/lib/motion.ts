@@ -332,3 +332,148 @@ export const revealKids: Action<HTMLElement, RevealKidsParams | undefined> = (no
 /** Рядки таблиці/списку: перші `max` (типово 8) — 20 мс драбинка, решта — одразу */
 export const revealRows: Action<HTMLElement, RevealKidsParams | undefined> = (node, p) =>
 	revealKids(node, { max: 8, step: 20, y: 4, duration: 180, ...p });
+
+/**
+ * Нова навігація (зокрема повторний візит, «назад/вперед») відкриває нову першу хвилю для
+ * шляху-цілі: сторінка знову з'являється з драбинкою, а не «вискакує». Викликається з onNavigate.
+ */
+export function resetWave(path?: string): void {
+	if (path) firstWave.delete(path);
+}
+
+/** Рядок/картка списку, що з'явилася після фільтра чи створення: 4 px + проявлення, 180 мс */
+export function listIn(_node: Element, { delay = 0 }: { delay?: number } = {}): TransitionConfig {
+	if (isReduced()) return { duration: 0 };
+	return {
+		delay,
+		duration: 180,
+		easing: EASE.out,
+		css: (t, u) => `opacity:${t.toFixed(3)};transform:translateY(${(u * 4).toFixed(2)}px)`
+	};
+}
+
+/** Рядок, що зникає: швидко геть (100 мс), без зсуву — сусіди під'їжджають через animate:flip */
+export function listOut(_node: Element): TransitionConfig {
+	if (isReduced()) return { duration: 0 };
+	return { duration: DUR.press, easing: EASE.in, css: (t) => `opacity:${t.toFixed(3)}` };
+}
+
+/**
+ * Короткий «спалах» тла при зміні ключа (новий статус, щойно створений запис): 600 мс ease-out.
+ * Перший показ — без спалаху; передайте { key, now: true }, щоб спалахнути одразу при монтуванні.
+ * Окремий шар із opacity — без анімації background-color.
+ */
+export const flash: Action<HTMLElement, unknown> = (node, key) => {
+	let last = key;
+	const run = () => {
+		if (isReduced() || typeof node.animate !== 'function') return;
+		if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
+		const layer = document.createElement('span');
+		layer.setAttribute('aria-hidden', 'true');
+		layer.style.cssText =
+			'position:absolute;inset:0;border-radius:inherit;background:var(--accent-soft,#e6f0ff);pointer-events:none;z-index:0;mix-blend-mode:multiply';
+		node.prepend(layer);
+		layer
+			.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' })
+			.finished.finally(() => layer.remove());
+	};
+	if (key && typeof key === 'object' && (key as { now?: boolean }).now) queueMicrotask(run);
+	return {
+		update(k) {
+			if (k !== last) {
+				last = k;
+				run();
+			}
+		}
+	};
+};
+
+/**
+ * Активний пункт бічного меню: одна «плашка», що ковзає між пунктами (FLIP, 220 мс ease-in-out).
+ * Шукає a[aria-current="page"] на будь-якій глибині; стилі .nav-ind — у app.css.
+ */
+export const navIndicator: Action<HTMLElement> = (node) => {
+	const ind = document.createElement('span');
+	ind.className = 'nav-ind';
+	ind.setAttribute('aria-hidden', 'true');
+	node.prepend(ind);
+	node.classList.add('has-nav-ind');
+	if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
+	let px = -1, py = -1, ph = 0, first = true;
+	const place = () => {
+		const sel = node.querySelector<HTMLElement>('a[aria-current="page"]');
+		if (!sel) {
+			ind.style.opacity = '0';
+			first = true;
+			return;
+		}
+		const nb = node.getBoundingClientRect();
+		const r = sel.getBoundingClientRect();
+		const x = r.left - nb.left + node.scrollLeft, y = r.top - nb.top + node.scrollTop;
+		if (!r.width) return;
+		if (x === px && y === py && r.height === ph && !first) return;
+		ind.style.width = r.width + 'px';
+		ind.style.height = r.height + 'px';
+		ind.style.transition = 'none';
+		if (first || isReduced()) {
+			ind.style.transform = `translate(${x}px,${y}px)`;
+		} else {
+			ind.style.transform = `translate(${px}px,${py}px)`;
+			void ind.offsetWidth;
+			ind.style.transition = '';
+			ind.style.transform = `translate(${x}px,${y}px)`;
+		}
+		ind.style.opacity = '1';
+		px = x; py = y; ph = r.height;
+		first = false;
+	};
+	requestAnimationFrame(place);
+	const mo = new MutationObserver(place);
+	mo.observe(node, { subtree: true, attributes: true, attributeFilter: ['aria-current'], childList: true });
+	const ro = new ResizeObserver(() => {
+		first = true;
+		place();
+	});
+	ro.observe(node);
+	return {
+		destroy() {
+			mo.disconnect();
+			ro.disconnect();
+			ind.remove();
+			node.classList.remove('has-nav-ind');
+		}
+	};
+};
+
+/**
+ * Закриття модального <dialog> (шухляда, палітра) з рухом: панель 160 мс --ease-in у бік, звідки
+ * прийшла, фон гасне паралельно; потім справжній close() (фокус повертає сам діалог/компонент).
+ * Відкриття — CSS-анімація [open] (260–300 мс --ease-emph).
+ */
+export function closeDialog(dlg: HTMLDialogElement, { x = 0, y = 0 }: { x?: number; y?: number } = {}): void {
+	if (!dlg.open || dlg.dataset.closing) return;
+	if (isReduced() || typeof dlg.animate !== 'function') {
+		dlg.close();
+		return;
+	}
+	dlg.dataset.closing = '1';
+	const opts = { duration: 160, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' as FillMode };
+	const a = dlg.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translate(${x}px,${y}px)` }], opts);
+	try {
+		dlg.animate([{ opacity: 1 }, { opacity: 0 }], { ...opts, pseudoElement: '::backdrop' });
+	} catch {
+		/* старі рушії без pseudoElement — фон зникне разом із close() */
+	}
+	a.finished
+		.catch(() => {})
+		.finally(() => {
+			delete dlg.dataset.closing;
+			dlg.getAnimations({ subtree: false }).forEach((x) => x.cancel());
+			try {
+				dlg.getAnimations().forEach((x) => x.cancel());
+			} catch {
+				/* ignore */
+			}
+			if (dlg.open) dlg.close();
+		});
+}

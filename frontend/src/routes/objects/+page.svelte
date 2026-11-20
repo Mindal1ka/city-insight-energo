@@ -1,7 +1,8 @@
 <script lang="ts">
 	// Список усіх комунальних об'єктів: K, генерація/споживання, заощаджено, окупність. Сортування + фільтри.
 	import { goto } from '$app/navigation';
-	import { revealRows } from '#lib/motion.ts';
+	import { revealRows, listIn, listOut, isReduced } from '#lib/motion.ts';
+	import { flip } from 'svelte/animate';
 	import Icon from '#lib/Icon.svelte';
 	import { page } from '$app/state';
 	import SesFilters from '#lib/SesFilters.svelte';
@@ -99,6 +100,19 @@
 		});
 	});
 
+	// Порційний показ: спершу 40 рядків, далі +40, коли низ списку під'їжджає до екрана (DOM лишається малим)
+	const STEP = 40;
+	let limit = $state(STEP);
+	const shown = $derived(rows.slice(0, limit));
+	const flipDur = isReduced() ? 0 : 220;
+	function more(node: HTMLElement) {
+		const io = new IntersectionObserver((e) => {
+			if (e.some((x) => x.isIntersecting)) limit += STEP;
+		}, { rootMargin: '600px 0px' });
+		io.observe(node);
+		return { destroy: () => io.disconnect() };
+	}
+
 	function sortBy(k: Key) {
 		if (sortKey === k) asc = !asc;
 		else {
@@ -169,8 +183,8 @@
 					</tr>
 				</thead>
 				<tbody use:revealRows>
-					{#each rows as r, i (r.id)}
-						<tr onclick={() => open(r.id)}>
+					{#each shown as r (r.id)}
+						<tr onclick={() => open(r.id)} animate:flip={{ duration: flipDur }} in:listIn out:listOut>
 							<td class="name">
 								<a href="/object/{r.id}" onclick={(e) => e.stopPropagation()}>{r.name}</a>
 								<span class="type"><CategoryIcon category={r.category_short} size={13} />{catLabel(r.category_short)}</span>
@@ -192,8 +206,8 @@
 
 		<!-- Телефон: компактні рядки -->
 		<ul class="cards" class:dim={loading} use:revealRows>
-			{#each rows as r, i (r.id)}
-				<li>
+			{#each shown as r (r.id)}
+				<li animate:flip={{ duration: flipDur }} in:listIn out:listOut>
 					<a href="/object/{r.id}">
 						<span class="t1">
 							<span class="nm">{r.name}</span>
@@ -209,12 +223,34 @@
 				<li class="empty">Нічого не знайдено</li>
 			{/each}
 		</ul>
+		{#if rows.length > limit}
+			<div class="more" use:more>
+				<button type="button" class="press" onclick={() => (limit += STEP)}>Показати ще ({rows.length - limit})</button>
+			</div>
+		{/if}
 	{/if}
 </div>
 
 <style>
 	.pg {
-		padding: 16px 0 32px;
+		padding: 0 0 32px;
+	}
+	.more {
+		display: flex;
+		justify-content: center;
+		padding: 12px 0;
+	}
+	.more button {
+		border: 1px solid var(--line);
+		background: var(--surface);
+		border-radius: var(--radius-sm);
+		padding: 0.45rem 1rem;
+		font: inherit;
+		color: var(--text-2);
+		cursor: pointer;
+	}
+	.more button:hover {
+		border-color: var(--card-line-hover);
 	}
 	.hd {
 		display: flex;
@@ -356,6 +392,9 @@
 	}
 	tbody tr:hover {
 		background: #f3f7fc;
+	}
+	tbody tr:active {
+		background: #e8f0fa;
 	}
 	.num {
 		text-align: right;

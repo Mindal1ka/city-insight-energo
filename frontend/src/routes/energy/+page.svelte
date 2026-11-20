@@ -1,7 +1,10 @@
 <script lang="ts">
 	// «Розподіл енергії» (вікно 3): live по всіх СЕС громади. Автооновлення щохвилини.
 	import { onMount } from 'svelte';
-	import { revealKids, revealRows } from '#lib/motion.ts';
+	import { revealKids, revealRows, isReduced } from '#lib/motion.ts';
+	import { flip } from 'svelte/animate';
+	// Автооновлення може переставити рядки — вони під'їжджають (FLIP 220 мс), а не стрибають
+	const flipDur = isReduced() ? 0 : 220;
 	import { page } from '$app/state';
 	import { errMessage } from '#lib/api.ts';
 	import { fetchLive, DEPARTMENTS, type LiveAll } from '#lib/api-v2.ts';
@@ -120,7 +123,7 @@
 					</thead>
 					<tbody use:revealRows={{ delay: 160 }}>
 						{#each items as r (r.id)}
-							<tr>
+							<tr animate:flip={{ duration: flipDur }}>
 								<td><div class="tn">
 									<span class="dot" class:off-dot={r.status !== 'online'} title={r.status}></span>
 									<span class="nm">

@@ -12,6 +12,7 @@
 	import Status from '#lib/Status.svelte';
 	import Icon from '#lib/Icon.svelte';
 	import KBadge from '#lib/KBadge.svelte';
+	import Roll from '#lib/Roll.svelte';
 	import DemoPill from '#lib/DemoPill.svelte';
 	import Disclosure from '#lib/Disclosure.svelte';
 	import ForecastCard from '#lib/ForecastCard.svelte';
@@ -306,7 +307,7 @@
 					{#each bigNums as n (n.k)}
 						<div class="num {n.k}">
 							<span class="n-l"><Icon name={n.icon} size={15} /> {n.pre}</span>
-							<span class="n-v tnum">{n.k === 'sav' ? uah(n.v) : num(n.v, n.d)} <small>{n.k === 'sav' ? '/рік' : n.unit}</small></span>
+							<span class="n-v tnum"><Roll text={n.k === 'sav' ? uah(n.v) : num(n.v, n.d)} value={n.v} /> <small>{n.k === 'sav' ? '/рік' : n.unit}</small></span>
 						</div>
 					{/each}
 				</div>

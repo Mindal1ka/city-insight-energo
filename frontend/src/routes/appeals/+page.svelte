@@ -18,8 +18,13 @@
 	import { dateTime } from '#lib/format.ts';
 	import Icon from '#lib/Icon.svelte';
 	import Skeleton from '#lib/Skeleton.svelte';
+	import { flip } from 'svelte/animate';
+	import { reveal, revealRows, listIn, listOut, slideIn, flash, isReduced } from '#lib/motion.ts';
 
 	let items = $state<Appeal[]>([]);
+	/** id щойно створених звернень — короткий спалах тла */
+	let fresh = $state<Set<number>>(new Set());
+	const flipDur = isReduced() ? 0 : 220;
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let needLogin = $state(false);
@@ -112,11 +117,13 @@
 		formErr = null;
 		try {
 			const k = kw.trim() === '' ? null : Number(kw.replace(',', '.'));
+			const before = new Set(items.map((x) => x.id));
 			await createAppeal({ building_id: bId, type: fType, to: to || undefined, kw: k != null && isFinite(k) ? k : null, text: text.trim() });
 			text = '';
 			kw = '';
 			open = false;
 			await load();
+			fresh = new Set(items.filter((x) => !before.has(x.id)).map((x) => x.id));
 		} catch (err) {
 			formErr = errMessage(err);
 		} finally {
@@ -128,7 +135,7 @@
 <svelte:head><title>Звернення · Енергія</title></svelte:head>
 
 <div class="pg">
-	<header class="hd">
+	<header class="hd ph-anim">
 		<div class="ph-text">
 			<h1>Звернення</h1>
 			<p class="ph-sub">Запити між розпорядниками щодо СЕС, лімітів і ремонту</p>
@@ -145,7 +152,7 @@
 		</div>
 	{:else}
 		{#if open}
-			<form class="form" onsubmit={submit}>
+			<form class="form" onsubmit={submit} in:slideIn={{ y: -8, duration: 220 }} out:slideIn={{ y: -8, out: true }}>
 				<div class="f">
 					<label for="bq">Будівля</label>
 					{#if picked}
@@ -190,7 +197,7 @@
 			</form>
 		{/if}
 
-		<div class="filters">
+		<div class="filters" use:reveal={{ i: 1 }}>
 			<select bind:value={fStatus} aria-label="Статус">
 				<option value="">Усі статуси</option>
 				{#each APPEAL_STATUSES as s (s)}<option value={s}>{s}</option>{/each}
@@ -207,9 +214,9 @@
 		{#if loading && !items.length}
 			<Skeleton variant="table" rows={5} />
 		{:else}
-			<ul class="list">
+			<ul class="list" use:revealRows={{ delay: 70 }}>
 				{#each rows as a (a.id)}
-					<li class="ap">
+					<li class="ap" class:fresh={fresh.has(a.id)} animate:flip={{ duration: flipDur }} in:listIn out:listOut use:flash={a.status}>
 						<div class="l1">
 							<span class="badge {TYPE_TONE[a.type]}" title={a.type_name}><Icon name={TYPE_ICON[a.type]} size={14} /> {a.type_name}</span>
 							<a class="obj" href="/object/{a.building_id}">{a.building_name}</a>
@@ -269,6 +276,11 @@
 	.pick button:hover { background: var(--accent-soft); }
 	.filters { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
 	.cnt { color: var(--muted); font-size: var(--fs-sm); }
+	.ap { position: relative; }
+	@media (prefers-reduced-motion: no-preference) {
+		.ap.fresh::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--accent-soft); mix-blend-mode: multiply; pointer-events: none; animation: ap-flash 600ms var(--ease-out) both; }
+		@keyframes ap-flash { to { opacity: 0; } }
+	}
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
 	.ap { padding: 0.8rem; background: var(--surface); border: 1px solid var(--card-line); border-radius: var(--radius); display: flex; flex-direction: column; gap: 0.4rem; }
 	.ap p { margin: 0; font-size: var(--fs-sm); }

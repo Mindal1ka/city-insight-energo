@@ -1,9 +1,13 @@
 // Вхід і поточний користувач. Без входу застосунок недоступний (лише /login).
-// Токен бекенду (HMAC) і користувач живуть лише в sessionStorage вкладки.
+// Сесія: токен бекенду (HMAC, 12 год) і користувач — у localStorage, тож вхід переживає перезавантаження
+// і спільний для всіх вкладок. Термін перевіряється локально (exp у токені); коли лишилося <20% —
+// ковзне продовження POST /api/auth/refresh (не довше 7 діб від входу). Вихід в одній вкладці —
+// вихід у всіх (подія storage) з очищенням кешу даних.
 // Використання: import { auth, currentRole } from '#lib/auth.svelte.ts'; auth.user?.role
 
 import { untrack } from 'svelte';
 import { roleName, type RoleId, type Department } from './roles.ts';
+import { clearAll as clearDataCache } from './store/cache.ts';
 
 export interface User {
 	full_name: string;
@@ -36,14 +40,46 @@ function normalize(u: Record<string, unknown>, token: string | null): User | nul
 	};
 }
 
-function read(): User | null {
+const TOKEN_TTL_MS = 12 * 3600_000; // як TOKEN_TTL на бекенді
+const REFRESH_AT = 0.2; // продовжуємо, коли лишилося <20% терміну
+
+/** exp (ms) із корисного навантаження токена; підпис перевіряє лише бекенд */
+export function tokenExp(token: string | null | undefined): number | null {
+	if (!token) return null;
 	try {
-		const raw = sessionStorage.getItem(KEY);
-		if (!raw) return null;
+		const b = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+		const json = new TextDecoder().decode(Uint8Array.from(atob(b + '='.repeat((4 - (b.length % 4)) % 4)), (c) => c.charCodeAt(0)));
+		const exp = Number(JSON.parse(json).exp);
+		return Number.isFinite(exp) ? exp * 1000 : null;
+	} catch {
+		return null;
+	}
+}
+
+function parse(raw: string | null): User | null {
+	if (!raw) return null;
+	try {
 		const u = JSON.parse(raw);
 		// Старий формат без токена (тестовий вхід) — більше не дійсний
-		if (!u?.token && !u?.mock) return null;
-		return normalize(u, u.token ?? null);
+		if (!u?.token) return null;
+		const exp = tokenExp(u.token);
+		if (exp !== null && exp <= Date.now()) return null; // прострочений — як без входу
+		return normalize(u, u.token);
+	} catch {
+		return null;
+	}
+}
+
+function read(): User | null {
+	try {
+		const u = parse(localStorage.getItem(KEY));
+		if (u) return u;
+		localStorage.removeItem(KEY);
+		// перехід зі старої схеми (sessionStorage вкладки)
+		const old = parse(sessionStorage.getItem(KEY));
+		sessionStorage.removeItem(KEY);
+		if (old) localStorage.setItem(KEY, JSON.stringify(old));
+		return old;
 	} catch {
 		/* сховище недоступне — вважаємо, що входу немає */
 	}
@@ -64,10 +100,15 @@ export function authToken(): string | null {
 	return untrack(() => auth.user?.token ?? null);
 }
 
-function save(user: User, extra: Record<string, unknown> = {}): void {
+function save(user: User): void {
+	const prev = auth.user;
+	// інша людина/роль — кеш даних попереднього користувача не показуємо ні миті
+	if (prev && (prev.role !== user.role || prev.building_id !== user.building_id || prev.department !== user.department || prev.full_name !== user.full_name)) {
+		clearDataCache();
+	}
 	auth.user = user;
 	try {
-		sessionStorage.setItem(KEY, JSON.stringify({ ...user, ...extra }));
+		localStorage.setItem(KEY, JSON.stringify(user));
 	} catch {
 		/* приватний режим: вхід діє до перезавантаження */
 	}
@@ -75,11 +116,78 @@ function save(user: User, extra: Record<string, unknown> = {}): void {
 
 export function logout(): void {
 	auth.user = null;
+	clearDataCache();
 	try {
+		localStorage.removeItem(KEY); // подія storage → вихід в інших вкладках
 		sessionStorage.removeItem(KEY);
 	} catch {
 		/* ігноруємо */
 	}
+}
+
+/** Тихе продовження сесії: true — отримано новий токен. Паралельні виклики об'єднуються. */
+let refreshing: Promise<boolean> | null = null;
+export function refreshSession(): Promise<boolean> {
+	const token = authToken();
+	if (!token) return Promise.resolve(false);
+	refreshing ??= (async () => {
+		try {
+			// нативний шлях без кешу; /api/auth/* обгортка не кешує
+			const res = await fetch('/api/auth/refresh', {
+				method: 'POST',
+				headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) return false;
+			const body = (await res.json()) as { token: string; user: Record<string, unknown> };
+			if (authToken() !== token) return true; // поки чекали, інша вкладка вже продовжила
+			const u = normalize(body.user, body.token);
+			if (!u) return false;
+			save(u);
+			return true;
+		} catch {
+			return false;
+		} finally {
+			setTimeout(() => (refreshing = null), 0);
+		}
+	})();
+	return refreshing;
+}
+
+/** Продовжити, якщо лишилося <20% терміну (викликається таймером і при поверненні у вкладку) */
+export async function maybeRefresh(): Promise<void> {
+	const exp = tokenExp(authToken());
+	if (exp === null) return;
+	const left = exp - Date.now();
+	if (left <= 0) {
+		logout();
+		return;
+	}
+	if (left < TOKEN_TTL_MS * REFRESH_AT) await refreshSession();
+}
+
+// Синхронізація між вкладками: вхід/продовження/вихід в одній — одразу в усіх
+if (typeof window !== 'undefined') {
+	window.addEventListener('storage', (e) => {
+		if (e.key !== KEY && e.key !== null) return;
+		const u = parse(e.newValue);
+		if (!u) {
+			if (auth.user) {
+				auth.user = null;
+				clearDataCache();
+			}
+			return;
+		}
+		if (!auth.user || auth.user.token !== u.token) {
+			if (auth.user && (auth.user.role !== u.role || auth.user.building_id !== u.building_id || auth.user.full_name !== u.full_name)) {
+				clearDataCache();
+			}
+			auth.user = u;
+		}
+	});
+	setInterval(() => void maybeRefresh(), 5 * 60_000);
+	document.addEventListener('visibilitychange', () => {
+		if (!document.hidden) void maybeRefresh();
+	});
 }
 
 export class LoginError extends Error {

@@ -24,7 +24,20 @@ def login(req: LoginIn, request: Request):
         auth.note_failure(ip, login=who)
         raise
     auth.note_success(ip, login=who)
-    return {"token": auth.make_token(user), "user": user.model_dump()}
+    tok = auth.make_token(user)
+    return {"token": tok, "exp": (auth.token_claims(tok) or {}).get("exp"), "user": user.model_dump()}
+
+
+@router.post("/api/auth/refresh")
+def refresh(request: Request):
+    """Ковзне продовження сесії: дійсний токен → новий (TTL 12 год, але не довше 7 діб від входу).
+    Не рахується в ліміт спроб входу (пароль не перевіряється)."""
+    tok = auth._bearer(request)
+    new = auth.refresh_token(tok) if tok else None
+    if new is None:
+        raise HTTPException(401, "Сесія завершилась — увійдіть знову")
+    claims = auth.token_claims(new) or {}
+    return {"token": new, "exp": claims.get("exp"), "user": auth.read_token(new).model_dump()}
 
 
 @router.get("/api/auth/me")

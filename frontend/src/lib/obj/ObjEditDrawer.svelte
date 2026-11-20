@@ -1,5 +1,6 @@
 <!-- «Редагувати дані СЕС»: бічна панель (на телефоні — знизу). Порожнє поле = «немає даних». -->
 <script lang="ts">
+	import { closeDialog } from '#lib/motion.ts';
 	import Icon from '#lib/Icon.svelte';
 	import { num } from '#lib/format.ts';
 	import type { ObjSes, ObjCosts, ObjPatch } from './ObjApi.ts';
@@ -53,7 +54,7 @@
 		if (open && !dlg.open) {
 			fill();
 			dlg.showModal();
-		} else if (!open && dlg.open) dlg.close();
+		} else if (!open && dlg.open) closeDialog(dlg, window.innerWidth <= 640 ? { y: 64 } : { x: 48 });
 	});
 
 	const today = new Date().toISOString().slice(0, 10);

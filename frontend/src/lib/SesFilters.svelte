@@ -3,7 +3,7 @@
 	// variant='map' — компактний рядок (пошук · період · «Фільтри (n)») + випадна панель з групами.
 	import type { Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
-	import { segIndicator } from './motion.ts';
+	import { segIndicator, slideIn } from './motion.ts';
 	import {
 		K_CLASSES,
 		VISIBLE_CLASSES,
@@ -257,7 +257,7 @@
 		{/if}
 
 		{#if open}
-			<div class="panel" id="mf-panel" role="dialog" aria-label="Фільтри">
+			<div class="panel" id="mf-panel" role="dialog" aria-label="Фільтри" in:slideIn={{ y: -8, duration: 220 }} out:slideIn={{ y: -8, out: true }}>
 				<div class="sec mseg"><h3>Період</h3>{@render seg()}</div>
 				{#if !restricted}
 					<div class="sec"><h3>Сезон</h3><div class="chips wrapc">{@render seasonChips()}</div></div>

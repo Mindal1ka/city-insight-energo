@@ -20,6 +20,7 @@
 </script>
 
 <script lang="ts">
+	import { closeDialog } from './motion.ts';
 	// Глобальний пошук (Ctrl+K): будівлі за назвою чи адресою + швидкі переходи на сторінки.
 	// Шаблон «комбобокс + список» у модальному <dialog>: стрілки, Enter, Esc, Home/End.
 	import { goto } from '$app/navigation';
@@ -65,7 +66,7 @@
 			ensureData();
 			tick().then(() => input?.focus());
 		} else if (!open && dialog.open) {
-			dialog.close();
+			closeDialog(dialog, { y: -8 });
 		}
 	});
 

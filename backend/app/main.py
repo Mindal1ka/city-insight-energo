@@ -10,10 +10,11 @@ import tempfile
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import freshness
+from . import freshness, httpcache
 from .analytics import Store
 from .auth import User, can_see_ses, can_see_sensitive, require, require_login
 from .import_umuni import detect_kind
@@ -29,6 +30,10 @@ store = Store(DATA_DIR)
 # REQUIRE_LOGIN=0 вимикає (тести, написані до появи ролей).
 OPEN_API = {"/api/auth/login", "/api/auth/roles"}
 
+# Порядок проміжних шарів (останній доданий — зовнішній): GZip → вхід → кеш/ETag → маршрути.
+# Кеш ВСЕРЕДИНІ перевірки входу: кешована відповідь ніколи не віддається без дійсного токена.
+app.middleware("http")(httpcache.middleware)
+
 
 @app.middleware("http")
 async def _require_login(request, call_next):
@@ -43,6 +48,9 @@ async def _require_login(request, call_next):
         if not tok or read_token(tok) is None:
             return JSONResponse({"detail": "Потрібен вхід"}, status_code=401)
     return await call_next(request)
+
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # JSON на сотні КБ стискається в 5–10 разів
 
 
 @app.get("/api/summary")

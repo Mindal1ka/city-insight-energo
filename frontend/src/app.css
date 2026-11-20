@@ -810,6 +810,61 @@ td.name {
 		opacity var(--dur-fast) var(--ease-out);
 }
 
+/* Бічне меню: одна плашка активного пункту ковзає між пунктами (дія navIndicator з lib/motion.ts) */
+nav.nav.has-nav-ind a {
+	position: relative;
+	z-index: 1;
+}
+nav.nav.has-nav-ind a[aria-current='page'] {
+	background: transparent;
+}
+nav.nav.has-nav-ind a[aria-current='page']::before {
+	display: none;
+}
+.nav-ind {
+	position: absolute;
+	left: 0;
+	top: 0;
+	z-index: 0;
+	border-radius: var(--radius);
+	background: var(--accent-soft);
+	pointer-events: none;
+	opacity: 0;
+	will-change: transform;
+	transition:
+		transform var(--dur-base) var(--ease-in-out),
+		opacity var(--dur-fast) var(--ease-out);
+}
+.nav-ind::before {
+	content: '';
+	position: absolute;
+	left: -0.25rem;
+	top: 0.4rem;
+	bottom: 0.4rem;
+	width: 3px;
+	border-radius: var(--r-sm);
+	background: var(--accent);
+}
+
+/* Поява заголовка сторінки при кожному відкритті маршруту: 8 px + проявлення, 220 мс.
+   Елемент живе весь час на сторінці — анімація не перезапускається від реактивних оновлень. */
+@media (prefers-reduced-motion: no-preference) {
+	main .page-head > *,
+	main .ph-anim > * {
+		animation: ph-in var(--dur-base) var(--ease-out) backwards;
+	}
+	main .page-head > :nth-child(n + 2),
+	main .ph-anim > :nth-child(n + 2) {
+		animation-delay: 40ms;
+	}
+	@keyframes ph-in {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+	}
+}
+
 /* --- Моушн-утиліти --- */
 .lift {
 	transition:

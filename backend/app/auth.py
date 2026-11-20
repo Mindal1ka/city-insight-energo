@@ -25,6 +25,7 @@ log = logging.getLogger("energo.auth")
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKEN_TTL = 12 * 3600  # 12 год
+SESSION_MAX = 7 * 24 * 3600  # ковзне продовження (/api/auth/refresh) — не довше 7 діб від входу
 
 ROLES: dict[str, dict] = {
     "public": {"name": "Мешканець / журналіст / депутат",
@@ -154,9 +155,12 @@ def _sign(body: str) -> str:
     return _b64e(hmac.new(SECRET_KEY, body.encode("ascii"), hashlib.sha256).digest())
 
 
-def make_token(user: User, ttl: int = TOKEN_TTL) -> str:
+def make_token(user: User, ttl: int = TOKEN_TTL, auth_time: int | None = None) -> str:
+    """auth_time — момент первинного входу (зберігається при продовженні; обмежує сесію SESSION_MAX)."""
+    now = int(time.time())
     payload = user.model_dump()
-    payload["exp"] = int(time.time()) + ttl
+    payload["iat"] = int(auth_time if auth_time is not None else now)
+    payload["exp"] = min(now + ttl, payload["iat"] + SESSION_MAX)
     body = _b64e(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
     return f"{body}.{_sign(body)}"
 
@@ -177,6 +181,29 @@ def read_token(token: str) -> User | None:
         return user
     except Exception:
         return None
+
+
+def token_claims(token: str) -> dict | None:
+    """Службові поля дійсного токена: {"iat", "exp"}; None — якщо токен недійсний."""
+    if read_token(token) is None:
+        return None
+    try:
+        data = json.loads(_b64d(token.split(".")[0]))
+        exp = int(data["exp"])
+        return {"exp": exp, "iat": int(data.get("iat", exp - TOKEN_TTL))}
+    except Exception:
+        return None
+
+
+def refresh_token(token: str) -> str | None:
+    """Новий токен для дійсної сесії, що не перевищила SESSION_MAX; інакше None."""
+    user = read_token(token)
+    claims = token_claims(token) if user else None
+    if user is None or claims is None:
+        return None
+    if time.time() - claims["iat"] >= SESSION_MAX:
+        return None
+    return make_token(user, auth_time=claims["iat"])
 
 
 def _bearer(request: Request) -> str | None:

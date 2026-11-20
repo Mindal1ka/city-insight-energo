@@ -6,7 +6,7 @@
 	import Term from '#lib/Term.svelte';
 	import StatCard from '#lib/StatCard.svelte';
 	import Icon from '#lib/Icon.svelte';
-	import { fadeUp, scaleIn } from '#lib/motion.ts';
+	import { fadeUp, scaleIn, reveal, revealKids } from '#lib/motion.ts';
 	import Disclosure from '#lib/Disclosure.svelte';
 	import DataStatus from '#lib/DataStatus.svelte';
 	import { auth } from '#lib/auth.svelte.ts';
@@ -116,7 +116,7 @@
 
 {#if !allowed}
 	<!-- Завантаження — лише провідний фахівець з енергозабезпечення і адміністратор даних -->
-	<section class="card lock" aria-labelledby="lock-h">
+	<section class="card lock" aria-labelledby="lock-h" use:reveal={1}>
 		<span class="lock-ic" aria-hidden="true"><Icon name="lock" size={26} /></span>
 		<h2 id="lock-h">{auth.user && isInternal(auth.user) ? 'Лише для провідного фахівця з енергозабезпечення' : 'Доступно після входу'}</h2>
 		{#if !(auth.user && isInternal(auth.user))}
@@ -124,7 +124,7 @@
 		{/if}
 	</section>
 {:else}
-<div class="layout">
+<div class="layout" use:revealKids={{ delay: 40, step: 40 }}>
 	<section class="card up" aria-labelledby="up-h">
 		<h2 id="up-h" class="visually-hidden">Завантаження файлу</h2>
 
