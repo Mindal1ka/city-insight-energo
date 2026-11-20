@@ -235,7 +235,12 @@ if FRONT.exists():
     def spa(path: str):
         if path == "api" or path.startswith("api/"):
             raise HTTPException(404, "Невідомий метод API")
-        f = FRONT / path
-        if path and f.is_file():
+        # лише файли всередині зібраного фронтенду: без «..», %2F та абсолютних шляхів
+        root = FRONT.resolve()
+        try:
+            f = (root / path).resolve()
+        except (OSError, ValueError):
+            f = root
+        if path and f != root and f.is_relative_to(root) and f.is_file():
             return FileResponse(f)
-        return FileResponse(FRONT / "index.html")
+        return FileResponse(root / "index.html")
