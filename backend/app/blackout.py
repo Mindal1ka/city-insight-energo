@@ -220,7 +220,7 @@ def blackout_item(bid: int, user: User = Depends(current_user)):
 def blackout_all(user: User = Depends(current_user)):
     """Зведення по громаді: скільки об'єктів протримається при повному блекауті."""
     if user.role not in ("energy_manager", "data_admin"):
-        raise HTTPException(403, "Лише енергоменеджер / адміністратор даних")
+        raise HTTPException(403, "Лише провідний фахівець з енергозабезпечення / адміністратор даних")
     store, sites = _ctx()
     gens = read_generators()
     now = _now()
@@ -343,7 +343,7 @@ def fuel_delete(bid: int, eid: int, user: User = Depends(current_user)):
 def generators_summary(user: User = Depends(current_user)):
     """Витрати на резервне живлення: вкладено в генератори й пальне за рік. Лише гроші, без автономії."""
     if user.role not in ("energy_manager", "data_admin", "finance"):
-        raise HTTPException(403, "Лише енергоменеджер, адміністратор даних або фінансовий орган")
+        raise HTTPException(403, "Лише провідний фахівець з енергозабезпечення, адміністратор даних або фінансовий орган")
     store, _ = _ctx()
     gens = read_generators()
     fuel = read_fuel()

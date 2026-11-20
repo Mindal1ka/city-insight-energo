@@ -96,7 +96,7 @@ def demo_log(store) -> list[dict]:
 
     Опорні дати — справжні (дата створення звітів UMUNI, дати пакета міста), решта — правдоподібний ритм.
     """
-    EM = ("Енергоменеджер міста", "energy_manager")
+    EM = ("Провідний фахівець з енергозабезпечення", "energy_manager")
     DA = ("Адміністратор даних UMUNI", "data_admin")
     rep26 = store.reports.get(2026)
     rep25 = store.reports.get(2025)

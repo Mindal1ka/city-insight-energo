@@ -10,7 +10,7 @@ from app import freshness, main
 from app.auth import User, current_user
 from app.main import app, store
 
-EM = User(full_name="Тест", position="Тест", role="energy_manager", role_name="Енергоменеджер міста")
+EM = User(full_name="Тест", position="Тест", role="energy_manager", role_name="Провідний фахівець з енергозабезпечення")
 
 
 @pytest.fixture

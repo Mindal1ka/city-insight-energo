@@ -55,7 +55,7 @@ def test_login_ok_and_me():
     assert r.status_code == 200
     d = r.json()
     assert d["user"] == {"full_name": "Іваненко Іван", "position": "Посада", "role": "energy_manager",
-                         "role_name": "Енергоменеджер міста", "building_id": None, "department": None}
+                         "role_name": "Провідний фахівець з енергозабезпечення", "building_id": None, "department": None}
     me = c.get("/api/auth/me", headers={"Authorization": f"Bearer {d['token']}"})
     assert me.status_code == 200 and me.json() == d["user"]
 

@@ -115,10 +115,10 @@
 </div>
 
 {#if !allowed}
-	<!-- Завантаження — лише енергоменеджер і адміністратор даних -->
+	<!-- Завантаження — лише провідний фахівець з енергозабезпечення і адміністратор даних -->
 	<section class="card lock" aria-labelledby="lock-h">
 		<span class="lock-ic" aria-hidden="true"><Icon name="lock" size={26} /></span>
-		<h2 id="lock-h">{auth.user && isInternal(auth.user) ? 'Лише для енергоменеджера' : 'Доступно після входу'}</h2>
+		<h2 id="lock-h">{auth.user && isInternal(auth.user) ? 'Лише для провідного фахівця з енергозабезпечення' : 'Доступно після входу'}</h2>
 		{#if !(auth.user && isInternal(auth.user))}
 			<a class="btn" href="/login?next={encodeURIComponent('/upload')}">Увійти <Icon name="arrow-right" size={18} /></a>
 		{/if}

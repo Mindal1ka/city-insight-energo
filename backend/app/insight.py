@@ -351,7 +351,7 @@ def insight_item(bid: int, day: str | None = None, tariff: float = Query(eff.TAR
 @router.put("/api/limits/{bid}")
 def limit_update(bid: int, body: dict = Body(...), user: User = Depends(current_user)):
     if user.role not in ("energy_manager", "finance"):
-        raise HTTPException(403, "Ліміт змінюють енергоменеджер або фінансовий орган")
+        raise HTTPException(403, "Ліміт змінюють провідний фахівець з енергозабезпечення або фінансовий орган")
     store, _ = _ctx()
     b = _find(store, bid)
     v = body.get("limit_uah_year")
@@ -708,7 +708,7 @@ def appeals_create(body: dict = Body(...), user: User = Depends(current_user)):
 @router.patch("/api/appeals/{aid}")
 def appeals_update(aid: int, body: dict = Body(...), user: User = Depends(current_user)):
     if user.role not in ("energy_manager", "department"):
-        raise HTTPException(403, "Статус змінюють енергоменеджер або управління-адресат")
+        raise HTTPException(403, "Статус змінюють провідний фахівець з енергозабезпечення або управління-адресат")
     st = body.get("status")
     if st not in APPEAL_STATUSES:
         raise HTTPException(422, "Невідомий статус")

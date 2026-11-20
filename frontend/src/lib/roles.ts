@@ -22,7 +22,7 @@ export interface RoleUser {
 
 /** Запасний список ролей — якщо GET /api/auth/roles ще недоступний */
 export const ROLES: RoleInfo[] = [
-	{ id: 'energy_manager', name: 'Енергоменеджер міста', description: 'Усі дані, редагування СЕС, завантаження UMUNI', needs_building: false, needs_department: false },
+	{ id: 'energy_manager', name: 'Провідний фахівець з енергозабезпечення', description: 'Усі дані, редагування СЕС, завантаження UMUNI', needs_building: false, needs_department: false },
 	{ id: 'data_admin', name: 'Адміністратор даних UMUNI', description: 'Перегляд усього, завантаження й якість даних', needs_building: false, needs_department: false },
 	{ id: 'department', name: 'Управління (освіта / охорона здоров’я)', description: 'Повні дані закладів свого управління', needs_building: false, needs_department: true },
 	{ id: 'facility_head', name: 'Керівник закладу', description: 'Повні дані й редагування СЕС свого закладу', needs_building: true, needs_department: false },
@@ -41,7 +41,7 @@ export function roleName(role: string | null | undefined): string {
 	return ROLES.find((r) => r.id === role)?.name ?? role;
 }
 
-/** Підпис ролі для чипа в шапці: «Енергоменеджер міста», «Управління освіти», «Публічний перегляд» */
+/** Підпис ролі для чипа в шапці: «Провідний фахівець з енергозабезпечення», «Управління освіти», «Публічний перегляд» */
 export function roleLabel(user: (RoleUser & { role_name?: string | null }) | null | undefined): string {
 	if (!user || !user.role || user.role === 'public') return PUBLIC_ROLE_NAME;
 	if (user.role === 'department') {
@@ -132,7 +132,7 @@ export function canSeeFinance(
 	return roleOf(user) === 'finance' || canSeeSensitive(user, cat, id);
 }
 
-/** Редагування даних СЕС і вартості: енергоменеджер — будь-який, керівник закладу — лише свій */
+/** Редагування даних СЕС і вартості: провідний фахівець з енергозабезпечення — будь-який, керівник закладу — лише свій */
 export function canEdit(user: RoleUser | null | undefined, id: number | string | null | undefined): boolean {
 	const r = roleOf(user);
 	if (r === 'energy_manager') return true;

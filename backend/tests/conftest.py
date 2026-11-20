@@ -24,7 +24,7 @@ def _legacy_energy_manager(request):
         yield
         return
     app.dependency_overrides[current_user] = lambda: User(
-        full_name="Тест", position="Тест", role="energy_manager", role_name="Енергоменеджер міста")
+        full_name="Тест", position="Тест", role="energy_manager", role_name="Провідний фахівець з енергозабезпечення")
     try:
         yield
     finally:

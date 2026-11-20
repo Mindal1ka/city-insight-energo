@@ -30,7 +30,7 @@ ROLES: dict[str, dict] = {
     "public": {"name": "Мешканець / журналіст / депутат",
                "description": "Внутрішня роль запиту без токена (гостьового режиму немає; клієнтам не показується)",
                "needs_building": False, "needs_department": False},
-    "energy_manager": {"name": "Енергоменеджер міста",
+    "energy_manager": {"name": "Провідний фахівець з енергозабезпечення",
                        "description": "Усі дані; редагує дані СЕС і вартість будь-якого об'єкта; завантажує UMUNI",
                        "needs_building": False, "needs_department": False},
     "data_admin": {"name": "Адміністратор даних UMUNI",
@@ -270,7 +270,7 @@ class LoginIn(BaseModel):
 # Демо-облікові записи: логін → роль (пароль спільний DEMO_PASSWORD).
 # Керівник закладу: логін «zaklad-<id будівлі>».
 ACCOUNTS: dict[str, dict] = {
-    "energo": {"role": "energy_manager", "full_name": "Енергоменеджер міста"},
+    "energo": {"role": "energy_manager", "full_name": "Провідний фахівець з енергозабезпечення"},
     "finance": {"role": "finance", "full_name": "Фінансове управління"},
     "osvita": {"role": "department", "department": "освіта", "full_name": "Управління освіти"},
     "zdorovia": {"role": "department", "department": "здоров'я", "full_name": "Управління охорони здоров'я"},

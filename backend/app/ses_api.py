@@ -278,7 +278,7 @@ def ses_update(bid: int, body: dict = Body(...), user: User = Depends(current_us
     if user.role == "public":
         raise HTTPException(401, "Потрібен вхід")
     if not can_edit_ses(user, b.id):
-        raise HTTPException(403, "Редагувати дані СЕС цього об'єкта можуть лише енергоменеджер або керівник закладу")
+        raise HTTPException(403, "Редагувати дані СЕС цього об'єкта можуть лише провідний фахівець з енергозабезпечення або керівник закладу")
     # приймаємо і плоский формат, і {ses:{...}, costs:{...}}
     flat = {k: v for k, v in body.items() if k not in ("ses", "costs")}
     for part in ("ses", "costs"):
