@@ -1333,8 +1333,9 @@
 		line-height: 1.3;
 	}
 	.k-problem .p-grid {
-		margin-top: 32px;
-		gap: 56px;
+		margin-top: 28px;
+		gap: 48px;
+		grid-template-columns: 0.8fr 1.2fr;
 	}
 	.k-problem .p-problem {
 		padding: 30px 40px;
@@ -1360,18 +1361,27 @@
 		margin-top: 8px;
 	}
 	.k-problem .p-value li {
-		font-size: 23px;
-		padding: 7px 0 7px 32px;
+		font-size: 22px;
+		line-height: 1.3;
+		padding: 5px 0 5px 30px;
 	}
 	.k-problem .p-value li::before {
-		top: 17px;
+		top: 14px;
 	}
 	.k-problem .users {
 		display: grid;
 		grid-template-columns: repeat(8, 1fr);
-		gap: 14px;
+		gap: 10px 14px;
 		align-items: start;
-		padding-top: 18px;
+		padding-top: 14px;
+	}
+	.k-problem .ava {
+		width: 60px;
+		height: 60px;
+	}
+	.k-problem .ava > svg {
+		width: 40px;
+		height: 40px;
 	}
 	.k-problem .users-t {
 		grid-column: 1 / -1;
