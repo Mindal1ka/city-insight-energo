@@ -32,3 +32,6 @@ backend/data/generators.csv
 backend/data/fuel_log.csv
 docs/presentation/slides/
 backend/data/upload_log.json
+
+# прапорець безпечного перезапуску (scripts/restart.bat)
+.restart-api

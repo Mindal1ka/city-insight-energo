@@ -53,6 +53,36 @@ async def _require_login(request, call_next):
 app.add_middleware(GZipMiddleware, minimum_size=1000)  # JSON на сотні КБ стискається в 5–10 разів
 
 
+# Безпечний перезапуск без прав адміністратора: scripts\restart.bat спершу перевіряє, що код
+# імпортується, потім створює .restart-api у корені репозиторію; сервер помічає файл за 2 с,
+# видаляє його й завершується, а цикл у start.bat (його тримає starter) запускає сервер знову.
+RESTART_FLAG = ROOT.parent / ".restart-api"
+
+
+def _watch_restart_flag() -> None:
+    import threading
+    import time
+
+    RESTART_FLAG.unlink(missing_ok=True)  # старий прапорець не має одразу зупинити щойно запущений сервер
+
+    def loop():
+        while True:
+            time.sleep(2)
+            if RESTART_FLAG.exists():
+                try:
+                    RESTART_FLAG.unlink()
+                except OSError:
+                    pass
+                print("restart requested", flush=True)
+                os._exit(0)
+
+    threading.Thread(target=loop, name="restart-flag", daemon=True).start()
+
+
+if os.getenv("RESTART_WATCH", "1") != "0":
+    _watch_restart_flag()
+
+
 @app.get("/api/summary")
 def summary():
     return store.summary()

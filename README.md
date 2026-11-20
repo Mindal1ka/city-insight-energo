@@ -223,7 +223,13 @@ npm run dev                     # http://localhost:5173, API — на :8000
 
 Локально бекенд читає `SECRET_KEY` і `DEMO_PASSWORD` зі змінних оточення, `backend/.env` або `.env` у корені (саме в такому порядку пріоритету). Без `DEMO_PASSWORD` вхід вимкнено.
 
-Тести: `cd backend && python -m pytest -q` — **112** тестів бекенду. Залежності зафіксовані: `backend/requirements.txt`, `frontend/package-lock.json`. CI (`.github/workflows/ci.yml`): тести, збірка фронтенду, Docker-образ і smoke-тест (`/api/auth/roles`).
+### Постійний хостинг на Windows (як працює https://pl.mindal1ka.com)
+- `start.bat` — вікно «City Insight Map :3839»: uvicorn на `127.0.0.1:3839` у циклі (упав — через 2 с знову). Перед ним Caddy (`pl.mindal1ka.com → 127.0.0.1:3839`).
+- Вікно тримає супервізор starter: рядок `"D:\Poltava inside\energo\start.bat"` у його `data.txt`.
+- `scripts\restart.bat` — безпечний перезапуск без прав адміністратора: спершу перевіряє, що бекенд імпортується і є `frontend\build\index.html` (інакше робочий сервер не чіпає), потім створює `.restart-api`; сервер за 2 с завершується, цикл `start.bat` піднімає новий, скрипт чекає відповіді `/api/auth/roles`.
+- Новий фронтенд не потребує перезапуску: досить скопіювати збірку в `frontend\build` (спершу файли, `index.html` останнім). Не редагуйте `start.bat`, поки вікно працює: cmd читає батник з диска по ходу виконання.
+
+Тести: `cd backend && python -m pytest -q` — **133** тести бекенду. Залежності зафіксовані: `backend/requirements.txt`, `frontend/package-lock.json`. CI (`.github/workflows/ci.yml`): тести, збірка фронтенду, Docker-образ і smoke-тест (`/api/auth/roles`).
 
 ## 8. Як оновити дані (без розробника)
 
